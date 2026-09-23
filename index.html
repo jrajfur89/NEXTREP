@@ -172,6 +172,18 @@ const fmtDateShort = (iso) => {
   }
 };
 
+// Universal Polish plural-form picker: 1 → "one" (1 seria), 2–4 not ending 12–14 → "few" (2
+// serie), everything else (0, 5+, 11–14, 22, ...) → "many" (5 serii). One small helper instead of
+// hand-fixing every "N rzeczownik" string across the app.
+function plWord(n, one, few, many) {
+  const abs = Math.abs(Math.round(n || 0));
+  if (abs === 1) return one;
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) return few;
+  return many;
+}
+
 const fmtDuration = (sec) => {
   sec = Math.max(0, Math.round(sec || 0));
   const h = Math.floor(sec / 3600);
@@ -201,11 +213,19 @@ function cardioSessionSummary(session) {
   return parts.join(" | ");
 }
 
+// Clock format for live, running timers (workout elapsed time, rest timer): M:SS under an hour
+// (minutes never zero-padded — "0:42", "12:37", "59:59"), then H:MM once it rolls past an hour
+// ("1:00", "1:15", "2:03") — never "75:00" and never a bare minute count like "75 min".
 const fmtClock = (sec) => {
   sec = Math.max(0, Math.round(sec || 0));
+  if (sec >= 3600) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return `${h}:${String(m).padStart(2, "0")}`;
+  }
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
 };
 
 // "YYYY-MM-DD" for the LOCAL calendar day, for <input type="date"> values and day-bucketing
@@ -5500,10 +5520,10 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
     setFetchedCloudData(data);
     const countOf = (key) => (Array.isArray(data[key]) ? data[key].length : data[key] ? 1 : 0);
     const summary = [
-      `${countOf(STORAGE_KEYS.exercises)} ćwiczeń`,
-      `${countOf(STORAGE_KEYS.plans)} planów`,
-      `${countOf(STORAGE_KEYS.history)} treningów w historii`,
-      `${countOf(STORAGE_KEYS.measurements)} pomiarów`,
+      `${countOf(STORAGE_KEYS.exercises)} ${plWord(countOf(STORAGE_KEYS.exercises), "ćwiczenie", "ćwiczenia", "ćwiczeń")}`,
+      `${countOf(STORAGE_KEYS.plans)} ${plWord(countOf(STORAGE_KEYS.plans), "plan", "plany", "planów")}`,
+      `${countOf(STORAGE_KEYS.history)} ${plWord(countOf(STORAGE_KEYS.history), "trening", "treningi", "treningów")} w historii`,
+      `${countOf(STORAGE_KEYS.measurements)} ${plWord(countOf(STORAGE_KEYS.measurements), "pomiar", "pomiary", "pomiarów")}`,
     ].join(", ");
     setCloudFetchMessage({ ok: true, text: `Dane z chmury są gotowe do przywrócenia. Znaleziono: ${summary}.` });
   };
@@ -6594,7 +6614,7 @@ function generateTrainingReport(session, history, exercises) {
   }
   if (counts.yellow > 0) {
     narrativeParts.push(
-      `${counts.yellow} ${counts.yellow === 1 ? "ćwiczenie wymaga" : "ćwiczenia wymagają"} jeszcze pracy nad liczbą powtórzeń, zanim ciężar pójdzie w górę.`
+      `${counts.yellow} ${plWord(counts.yellow, "ćwiczenie wymaga", "ćwiczenia wymagają", "ćwiczeń wymaga")} jeszcze pracy nad liczbą powtórzeń, zanim ciężar pójdzie w górę.`
     );
   }
   if (counts.red > 0) {
@@ -6604,7 +6624,7 @@ function generateTrainingReport(session, history, exercises) {
   }
   if (counts.stagnation > 0) {
     narrativeParts.push(
-      `⚠️ ${counts.stagnation} ${counts.stagnation === 1 ? "ćwiczenie pokazuje" : "ćwiczenia pokazują"} możliwą stagnację — dwa kolejne treningi bez przekroczenia dolnej granicy zakresu przy tym samym ciężarze. To sygnał, żeby popracować nad powtórzeniami przy tym samym ciężarze — ewentualnie pomóc sobie dropsetem, a nie zmieniać ćwiczenie czy program.`
+      `⚠️ ${counts.stagnation} ${plWord(counts.stagnation, "ćwiczenie pokazuje", "ćwiczenia pokazują", "ćwiczeń pokazuje")} możliwą stagnację — dwa kolejne treningi bez przekroczenia dolnej granicy zakresu przy tym samym ciężarze. To sygnał, żeby popracować nad powtórzeniami przy tym samym ciężarze — ewentualnie pomóc sobie dropsetem, a nie zmieniać ćwiczenie czy program.`
     );
   }
 
@@ -6737,7 +6757,7 @@ function generateProgressReport(progressSignal) {
   if (counts.stagnation > 0) parts.push(`⚠️ Możliwa stagnacja: ${namesFor("stagnation")} — warto popracować nad powtórzeniami, ewentualnie dorzucić dropset.`);
   if (counts.red > 0) parts.push(`🔴 Regres: ${namesFor("red")} — skup się na technice przy obecnym ciężarze.`);
   if (counts.yellow > 0 && parts.length < 2) {
-    parts.push(`🟡 ${counts.yellow} ${counts.yellow === 1 ? "ćwiczenie pracuje" : "ćwiczenia pracują"} nad liczbą powtórzeń, zanim ciężar pójdzie w górę.`);
+    parts.push(`🟡 ${counts.yellow} ${plWord(counts.yellow, "ćwiczenie pracuje", "ćwiczenia pracują", "ćwiczeń pracuje")} nad liczbą powtórzeń, zanim ciężar pójdzie w górę.`);
   }
 
   const heading =
@@ -6917,10 +6937,108 @@ function NameModal({ currentName, onSave, onClose }) {
   );
 }
 
+// Rotating greeting line shown under the dashboard's "Cześć" — one per dashboard visit, held
+// stable for the whole time the person is on the dashboard (picked via useState's lazy
+// initializer in Dashboard, never re-rolled on re-render).
+const DASHBOARD_WELCOME_PHRASES = [
+  "Gotowy na kolejny trening?",
+  "Czas zrobić kolejny krok.",
+  "Gotowy, żeby trenować?",
+  "Twój kolejny trening czeka.",
+  "Zaczynamy kolejny trening?",
+  "Czas na kolejną serię.",
+  "Wracamy do pracy?",
+  "Gotowy na kolejny rep?",
+  "Czas kontynuować progres.",
+  "Kolejny trening. Kolejny krok.",
+  "Wracasz po więcej?",
+  "Twój następny trening zaczyna się teraz.",
+  "Czas sprawdzić, co dziś zrobisz.",
+  "Gotowy poprawić swój wynik?",
+  "Kolejny trening. Jedziemy.",
+  "Czas zrobić swoje.",
+  "Gotowy na następny poziom?",
+  "Twój progres czeka na kolejny trening.",
+  "Zobaczmy, co dziś wypracujesz.",
+  "Zaczynamy? Twój kolejny rep czeka.",
+];
+
+// Motivational phrases shown over the dashboard's photo card. Pre-split into a white first part
+// (w) and an orange-highlighted second part (o) — the split point is chosen once, here, rather
+// than at render time, so it's always a sensible break and the two parts always reconstruct the
+// exact phrase from the spec.
+const DASHBOARD_CARD_PHRASES = [
+  { w: "Każdy trening buduje", o: "kolejny." },
+  { w: "Twój następny rep", o: "zaczyna się tutaj." },
+  { w: "Mały krok.", o: "Duży progres." },
+  { w: "Dziś budujesz", o: "swoją formę." },
+  { w: "Każda seria", o: "ma znaczenie." },
+  { w: "Progres zaczyna się od", o: "kolejnego powtórzenia." },
+  { w: "Wczorajszy wynik.", o: "Dzisiejszy cel." },
+  { w: "Trenuj dziś.", o: "Poprawiaj jutro." },
+  { w: "Twój wynik.", o: "Twój kolejny krok." },
+  { w: "Każdy trening", o: "zostawia ślad." },
+  { w: "Nie zaczynasz od zera.", o: "Zaczynasz od ostatniego treningu." },
+  { w: "To, co zrobisz dziś,", o: "buduje kolejny wynik." },
+  { w: "Kolejna seria.", o: "Kolejny krok." },
+  { w: "Twoja historia tworzy", o: "Twój progres." },
+  { w: "Analizuj. Trenuj.", o: "Poprawiaj." },
+  { w: "Wiesz, gdzie byłeś.", o: "Wiesz, co dalej." },
+  { w: "Poprzedni trening.", o: "Następny cel." },
+  { w: "Progres to kolejny", o: "dobrze wykonany rep." },
+  { w: "Każdy trening przybliża Cię", o: "do celu." },
+  { w: "Twój progres ma", o: "swoją historię." },
+];
+
+// Dashboard's three-number summary. Deliberately does NOT introduce any new analysis: "Progres"
+// reuses session.analysis[exerciseId].status exactly as it was computed and stored by the
+// existing progression engine at workout-save time (see ActiveWorkout's finish handler and
+// computeExerciseAnalysis). An exercise occurrence only counts toward the Progres ratio when a
+// real prior session for that exact exercise existed (findMatchingSessions — the same lookup
+// the report screen itself uses) — so a first-ever occurrence, which the engine had no
+// comparative data for, is never silently counted as "progress".
+function computeDashboardSummary(history) {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const monthSessions = history.filter((s) => {
+    const d = new Date(s.date);
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+
+  let exerciseOccurrences = 0;
+  let analyzed = 0;
+  let positive = 0;
+
+  monthSessions.forEach((session) => {
+    (session.exercises || []).forEach((ex) => {
+      if (!ex.sets || !ex.sets.length) return;
+      exerciseOccurrences++;
+      const hasPrior = findMatchingSessions(history, { exerciseId: ex.exerciseId, beforeDate: session.date }).length > 0;
+      if (!hasPrior) return;
+      const status = session.analysis && session.analysis[ex.exerciseId] ? session.analysis[ex.exerciseId].status : null;
+      if (!status) return;
+      analyzed++;
+      if (status === "green") positive++;
+    });
+  });
+
+  return {
+    workoutsCount: monthSessions.length,
+    exercisesCount: exerciseOccurrences,
+    progressPct: analyzed > 0 ? Math.round((positive / analyzed) * 100) : null,
+  };
+}
+
 function Dashboard({ history, exercises, onNavigate, onGoStart, onOpenSession, onOpenReport, userName, onSaveName, isPro, onOpenUnlock, proHint, onHintShown }) {
-  const last = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-  const progression = computeProgression(history, last);
   const [nameModalOpen, setNameModalOpen] = useState(false);
+  // Picked once when the dashboard mounts (i.e. when the person arrives at it) and held stable
+  // for as long as they're on it — Dashboard fully unmounts on navigation, so the next visit
+  // mounts fresh and rerolls both; a re-render while still here never changes them.
+  const [welcomeIdx] = useState(() => Math.floor(Math.random() * DASHBOARD_WELCOME_PHRASES.length));
+  const [cardPhraseIdx] = useState(() => Math.floor(Math.random() * DASHBOARD_CARD_PHRASES.length));
+  const cardPhrase = DASHBOARD_CARD_PHRASES[cardPhraseIdx];
+  const summary = useMemo(() => computeDashboardSummary(history), [history]);
 
   useEffect(() => {
     if (!isPro && proHint) onHintShown(proHint.key);
@@ -6929,152 +7047,75 @@ function Dashboard({ history, exercises, onNavigate, onGoStart, onOpenSession, o
   return (
     <div className="min-h-screen bg-neutral-950 font-body flex flex-col">
       <FontStyles />
-      <div className="px-5 pt-5 flex-shrink-0">
+      {/* 1. Poziome logo NEXTREP — bez poświaty, bez zmiany istniejącego komponentu/ikony. */}
+      <div className="px-5 pt-5 flex-shrink-0 flex items-center justify-between">
         <NextRepLogo height={22} />
-      </div>
-      <div className="px-5 pt-2 pb-2 flex-shrink-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            {userName ? (
-              <button onClick={() => setNameModalOpen(true)} className="flex items-center gap-1.5 text-left active:opacity-70">
-                <p className="font-display text-2xl text-neutral-50 tracking-wide leading-none break-words">
-                  {last ? `Cześć, ${userName}!` : `Witaj w NEXTREP, ${userName}.`}
-                </p>
-                <Pencil size={13} className="text-neutral-600 flex-shrink-0" />
-              </button>
-            ) : !last ? (
-              <button onClick={() => setNameModalOpen(true)} className="flex items-center gap-1.5 text-left active:opacity-70">
-                <p className="font-display text-2xl text-neutral-50 tracking-wide leading-none">Witaj w NEXTREP.</p>
-                <Pencil size={13} className="text-neutral-600 flex-shrink-0" />
-              </button>
-            ) : (
-              <button
-                onClick={() => setNameModalOpen(true)}
-                className="flex items-center gap-2 bg-neutral-900 border border-orange-500/30 rounded-xl pl-3 pr-2.5 py-2 active:bg-neutral-800"
-              >
-                <span className="text-base flex-shrink-0">👋</span>
-                <span className="text-neutral-200 text-sm font-semibold">Jak mam się do Ciebie zwracać?</span>
-                <ChevronRight size={15} className="text-neutral-500 flex-shrink-0" />
-              </button>
-            )}
-            <p className="text-neutral-300 text-base font-semibold mt-1.5">{dashboardTimePhrase()}</p>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={onOpenUnlock}
-              className={`px-2.5 py-1 rounded-full text-xs font-bold ${isPro ? "bg-gradient-to-br from-orange-500 via-orange-500 to-orange-400 text-neutral-950 shadow-brand-glow" : "bg-neutral-900 border border-neutral-800 text-neutral-500"}`}
-            >
-              PRO
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={onOpenUnlock}
+          className={`px-2.5 py-1 rounded-full text-xs font-bold ${isPro ? "bg-gradient-to-br from-orange-500 via-orange-500 to-orange-400 text-neutral-950 shadow-brand-glow" : "bg-neutral-900 border border-neutral-800 text-neutral-500"}`}
+        >
+          PRO
+        </button>
       </div>
 
-      <div className="px-5 mt-2 pb-24 flex-1 flex flex-col">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 overflow-hidden flex-shrink-0">
-          <div className="px-4 pt-3 pb-2.5 border-b border-neutral-800 flex items-center justify-between">
-            <span className="text-neutral-400 text-xs font-semibold tracking-wide uppercase">Ostatni trening</span>
-            {last && <span className="text-neutral-500 text-xs">{fmtDate(last.date)}</span>}
-          </div>
+      {/* 2. Powitanie użytkownika + 3. losowe hasło powitalne (stabilne przez całą sesję na
+          dashboardzie — patrz komentarz przy welcomeIdx powyżej). Kliknięcie nadal otwiera
+          NameModal — funkcja ustawiania imienia zostaje, tylko bez osobnej „nudge” wersji. */}
+      <div className="px-5 pt-4 flex-shrink-0">
+        <button onClick={() => setNameModalOpen(true)} className="flex items-center gap-1.5 text-left active:opacity-70">
+          <p className="font-display text-3xl text-neutral-50 tracking-wide leading-none break-words">
+            {userName ? `Cześć, ${userName}!` : "Cześć!"}
+          </p>
+          <Pencil size={13} className="text-neutral-600 flex-shrink-0" />
+        </button>
+        <p className="text-neutral-400 text-sm font-medium mt-1.5">{DASHBOARD_WELCOME_PHRASES[welcomeIdx]}</p>
+      </div>
 
-          {!last ? (
-            <div className="px-4 py-6 text-center">
-              <div className="w-14 h-14 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_28px_-6px_rgba(255,106,0,0.45)]">
-                <Dumbbell size={24} className="text-orange-400" />
-              </div>
-              <p className="font-display text-xl text-neutral-50 tracking-wide">Twój pierwszy trening rozpoczyna Twoją historię progresu.</p>
-              <p className="text-neutral-500 text-xs mt-3">Po pierwszym treningu NEXTREP pokaże Ci, co zrobić następnym razem.</p>
-            </div>
-          ) : (
-            <div className="p-3">
-              <button className="w-full text-left" onClick={() => onOpenSession(last)}>
-                <div className="flex items-baseline justify-between">
-                  <div className="min-w-0">
-                    <p className="font-display text-xl text-neutral-50 tracking-wide leading-none">
-                      {last.planLabel ? `Trening ${last.planLabel}` : "Trening bez planu"}
-                    </p>
-                    <p className="text-neutral-400 text-xs mt-1">{last.planName || "Sesja swobodna"}</p>
-                  </div>
-                  <ChevronRight size={18} className="text-neutral-600 flex-shrink-0" />
-                </div>
-
-                {isCardioSession(last) ? (
-                  <div className="mt-3">
-                    <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 mb-2">
-                      CARDIO
-                    </span>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <Stat label="Czas" value={fmtDuration(last.exercises[0]?.sets?.[0]?.duration || last.durationSec)} compact />
-                      <Stat label="Dystans" value={last.exercises[0]?.sets?.[0]?.distance ? `${last.exercises[0].sets[0].distance} km` : "—"} compact />
-                      <Stat label="Kcal" value={last.exercises[0]?.sets?.[0]?.kcal || "—"} compact />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-4 gap-1.5 mt-3">
-                      <Stat label="Ćwicz." value={last.exercisesCount} compact />
-                      <Stat label="Serie" value={last.totalSets} compact />
-                      <Stat label="Powt." value={last.totalReps} compact />
-                      <Stat label="Czas" value={fmtDuration(last.durationSec)} small compact />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5 mt-1.5">
-                      <Stat label="Suma ciężarów" value={`${Math.round(last.totalWeight)} kg`} wide compact />
-                      <Stat label="Objętość" value={`${Math.round(last.volume)} kg`} wide compact />
-                    </div>
-                  </>
-                )}
-
-                {!isCardioSession(last) && progression && progression.hasPrior && (
-                  <div className="mt-2 flex items-center gap-2 text-xs">
-                    {progression.deltaVolume > 0 ? (
-                      <TrendingUp size={14} className="text-lime-400 flex-shrink-0" />
-                    ) : progression.deltaVolume < 0 ? (
-                      <TrendingDown size={14} className="text-red-400 flex-shrink-0" />
-                    ) : (
-                      <Minus size={14} className="text-neutral-500 flex-shrink-0" />
-                    )}
-                    <span className={progression.deltaVolume > 0 ? "text-lime-400" : progression.deltaVolume < 0 ? "text-red-400" : "text-neutral-400"}>
-                      {progression.deltaVolume > 0 ? "+" : ""}
-                      {Math.round(progression.deltaVolume)} kg objętości vs. poprzedni „{last.planLabel || last.planName}”
-                    </span>
-                  </div>
-                )}
-
-                <div className="mt-2 bg-neutral-950 border border-neutral-800 rounded-xl p-2.5">
-                  <p className="text-neutral-500 text-xs uppercase font-semibold tracking-wide mb-0.5">Analiza</p>
-                  <p className="text-neutral-300 text-xs leading-snug">
-                    {isCardioSession(last)
-                      ? generateTrainingReport(last, history, exercises).exerciseReports[0]?.message || "Zapisano dzisiejszy wynik."
-                      : recommendation(last, progression)}
-                  </p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => onOpenReport(last)}
-                className="w-full mt-2 py-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-200 font-semibold text-xs flex items-center justify-center gap-1.5"
-              >
-                Zobacz pełną analizę <ChevronRight size={14} />
-              </button>
-
-              {!isPro && proHint && (
-                <button onClick={onOpenUnlock} className="w-full mt-2 text-left">
-                  <p className="text-orange-400/90 text-xs leading-snug">{proHint.text}</p>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="mt-4" />
-
+      <div className="px-5 mt-5 pb-24 flex-1 flex flex-col">
+        {/* 4/5/8. Duża karta treningowa ze zdjęciem — zastępuje starą kartę „Ostatni trening”
+            jako główny element dashboardu. Reużywa istniejący, już offline'owy asset zdjęciowy
+            (WELCOME_BG_IMAGE, ten sam co na ekranie powitalnym) — brak nowych/zewnętrznych URL-i. */}
         <button
           onClick={onGoStart}
-          className="w-full bg-gradient-to-br from-[#FF5A00] via-orange-500 to-orange-400 active:brightness-90 text-neutral-950 font-bold text-base py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-brand-glow flex-shrink-0 mb-3"
+          className="relative w-full rounded-2xl overflow-hidden flex-shrink-0 text-left"
+          style={{ aspectRatio: "4 / 5" }}
         >
-          <Flame size={19} strokeWidth={2.5} /> {last ? "DO ROBOTY — ROZPOCZNIJ TRENING" : "ROZPOCZNIJ PIERWSZY TRENING"}
+          <img src={WELCOME_BG_IMAGE} alt="" className="absolute inset-0 w-full h-full object-cover grayscale" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
+          <div className="absolute inset-0 bg-orange-500/10" />
+          <div className="relative h-full flex flex-col justify-end p-5">
+            <p className="font-display text-2xl leading-[1.15] tracking-wide break-words">
+              <span className="text-neutral-50">{cardPhrase.w} </span>
+              <span className="text-orange-500">{cardPhrase.o}</span>
+            </p>
+            <div className="mt-4 bg-gradient-to-br from-[#FF5A00] via-orange-500 to-orange-400 active:brightness-90 text-neutral-950 font-bold text-base py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-brand-glow">
+              <Flame size={19} strokeWidth={2.5} /> ROZPOCZNIJ TRENING
+            </div>
+          </div>
         </button>
+
+        {/* 6/9-13. Podsumowanie — Treningów (ukończone w tym miesiącu) / Ćwiczeń (wystąpienia w
+            tym miesiącu) / Progres (% analizowanych wystąpień ze statusem "green" z istniejącego
+            silnika progresji — patrz computeDashboardSummary powyżej). */}
+        <div className="mt-6">
+          <p className="text-neutral-500 text-xs font-bold tracking-wide uppercase mb-2">Podsumowanie · Ten miesiąc</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 flex flex-col items-center justify-center min-w-0">
+              <span className="font-display text-2xl text-neutral-50 tracking-wide leading-none">{summary.workoutsCount}</span>
+              <span className="text-neutral-500 text-[10px] uppercase font-semibold mt-1 text-center">Treningów</span>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 flex flex-col items-center justify-center min-w-0">
+              <span className="font-display text-2xl text-neutral-50 tracking-wide leading-none">{summary.exercisesCount}</span>
+              <span className="text-neutral-500 text-[10px] uppercase font-semibold mt-1 text-center">Ćwiczeń</span>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 flex flex-col items-center justify-center min-w-0">
+              <span className={`font-display text-2xl tracking-wide leading-none ${summary.progressPct != null ? "text-green-400" : "text-neutral-50"}`}>
+                {summary.progressPct != null ? `${summary.progressPct}%` : "—"}
+              </span>
+              <span className="text-neutral-500 text-[10px] uppercase font-semibold mt-1 text-center">Progres</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <BottomNav screen="dashboard" onNavigate={onNavigate} />
@@ -7803,7 +7844,7 @@ function PlansScreen({ plans, exercises, updatePlans, updateExercises, onNavigat
                     <div className="flex-1 min-w-0" onClick={() => onOpenEditor(p)}>
                       <p className="text-neutral-100 font-semibold break-words">{p.name}</p>
                       <p className="text-neutral-500 text-xs mt-0.5">
-                        {p.exercises.length} {p.exercises.length === 1 ? "ćwiczenie" : "ćwiczeń"}
+                        {p.exercises.length} {plWord(p.exercises.length, "ćwiczenie", "ćwiczenia", "ćwiczeń")}
                       </p>
                     </div>
                     <div className="flex flex-col">
@@ -7951,7 +7992,7 @@ function PlansScreen({ plans, exercises, updatePlans, updateExercises, onNavigat
                             <div key={it.id} className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5">
                               <p className="text-neutral-100 text-sm font-medium">{ex?.name || "Ćwiczenie"}</p>
                               <p className="text-neutral-500 text-xs mt-0.5">
-                                {it.setsDetail.length} serie · {firstSet?.target} {ex?.isTimeBased ? "s" : "powt."}
+                                {it.setsDetail.length} {plWord(it.setsDetail.length, "seria", "serie", "serii")} · {firstSet?.target} {ex?.isTimeBased ? "s" : "powt."}
                                 {firstSet?.rir != null && firstSet?.rir !== "" ? ` · RIR ${firstSet.rir}` : ""} · przerwa {it.restSeconds}s
                               </p>
                             </div>
@@ -8856,6 +8897,9 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   const [restTarget, setRestTarget] = useState(90);
   const [restRemaining, setRestRemaining] = useState(90);
   const [restRunning, setRestRunning] = useState(false);
+  // Absolute epoch-ms deadline for the running countdown, not a tick count — see the audited
+  // effect below for why.
+  const restEndAtRef = useRef(null);
 
   // Exercise stopwatch — for time-based (and cardio) sets, a real Start/Stop/Reset timer rather
   // than only manual entry. Only one row's stopwatch panel is open at a time.
@@ -8899,21 +8943,42 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
     return () => clearInterval(t);
   }, [startTime]);
 
+  // AUDITED (Step: rest timer real-time audit): setInterval ticks are NOT reliable while the
+  // screen is off or the tab/PWA is backgrounded — mobile browsers throttle or fully suspend
+  // background timers, so a naive "subtract 1 each tick" counter silently falls behind (or, if
+  // ticks were ever double-fired, ahead) of the real time that actually passed. Fixed by
+  // measuring against a real wall-clock deadline instead of counting ticks: restEndAtRef holds
+  // the absolute Date.now() timestamp the countdown should hit zero at (set once, when the
+  // countdown starts or resumes, from the remaining time at that moment), and every tick —
+  // however late it actually fires — recomputes remaining as (deadline - Date.now()), which is
+  // self-correcting regardless of how long the interval was throttled. A visibilitychange
+  // listener forces one extra recompute the instant the screen/tab comes back, so the display is
+  // never stale even if the next setInterval tick hasn't fired yet.
   useEffect(() => {
     if (!restRunning) return;
-    const t = setInterval(() => {
-      setRestRemaining((r) => {
-        if (r <= 1) {
-          setRestRunning(false);
-          try {
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-          } catch {}
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
+    restEndAtRef.current = Date.now() + restRemaining * 1000;
+
+    const tick = () => {
+      const remain = Math.max(0, Math.round((restEndAtRef.current - Date.now()) / 1000));
+      setRestRemaining(remain);
+      if (remain <= 0) {
+        setRestRunning(false);
+        try {
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        } catch {}
+      }
+    };
+
+    const t = setInterval(tick, 1000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restRunning]);
 
   useEffect(() => {
@@ -9040,6 +9105,8 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
 
   const canGoNext = blockIdx < blocks.length - 1 || subIdx < (currentBlock?.items.length || 1) - 1;
   const canGoPrev = blockIdx > 0 || subIdx > 0;
+  const isLastExercise = !canGoNext;
+  const unfilledSetsCount = blocks.flatMap((b) => b.items).reduce((sum, it) => sum + it.sets.filter((s) => !isSetPerformed(s, it.type)).length, 0);
 
   const finish = () => {
     const allItems = blocks.flatMap((b) => b.items);
@@ -9219,16 +9286,20 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
         {currentBlock.items.length > 1 ? (
           <>
             <div className="flex items-center gap-2 mt-3">
-              <div className="flex items-center gap-1.5 text-lime-400 text-xs font-semibold">
-                <Link2 size={13} /> SUPERSERIA · Ćwiczenie {subIdx + 1} z {currentBlock.items.length}
-              </div>
+              <button
+                onClick={() => setSubIdx((subIdx + 1) % currentBlock.items.length)}
+                aria-label="Przełącz na kolejne ćwiczenie superserii"
+                className="flex items-center gap-1.5 text-green-400 text-xs font-bold bg-green-400/10 border border-green-400/30 rounded-full px-3 py-1.5"
+              >
+                <Link2 size={13} /> SUPER SERIA · {subIdx + 1} Z {currentBlock.items.length}
+              </button>
               <div className="flex gap-1">
                 {currentBlock.items.map((it, i) => (
                   <button
                     key={it.planItemId}
                     onClick={() => setSubIdx(i)}
                     aria-label={`Przełącz na ćwiczenie ${i + 1}`}
-                    className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center border flex-shrink-0 ${
+                    className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center border flex-shrink-0 ${
                       i === subIdx ? "bg-orange-500 border-orange-500 text-neutral-950" : "border-neutral-700 text-neutral-500"
                     }`}
                   >
@@ -9612,11 +9683,21 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
           <ChevronLeft size={18} /> Poprzednie
         </button>
         <button
-          onClick={goNext}
-          disabled={!canGoNext}
-          className="flex-1 py-3.5 rounded-xl bg-orange-500 disabled:opacity-30 text-neutral-950 font-bold flex items-center justify-center gap-1"
+          onClick={isLastExercise ? () => setConfirmFinish("finish") : goNext}
+          disabled={!isLastExercise && !canGoNext}
+          className={`flex-1 py-3.5 rounded-xl disabled:opacity-30 font-bold flex items-center justify-center gap-1 ${
+            isLastExercise ? "bg-gradient-to-br from-[#FF5A00] via-orange-500 to-orange-400 text-neutral-950 shadow-brand-glow" : "bg-orange-500 text-neutral-950"
+          }`}
         >
-          Następne <ChevronRight size={18} />
+          {isLastExercise ? (
+            <>
+              <Check size={18} /> Zakończ
+            </>
+          ) : (
+            <>
+              Następne <ChevronRight size={18} />
+            </>
+          )}
         </button>
       </div>
 
@@ -9659,7 +9740,12 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
               className="w-full flex items-center gap-3 px-3 py-3.5 text-left active:bg-neutral-800 rounded-xl"
             >
               <Check size={19} className="text-orange-400 flex-shrink-0" />
-              <span className="text-neutral-100 font-medium text-sm">{editingSession ? "Zapisz trening" : "Zakończ trening"}</span>
+              <span className="min-w-0">
+                <span className="block text-neutral-100 font-medium text-sm">{editingSession ? "Zapisz trening" : "Zakończ trening"}</span>
+                <span className="block text-neutral-500 text-[11px] font-normal mt-0.5">
+                  {editingSession ? "Zapisany wcześniej trening zostanie zaktualizowany." : "Bieżące wyniki zostaną zapisane i trening zostanie zakończony."}
+                </span>
+              </span>
             </button>
 
             <button
@@ -9670,7 +9756,12 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
               className="w-full flex items-center gap-3 px-3 py-3.5 text-left active:bg-neutral-800 rounded-xl"
             >
               <X size={19} className="text-red-400 flex-shrink-0" />
-              <span className="text-neutral-100 font-medium text-sm">{editingSession ? "Odrzuć zmiany" : "Przerwij trening"}</span>
+              <span className="min-w-0">
+                <span className="block text-neutral-100 font-medium text-sm">{editingSession ? "Odrzuć zmiany" : "Przerwij trening"}</span>
+                <span className="block text-neutral-500 text-[11px] font-normal mt-0.5">
+                  {editingSession ? "Wprowadzone zmiany nie zostaną zapisane." : "Bieżący trening nie zostanie zapisany."}
+                </span>
+              </span>
             </button>
           </div>
         </div>
@@ -9689,8 +9780,13 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
                   : "Postęp z tej sesji nie zostanie zapisany."
                 : editingSession
                 ? "Zapisany wcześniej trening zostanie zaktualizowany."
-                : "Podsumowanie zostanie zapisane w historii i na dashboardzie."}
+                : "Bieżące wyniki zostaną zapisane."}
             </p>
+            {confirmFinish === "finish" && !editingSession && unfilledSetsCount > 0 && (
+              <p className="text-amber-400 text-xs mb-5 -mt-3">
+                {unfilledSetsCount} {plWord(unfilledSetsCount, "niewypełniona seria", "niewypełnione serie", "niewypełnionych serii")} nie zostanie zapisan{unfilledSetsCount === 1 ? "a" : "e"}.
+              </p>
+            )}
             <div className="flex gap-3">
               <button onClick={() => setConfirmFinish(false)} className="flex-1 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
                 Wróć
@@ -9832,18 +9928,6 @@ function StatsScreen({ history, exercises, onNavigate, onOpenExercise }) {
       <FontStyles />
       <TopBar title="STATYSTYKI" />
       <div className="px-5 pt-3">
-        <div className="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-xl p-1 mb-4">
-          {["week", "month", "all"].map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold ${range === r ? "bg-orange-500 text-neutral-950" : "text-neutral-400"}`}
-            >
-              {rangeLabel[r]}
-            </button>
-          ))}
-        </div>
-
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4">
           <p className="text-neutral-500 text-xs uppercase font-semibold mb-3">Sygnał progresu</p>
           {progressSignal.items.length === 0 ? (
@@ -9896,6 +9980,21 @@ function StatsScreen({ history, exercises, onNavigate, onOpenExercise }) {
           )}
         </div>
 
+        {/* Przełącznik okresu — świadomie POD "Sygnał progresu" i tuż nad "Podsumowanie": filtruje
+            wyłącznie dane podsumowania poniżej, nigdy sygnał progresu (ten zawsze patrzy na całą
+            historię), więc siedzi wizualnie przy tych danych, których faktycznie dotyczy. */}
+        <div className="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-xl p-1 mb-2">
+          {["week", "month", "all"].map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold ${range === r ? "bg-orange-500 text-neutral-950" : "text-neutral-400"}`}
+            >
+              {rangeLabel[r]}
+            </button>
+          ))}
+        </div>
+
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4">
           <p className="text-neutral-500 text-xs uppercase font-semibold mb-3">Podsumowanie — {rangeLabel[range].toLowerCase()}</p>
           <div className="grid grid-cols-3 gap-2">
@@ -9926,7 +10025,7 @@ function StatsScreen({ history, exercises, onNavigate, onOpenExercise }) {
                     <div className="flex-1 text-left min-w-0">
                       <p className="text-neutral-100 font-semibold text-sm">{cat}</p>
                       <p className="text-neutral-500 text-xs">
-                        {st.sets} serii · {st.reps} powt. · {Math.round(st.volume)} kg obj. ({rangeLabel[range].toLowerCase()})
+                        {st.sets} {plWord(st.sets, "seria", "serie", "serii")} · {st.reps} powt. · {Math.round(st.volume)} kg obj. ({rangeLabel[range].toLowerCase()})
                       </p>
                       {delta && (
                         <p className={`text-xs mt-0.5 flex items-center gap-1 ${delta.delta > 0 ? "text-lime-400" : delta.delta < 0 ? "text-red-400" : "text-neutral-500"}`}>
@@ -10069,7 +10168,7 @@ function HistoryScreen({ history, plans, exercises, updatePlans, updateExercises
                       <p className="text-neutral-500 text-xs mt-1">
                         {isCardioSession(s)
                           ? cardioSessionSummary(s) || fmtDuration(s.durationSec)
-                          : `${s.exercisesCount} ćwiczeń · ${s.totalSets} serii · ${Math.round(s.volume)} kg objętości · ${fmtDuration(s.durationSec)}`}
+                          : `${s.exercisesCount} ${plWord(s.exercisesCount, "ćwiczenie", "ćwiczenia", "ćwiczeń")} · ${s.totalSets} ${plWord(s.totalSets, "seria", "serie", "serii")} · ${Math.round(s.volume)} kg objętości · ${fmtDuration(s.durationSec)}`}
                       </p>
                     </button>
                     <button onClick={() => setConfirmDelete(s)} className="p-2 text-neutral-600 active:text-red-500">
@@ -10137,7 +10236,7 @@ function HistoryScreen({ history, plans, exercises, updatePlans, updateExercises
                           <span className="text-xs flex-shrink-0">{overallIcon}</span>
                         </div>
                         <p className="text-neutral-500 text-xs mt-1">
-                          {s.totalSets} serii · {s.totalReps} powt. · {Math.round(s.volume)} kg objętości
+                          {s.totalSets} {plWord(s.totalSets, "seria", "serie", "serii")} · {s.totalReps} powt. · {Math.round(s.volume)} kg objętości
                         </p>
                         <p className="text-neutral-400 text-xs mt-1.5 leading-snug">{rep.narrative}</p>
                         <span className="text-orange-400 text-xs font-semibold mt-1.5 inline-flex items-center gap-1">
@@ -10208,7 +10307,7 @@ function HistoryScreen({ history, plans, exercises, updatePlans, updateExercises
                   <p className="text-neutral-500 text-xs mt-1">
                     {isCardioSession(s)
                       ? cardioSessionSummary(s) || fmtDuration(s.durationSec)
-                      : `${s.exercisesCount} ćwiczeń · ${s.totalSets} serii · ${Math.round(s.volume)} kg objętości · ${fmtDuration(s.durationSec)}`}
+                      : `${s.exercisesCount} ${plWord(s.exercisesCount, "ćwiczenie", "ćwiczenia", "ćwiczeń")} · ${s.totalSets} ${plWord(s.totalSets, "seria", "serie", "serii")} · ${Math.round(s.volume)} kg objętości · ${fmtDuration(s.durationSec)}`}
                   </p>
                 </button>
                 <button onClick={() => setConfirmDelete(s)} className="p-2 text-neutral-600 active:text-red-500">
@@ -10482,7 +10581,7 @@ function TrainingReport({ session, history, exercises, onBack }) {
         </div>
         {quickSummary.dropsetCount > 0 && (
           <p className="text-neutral-500 text-xs mt-2 flex items-center gap-1.5">
-            <Layers size={12} /> {quickSummary.dropsetCount} {quickSummary.dropsetCount === 1 ? "dropset" : "dropsety"} w tym treningu
+            <Layers size={12} /> {quickSummary.dropsetCount} {plWord(quickSummary.dropsetCount, "dropset", "dropsety", "dropsetów")} w tym treningu
           </p>
         )}
 
