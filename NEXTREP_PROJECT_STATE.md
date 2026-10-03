@@ -75,6 +75,10 @@ NEXTREP/
 └── icons/
     ├── icon-192.png
     └── icon-512.png
+├── NEXTREP_PROJECT_STATE.md
+├── STAGE_STATUS.md
+├── STAGE_4A_PLAN.md
+└── ACCOUNT_DATA_MODEL.md
 ```
 
 Documentation structure is being introduced and is expected to become part of the repository source of truth.
