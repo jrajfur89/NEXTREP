@@ -8,6 +8,7 @@
 * **IMPLEMENTED** — funkcjonalność istnieje w kodzie.
 * **DEPLOYED** — funkcjonalność została wdrożona na środowisko docelowe.
 * **TESTED** — funkcjonalność została zweryfikowana odpowiednimi testami.
+* **IN PROGRESS** — prace nad elementem trwają; implementacja lub testowanie nie zostały jeszcze zakończone.
 * **PLANNED** — zaakceptowana praca na przyszłość.
 * **PROPOSED** — propozycja, która nie została jeszcze ostatecznie zatwierdzona.
 * **OPEN** — znany problem lub nierozstrzygnięta kwestia.
