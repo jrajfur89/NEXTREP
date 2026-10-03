@@ -358,8 +358,8 @@ Manual deployment verification remains required.
 | -------------------------- | ----------- |
 | `NEXTREP_PROJECT_STATE.md` | IMPLEMENTED |
 | `STAGE_STATUS.md`          | IN PROGRESS |
-| `STAGE_4A_PLAN.md`         | PLANNED     |
-| `ACCOUNT_DATA_MODEL.md`    | PLANNED     |
+| `STAGE_4A_PLAN.md`         | IMPLEMENTED |
+| `ACCOUNT_DATA_MODEL.md`    | IMPLEMENTED |
 | `SYNC_AND_MIGRATION.md`    | PLANNED     |
 | `PRO_ENTITLEMENT_MODEL.md` | PLANNED     |
 | `DESIGN.md`                | PLANNED     |
