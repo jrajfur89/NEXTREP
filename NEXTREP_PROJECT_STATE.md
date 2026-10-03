@@ -59,7 +59,7 @@ Repository:
 
 Current audited commit:
 
-`99e8e928c3c0e2a3ae783ff205943a66ed56d2d5`
+4cdd354100b9211b5384b5bb184ba763c2f0e46c`
 
 Current `index.html` SHA:
 
