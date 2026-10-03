@@ -1023,7 +1023,6 @@ Kod i dokumentacja w repozytorium są nadrzędne wobec opisów znajdujących si�
 * PUSH,
 * PULL,
 * conflict store,
-* Conflict Center — implementacja rozpoczęta,
 * account source selection.
 
 ## TESTED
@@ -1040,10 +1039,9 @@ Kod i dokumentacja w repozytorium są nadrzędne wobec opisów znajdujących si�
 * before-restore,
 * offline login,
 * pełne tombstones po stronie lokalnej,
-* pełne delete/update,
-* finalna obsługa konfliktów,
 * pełna obsługa offline sync,
-* pełny E2E Stage 4A.
+* Conflict Center,
+* finalna obsługa konfliktów,
 
 ## PLANNED
 
