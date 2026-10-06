@@ -86,3 +86,49 @@ describe("Dashboard next plan", () => {
     assert.match(card.textContent, /Plan B/);
   });
 });
+
+// Post-smoke-test fix — the exact production case: Statistics, muscle group "Klatka piersiowa".
+// The card is the source of truth for comparisons; the chart keeps the real points but never shows
+// its own last−first delta (which produced "−1560 kg" next to "Brak porównania").
+describe("Statistics: muscle-group chart has no false delta", () => {
+  const DAY = 86400000;
+  const iso = (msAgo) => new Date(Date.now() - msAgo).toISOString();
+  const bench = (reps, msAgo) => ({ id: `b-${msAgo}`, date: iso(msAgo), planId: "SP", planName: "SMOKE Plan A", exercises: [{ id: `eb-${msAgo}`, exerciseId: "bench_press", name: "Wyciskanie", type: "weight", setsDetail: [{ id: "x", target: "8-10", rir: "" }], sets: [1, 2, 3].map((i) => ({ id: `s${i}`, weight: "60", reps: String(reps), rir: "1-2" })) }] });
+  const dips = (msAgo) => ({ id: `d-${msAgo}`, date: iso(msAgo), exercises: [{ id: `ed-${msAgo}`, exerciseId: "dips", name: "Dipsy", type: "bodyweightPlus", sets: [1, 2, 3].map((i) => ({ id: `s${i}`, weight: "10", reps: "8", rir: "1-2" })) }] });
+  const pro = () => ({ manualPro: false, adUnlockExpiresAt: Date.now() + DAY });
+  async function openChest(history) {
+    await bootGuestApp({ history, pro_status: pro() });
+    const nav = $$("button").find((b) => b.textContent.trim() === "Statystyki");
+    await click(nav);
+    await flush(10, 3);
+    // "Cały czas" so the result never depends on which weekday the suite runs (default = this week)
+    await click($$("button").find((b) => b.textContent.trim() === "Cały czas"));
+    await flush(10, 2);
+    const group = $$("button").find((b) => b.textContent.trim().startsWith("Klatka piersiowa"));
+    assert.ok(group, "muscle-group card rendered");
+    await click(group);
+    await flush(10, 2);
+    const title = $$("p").find((p) => p.textContent.trim() === "Objętość na trening z tą partią");
+    assert.ok(title, "chart rendered");
+    return { card: group, chart: title.parentElement.parentElement };
+  }
+
+  test("1800 → 2160 → Dipsy 240: card 'Brak porównania', chart without TrendingDown / −1560, real points kept", async () => {
+    const { card, chart } = await openChest([bench(10, 3 * DAY), bench(12, 2 * DAY), dips(1 * DAY)]);
+    assert.ok(byTestId("mgw-no-compare"));
+    assert.match(byTestId("mgw-no-compare").textContent, /Brak porównania .* inny zestaw ćwiczeń/);
+    assert.ok(!chart.querySelector('[data-icon="TrendingDown"]') && !chart.querySelector('[data-icon="TrendingUp"]'), "no delta icon in the chart header");
+    assert.doesNotMatch(chart.textContent, /1560/);
+    assert.match(chart.textContent, /240kg – 2160kg/, "points still the real workload (min 240, max 2160)");
+    assert.ok(card);
+  });
+
+  test("1800 → 2160: card shows +360; the chart shows no contradicting direction", async () => {
+    const { card, chart } = await openChest([bench(10, 3 * DAY), bench(12, 2 * DAY)]);
+    assert.ok(!byTestId("mgw-no-compare"));
+    assert.match(card.textContent, /\+360 kg vs/);
+    assert.ok(card.querySelector('[data-icon="TrendingUp"]'));
+    assert.ok(!chart.querySelector('[data-icon="TrendingDown"]'), "no red regression on the chart");
+    assert.match(chart.textContent, /1800kg – 2160kg/);
+  });
+});

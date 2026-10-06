@@ -119,6 +119,32 @@ describe("computeExerciseAnalysis — statuses", () => {
     assert.match(a.currentLine, /Pełna realizacja celu planu \(8–10 powt\.\) przy 100 kg — powyżej górnej granicy: 12 powt\./);
   });
 
+  // Post-smoke-test fix: the overshoot plan line ends with EXACTLY one period
+  // (production showed "… 12 powt.." because "powt." already carries its own period).
+  const noDoublePeriod = (a) => {
+    for (const f of ["message", "currentLine", "analysisText", "recommendation"]) assert.doesNotMatch(a[f], /\.\./, `${f}: ${a[f]}`);
+  };
+  test("OVERSHOOT text, weight: ends exactly '… 12 powt.' (one period)", () => {
+    const a = run([W(60, 12, "1-2"), W(60, 12, "1-2"), W(60, 12, "1-2")], p810, hist([[W(60, 10, "1-2"), W(60, 10, "1-2"), W(60, 10, "1-2")], "2026-10-03"]));
+    assert.equal(a.currentLine, "Pełna realizacja celu planu (8–10 powt.) przy 60 kg — powyżej górnej granicy: 12 powt.");
+    assert.equal(a.status, "green", "status unchanged by the text fix");
+    noDoublePeriod(a);
+  });
+  test("OVERSHOOT text, bodyweight: ends exactly '… 15 powt.' (one period)", () => {
+    const a = run([BW(15), BW(15)], plan("8-12", "8-12"), hist([[BW(12), BW(12)], "2026-10-03"]), "bodyweight");
+    assert.equal(a.currentLine, "Pełna realizacja celu planu (8–12 powt.) — powyżej górnej granicy: 15 powt.");
+    noDoublePeriod(a);
+  });
+  test("OVERSHOOT text, time: '… 50 s.' keeps its single closing period", () => {
+    const a = run([T(50), T(50)], plan("30-45", "30-45"), hist([[T(45), T(45)], "2026-10-03"]), "time");
+    assert.equal(a.currentLine, "Pełna realizacja celu planu (30–45 s) — powyżej górnej granicy: 50 s.");
+    noDoublePeriod(a);
+  });
+  test("plan line without overshoot still ends with one period", () => {
+    const a = run([W(60, 10), W(60, 10), W(60, 10)], p810, hist([[W(60, 9), W(60, 9), W(60, 9)], "2026-10-03"]));
+    assert.equal(a.currentLine, "Pełna realizacja celu planu (8–10 powt.) przy 60 kg.");
+  });
+
   test("OVERSHOOT does not change the plan range (still judged against 8–10)", () => {
     const a = run([W(100, 12), W(100, 12), W(100, 12)], p810, hist([[W(100, 10), W(100, 10), W(100, 10)], "2026-09-17"]));
     assert.match(a.recommendation + a.currentLine, /8–10/);
@@ -178,6 +204,19 @@ describe("computeExerciseAnalysis — statuses", () => {
     const a = run(s(), p810, hist([s(), "2026-09-17"], [s(), "2026-09-14"]));
     assert.equal(a.status, "stagnation");
     assert.match(a.message, /Możliwa stagnacja/);
+  });
+
+  // Post-smoke-test fix: "bez przekroczenia 8 powt.. Pracuj" → "8 powt. Pracuj"; time keeps "30 s.".
+  test("STAGNATION text (at/below min): '8 powt.' followed by one period only", () => {
+    const a = run([W(60, 8), W(60, 8)], plan("8-10", "8-10"), hist([[W(60, 8), W(60, 8)], "2026-10-03"]));
+    assert.equal(a.status, "stagnation");
+    assert.match(a.analysisText, /bez przekroczenia 8 powt\. Pracuj dalej/);
+    assert.doesNotMatch(a.message + a.analysisText, /\.\./);
+  });
+  test("STAGNATION text, time: '30 s.' keeps its closing period", () => {
+    const a = run([T(30), T(30)], plan("30-45", "30-45"), hist([[T(30), T(30)], "2026-10-03"]), "time");
+    assert.equal(a.status, "stagnation");
+    assert.match(a.analysisText, /bez przekroczenia 30 s\. Pracuj dalej/);
   });
 
   test("twice at top of range with RIR reserve at same load → 'można rozważyć zwiększenie', never a concrete kg", () => {

@@ -89,19 +89,54 @@ describe(`progression engine: current vs ${REF} (pre-overshoot)`, () => {
         continue;
       }
       // Explained difference: some comparison in the chain is decided by repsAboveRange, or the
-      // only change is the new "— powyżej górnej granicy: N" text on the plan line.
+      // status is identical and the only change is TEXT:
+      //   • the new "— powyżej górnej granicy: N powt." on the plan line (that "powt." also ends
+      //     the sentence since the post-smoke-test fix — so it is replaced by the plain ".");
+      //   • the old engine's double period after "powt." ("bez przekroczenia 8 powt.. Pracuj"),
+      //     removed by the same fix (normalised on the OLD side only).
+      // Rule updated deliberately with the double-period fix (README rule 3); status never differs.
       const range = NEW.overallRepRange(c.setsDetail);
       const perfs = [NEW.summarizePerformance(c.sets, "weight", range, c.date), ...c.history.map((h) => NEW.summarizePerformance(h.sets, "weight", range, h.date))];
       const chain = perfs.slice(0, -1).map((p, k) => NEW.comparePerformances(p, perfs[k + 1], true));
       const anyAbove = chain.some((x) => x.signal === "repsAboveRange");
-      const aboveText = a.message.replace(/ — powyżej górnej granicy: \d+ powt\./, "") === b.message;
-      if (anyAbove || aboveText) overshootDiffs++;
+      const textOnly = a.status === b.status && a.message.replace(/ — powyżej górnej granicy: \d+ powt\./, ".") === b.message.replace(/powt\.\./g, "powt.");
+      if (anyAbove || textOnly) overshootDiffs++;
       else unexplained.push({ i, new: a.status, old: b.status, newMsg: a.message, oldMsg: b.message });
     }
     t.diagnostic(`identical=${identical} overshoot-explained=${overshootDiffs} unexplained=${unexplained.length}`);
     assert.deepEqual(unexplained.slice(0, 3), []);
     assert.ok(identical > 1000, "most cases must be untouched by the stage");
     assert.ok(overshootDiffs > 0, "the matrix must actually exercise overshoot");
+  });
+
+  // Guard (post-smoke-test fix): no engine text may ever contain "..". Runs on the CURRENT engine
+  // only (no reference bundle needed, never skipped), over the same deterministic matrix for every
+  // kind with a unit: weight, bodyweightPlus, bodyweight (reps) and time (seconds).
+  test("no '..' in any engine text across 4 × 2000 matrix cases (all kinds)", () => {
+    const toKind = (sets, kind) =>
+      sets.map((s) => (kind === "time" ? { duration: String(Number(s.reps) * 5), rir: s.rir } : kind === "bodyweight" ? { ...s, weight: "" } : s));
+    const fields = ["message", "currentLine", "analysisText", "recommendation"];
+    const offenders = [];
+    let aboveRangeSeen = 0;
+    for (const kind of ["weight", "bodyweightPlus", "bodyweight", "time"]) {
+      const r = rng(20261006);
+      for (let i = 0; i < 2000; i++) {
+        const c = randomCase(r);
+        const scale = kind === "time" ? (t) => t.replace(/(\d+)/g, (n) => String(Number(n) * 5)) : (t) => t;
+        const args = {
+          sets: toKind(c.sets, kind),
+          kind,
+          setsDetail: c.setsDetail.map((sd) => ({ ...sd, target: scale(sd.target) })),
+          history: c.history.map((h) => ({ ...h, sets: toKind(h.sets, kind) })),
+          date: c.date,
+        };
+        const a = NEW.computeExerciseAnalysis(args);
+        if (/powyżej górnej granicy: \d+/.test(a.currentLine)) aboveRangeSeen++;
+        for (const f of fields) if (/\.\./.test(a[f] || "")) offenders.push({ kind, i, f, text: a[f] });
+      }
+    }
+    assert.deepEqual(offenders.slice(0, 3), []);
+    assert.ok(aboveRangeSeen > 100, "the matrix must contain reps/time above the range");
   });
 
   test("comparePerformances: identical results whenever no value exceeds the range", (t) => {

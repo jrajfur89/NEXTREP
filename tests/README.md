@@ -45,15 +45,20 @@ czy bundle pochodzi z aktualnego `index.html` (md5). Jeśli nie, test kończy si
 
 | Plik | Testy | Zakres |
 |---|---|---|
-| `unit/progression.test.mjs` | 37 | parsery zakresu/RIR, objętość wg rodzaju, hierarchia sygnałów `comparePerformances`, **overshoot** (`repsAboveRange`), statusy silnika (baseline / green / yellow / red / stagnation), przerwa >14 dni, notatki (gorszy dzień, za ciężko), sugestia „można rozważyć zwiększenie”, okno 10 wykonań, chronologia historii (brak „przecieku przyszłości” przy backfillu) |
-| `unit/progression-crossversion.test.mjs` | 4 | silnik aktualny vs `c07a61d` (sprzed overshoot): 2000 losowych, deterministycznych przypadków. Różnice dopuszczalne **tylko** tam, gdzie decydują powtórzenia powyżej zakresu. Test jest przypięty do etapu overshoot (patrz niżej) |
-| `unit/muscle-groups.test.mjs` | 33 | MGW-001: słownik 10 partii, mapa atlasu (61), tylko partia główna (bez podwójnego liczenia), jednostki kg/powt./s rozdzielone, dropsety pominięte, okno dat, „brak porównania” (inne ćwiczenia / inna jednostka), chronologia z `session.date`. MGW-002: `buildMuscleCategory` (kolejność słownikowa), `readMuscleSelection` (atlas tylko do odczytu, stare kategorie, legacy „Nogi”), filtry (+Cardio, „Partia nieokreślona” tylko gdy potrzebna), odznaki |
+| `unit/progression.test.mjs` | 43 | parsery zakresu/RIR, objętość wg rodzaju, hierarchia sygnałów `comparePerformances`, **overshoot** (`repsAboveRange`), statusy silnika (baseline / green / yellow / red / stagnation), przerwa >14 dni, notatki (gorszy dzień, za ciężko), sugestia „można rozważyć zwiększenie”, okno 10 wykonań, chronologia historii (brak „przecieku przyszłości” przy backfillu) |
+| `unit/progression-crossversion.test.mjs` | 5 | silnik aktualny vs `c07a61d` (sprzed overshoot): 2000 losowych, deterministycznych przypadków. Różnice dopuszczalne **tylko** tam, gdzie decydują powtórzenia powyżej zakresu. Test jest przypięty do etapu overshoot (patrz niżej) |
+| `unit/muscle-groups.test.mjs` | 39 | MGW-001: słownik 10 partii, mapa atlasu (61), tylko partia główna (bez podwójnego liczenia), jednostki kg/powt./s rozdzielone, dropsety pominięte, okno dat, „brak porównania” (inne ćwiczenia / inna jednostka), chronologia z `session.date`. MGW-002: `buildMuscleCategory` (kolejność słownikowa), `readMuscleSelection` (atlas tylko do odczytu, stare kategorie, legacy „Nogi”), filtry (+Cardio, „Partia nieokreślona” tylko gdy potrzebna), odznaki |
 | `unit/dates-dashboard.test.mjs` | 19 | `editedSessionDateIso` (ten sam dzień = ten sam timestamp, inny dzień = ta sama godzina lokalna, DST), `toLocalDateStr`, Dashboard: kroczące 30 dni zakotwiczone na ostatnim treningu, `computeDashboardSummary`, `getNextPlan`, `summarizeActiveWorkoutDraft`, `findMatchingSessions` |
 | `unit/accounts-storage.test.mjs` | 22 | namespace’y gość/A/B, izolacja danych, device_id per konto, jednorazowa niedestrukcyjna migracja kluczy `trainapp_*`, marker inicjalizacji konta + bramka sync, `hasLocalAccountData`, snapshot/restore/clear jednego konta, `startAccountEmpty`, `checkCloudAccountData` (fake), teksty błędów offline |
 | `unit/sync-queue.test.mjs` | 10 | lokalna kolejka sync: dedup, walidacja, izolacja per konto, uszkodzony JSON, klasyfikacja błędów, backoff, kolejność zależności tabel, szkic treningu poza synchronizacją |
-| `ui/components.test.mjs` | 10 | jsdom + React 18.3.1: `DateField` (dd.mm.rrrr, brak przyszłych dat, nieistniejące daty), `ExerciseEditorModal` (partia główna + drugorzędne → `category`, atlas tylko do odczytu, legacy „Nogi”), `LoginScreen` offline |
-| `ui/app-flows.test.mjs` | 5 | pełna `<App/>` jako gość: start bez zapisów do chmury, podsumowanie 30 dni, karta „Kontynuuj trening” (otwiera tylko przycisk, szkic zostaje), następny plan |
-| **Razem** | **140** | |
+| `ui/components.test.mjs` | 14 | jsdom + React 18.3.1: `DateField` (dd.mm.rrrr, brak przyszłych dat, nieistniejące daty), `ExerciseEditorModal` (partia główna + drugorzędne → `category`, atlas tylko do odczytu, legacy „Nogi”), `LoginScreen` offline |
+| `ui/app-flows.test.mjs` | 7 | pełna `<App/>` jako gość: start bez zapisów do chmury, podsumowanie 30 dni, karta „Kontynuuj trening” (otwiera tylko przycisk, szkic zostaje), następny plan |
+| **Razem** | **159** | |
+
+Poprawki po production smoke test (19 testów dopisanych do 140): podwójna kropka w tekstach
+overshoot/stagnacji (+ strażnik „..” na macierzy 4 × 2000 przypadków), `ChartCard showDelta`
+(wykres partii bez delty w nagłówku; przypadek 1800 → 2160 → Dipsy 240 w Statystykach),
+osobny kafel „Łydki” w atlasie (assety przypięte hashem SHA-256).
 
 ## Czego ten zestaw nie obejmuje (brak pokrycia — świadomie)
 

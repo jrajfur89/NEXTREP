@@ -127,3 +127,43 @@ describe("LoginScreen offline", () => {
     assert.doesNotMatch(document.body.textContent, /Failed to fetch/);
   });
 });
+
+// Post-smoke-test fix: ChartCard's header delta (last − first) is optional.
+describe("ChartCard showDelta", () => {
+  const props = { title: "Objętość na trening z tą partią", data: [1800, 2160, 240], dates: ["3.10", "6.10", "6.10"], unit: "kg" };
+  test("default (showDelta=true): unchanged behaviour — red TrendingDown with −1560kg", async () => {
+    const root = await mount(h(A.ChartCard, props));
+    assert.ok(root.querySelector('[data-icon="TrendingDown"]'));
+    assert.match(root.textContent, /-1560kg/);
+  });
+  test("default keeps a positive delta green/TrendingUp (other charts unchanged)", async () => {
+    const root = await mount(h(A.ChartCard, { ...props, data: [100, 120] }));
+    assert.ok(root.querySelector('[data-icon="TrendingUp"]'));
+    assert.match(root.textContent, /\+20kg/);
+  });
+  test("showDelta=false: no delta in the header, values still shown", async () => {
+    const root = await mount(h(A.ChartCard, { ...props, showDelta: false }));
+    assert.ok(!root.querySelector('[data-icon="TrendingDown"]') && !root.querySelector('[data-icon="TrendingUp"]'));
+    assert.doesNotMatch(root.textContent, /-1560|\+360/);
+    assert.match(root.textContent, /240kg/, "current (last) value still displayed");
+    assert.match(root.textContent, /240kg – 2160kg/, "min–max of the real points still displayed");
+  });
+});
+
+// Post-smoke-test fix: the Łydki tile uses its own asset; Czworogłowe uda keeps the Nogi asset.
+describe("CategoryTiles atlas images", () => {
+  test("each muscle-group tile renders the expected asset", async () => {
+    const root = await mount(h(A.CategoryTiles, { categories: A.MUSCLE_FILTER_OPTIONS, onSelect: () => {}, countFor: () => 1 }));
+    const src = (alt) => {
+      const img = root.querySelector(`img[alt="${alt}"]`);
+      return img ? img.getAttribute("src") : null;
+    };
+    assert.equal(src("Łydki"), A.CATEGORY_IMAGES["Łydki"]);
+    assert.equal(src("Czworogłowe uda"), A.CATEGORY_IMAGES.Nogi);
+    assert.notEqual(src("Łydki"), src("Czworogłowe uda"));
+    assert.equal(src("Klatka piersiowa"), A.CATEGORY_IMAGES.Klatka);
+    assert.equal(src("Dwugłowe uda / pośladki"), A.CATEGORY_IMAGES["Pośladki"]);
+    assert.equal(src("Cardio"), A.CATEGORY_IMAGES.Cardio);
+    assert.equal(root.querySelectorAll("img").length, 11, "10 groups + Cardio, each with an image");
+  });
+});

@@ -5,6 +5,7 @@
 //            filters (10 groups + Cardio + "Partia nieokreślona" only when needed), badges.
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { loadApp } from "../harness/load-app.mjs";
 import { W, BW, T, DROP, session, ex } from "../harness/fixtures.mjs";
 
@@ -237,5 +238,63 @@ describe("MGW-002 filters and badges", () => {
     assert.equal(A.categoryVisualKey("Klatka piersiowa"), "Klatka");
     assert.equal(A.categoryVisualKey("Czworogłowe uda"), "Nogi");
     assert.equal(A.categoryVisualKey("Cardio"), "Cardio");
+  });
+});
+
+// Post-smoke-test fix: "Łydki" got its own atlas tile (it used to fall back to the shared "Nogi"
+// visual, identical to "Czworogłowe uda"). Assets are pinned by SHA-256 of the data URI so any
+// accidental change to another tile fails here.
+describe("atlas tiles (CATEGORY_IMAGES)", () => {
+  const h = (v) => createHash("sha256").update(v).digest("hex").slice(0, 16);
+  const PINNED_UNCHANGED = {
+    Klatka: "dce017813105bcb2", Plecy: "8d7b7331d77a84ae", Nogi: "8159c2db0e0ff1f3", Barki: "8592fb3365ab73a8",
+    Biceps: "19eeda7cbb9afe3c", Triceps: "0dcc39da14f00ffc", Brzuch: "7f52e5aad28b1489", "Pośladki": "2cae72a4d26aa1d6",
+    Przedramiona: "d42e338ce0c08ee0", "Całe ciało": "22dad6448cffaa61", Cardio: "658c5a8a412dd1cb",
+  };
+  const LYDKI = "c9b8df967bb75daa";
+  const imageFor = (label) => A.CATEGORY_IMAGES[label] || A.CATEGORY_IMAGES[A.categoryVisualKey(label)];
+  const jpegSize = (dataUri) => {
+    const b = Buffer.from(dataUri.split(",")[1], "base64");
+    for (let i = 2; i < b.length - 9; i++) if (b[i] === 0xff && b[i + 1] >= 0xc0 && b[i + 1] <= 0xc2) return [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)];
+    return null;
+  };
+
+  test("the 11 existing tile assets are byte-identical to 7ca9c45", () => {
+    for (const [k, v] of Object.entries(PINNED_UNCHANGED)) assert.equal(h(A.CATEGORY_IMAGES[k]), v, k);
+  });
+  test("Łydki has its own asset (pinned), 320×320 JPEG like the others", () => {
+    assert.equal(h(A.CATEGORY_IMAGES["Łydki"]), LYDKI);
+    assert.deepEqual(jpegSize(A.CATEGORY_IMAGES["Łydki"]), [320, 320]);
+    assert.deepEqual(jpegSize(A.CATEGORY_IMAGES.Nogi), [320, 320]);
+  });
+  test("tile lookup: Łydki → own tile; Czworogłowe uda → unchanged Nogi tile; others unchanged", () => {
+    assert.equal(imageFor("Łydki"), A.CATEGORY_IMAGES["Łydki"]);
+    assert.notEqual(imageFor("Łydki"), imageFor("Czworogłowe uda"));
+    assert.equal(h(imageFor("Czworogłowe uda")), PINNED_UNCHANGED.Nogi);
+    const expected = { "Klatka piersiowa": "Klatka", Plecy: "Plecy", Barki: "Barki", Biceps: "Biceps", Triceps: "Triceps", Przedramiona: "Przedramiona", Brzuch: "Brzuch", "Dwugłowe uda / pośladki": "Pośladki", Cardio: "Cardio" };
+    for (const [label, key] of Object.entries(expected)) assert.equal(h(imageFor(label)), PINNED_UNCHANGED[key], label);
+  });
+  test("classification is untouched: Łydki still maps to calves, visual key still 'Nogi'", () => {
+    assert.equal(A.MUSCLE_GROUP_BY_LABEL["Łydki"].id, "calves");
+    assert.equal(A.categoryVisualKey("Łydki"), "Nogi");
+  });
+});
+
+// Post-smoke-test fix, data side of the muscle-group chart: the points stay the real workload values
+// (the fix only hides the chart header's last−first delta, see ui/app-flows).
+describe("muscle-group chart data for the smoke-test case 1800 → 2160 → Dipsy 240", () => {
+  const smoke = () => [
+    session("2026-10-03T14:38:00", [ex("bench_press", "weight", [W(60, 10), W(60, 10), W(60, 10)])], { planLabel: "SMOKE Plan A" }),
+    session("2026-10-06T14:39:00", [ex("bench_press", "weight", [W(60, 12), W(60, 12), W(60, 12)])], { planLabel: "SMOKE Plan A" }),
+    session("2026-10-06T14:44:00", [ex("dips", "bodyweightPlus", [W(10, 8), W(10, 8), W(10, 8)])]),
+  ];
+  test("series keeps all three real values in kg", () => {
+    assert.deepEqual(A.computeCategoryTimeSeries(smoke(), [], "chest").map((p) => [p.volume, p.unit]), [[1800, "kg"], [2160, "kg"], [240, "kg"]]);
+  });
+  test("card comparison: not comparable (other exercises); without the Dipsy session: +360", () => {
+    const d = A.computeCategoryLastDelta(smoke(), [], "chest");
+    assert.deepEqual([d.comparable, d.reason], [false, "exercises"]);
+    const d2 = A.computeCategoryLastDelta(smoke().slice(0, 2), [], "chest");
+    assert.deepEqual([d2.comparable, d2.delta], [true, 360]);
   });
 });
