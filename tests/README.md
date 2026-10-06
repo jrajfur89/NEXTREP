@@ -53,7 +53,9 @@ czy bundle pochodzi z aktualnego `index.html` (md5). Jeśli nie, test kończy si
 | `unit/sync-queue.test.mjs` | 10 | lokalna kolejka sync: dedup, walidacja, izolacja per konto, uszkodzony JSON, klasyfikacja błędów, backoff, kolejność zależności tabel, szkic treningu poza synchronizacją |
 | `ui/components.test.mjs` | 14 | jsdom + React 18.3.1: `DateField` (dd.mm.rrrr, brak przyszłych dat, nieistniejące daty), `ExerciseEditorModal` (partia główna + drugorzędne → `category`, atlas tylko do odczytu, legacy „Nogi”), `LoginScreen` offline |
 | `ui/app-flows.test.mjs` | 7 | pełna `<App/>` jako gość: start bez zapisów do chmury, podsumowanie 30 dni, karta „Kontynuuj trening” (otwiera tylko przycisk, szkic zostaje), następny plan |
-| **Razem** | **159** | |
+| `unit/workspace-hardening.test.mjs` | 6 | Stage 4A.2: warunek w `saveDataToCloud` (tylko workspace bieżącej sesji), przypięty SDK Supabase 2.117.2 w importmap, `purgeDeletedAccountData` (tylko usunięte konto i jego kopie), `cancelScheduledSync` |
+| `ui/workspace-isolation.test.mjs` | 7 | Stage 4A.2 w pełnej `<App/>`: gość offline → odzyskana sesja w trakcie treningu gościa (przełączenie wstrzymane do zakończenia lub przerwania, komunikat, dane gościa nie trafiają do konta), usunięcie konta (sukces i błąd), anulowanie zaplanowanych sync przy zmianie workspace’u, A → wylogowanie → B → wylogowanie → A (dane, szkic, lokalne PRO) |
+| **Razem** | **172** | |
 
 Poprawki po production smoke test (19 testów dopisanych do 140): podwójna kropka w tekstach
 overshoot/stagnacji (+ strażnik „..” na macierzy 4 × 2000 przypadków), `ChartCard showDelta`

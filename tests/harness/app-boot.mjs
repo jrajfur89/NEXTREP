@@ -15,3 +15,31 @@ export async function bootGuestApp(seed = {}) {
   await flush(20, 5);
   return { A, container };
 }
+
+// Boots the full <App/> with an optional SESSION (fake Supabase) and raw localStorage entries
+// (key → value; objects are JSON-stringified). Options:
+//   session      — { user: { id } } or null (guest)
+//   storage      — { "full_key": value }
+//   holdSession  — getSession() stays pending (SDK still trying to refresh, e.g. offline)
+//   offline      — navigator.onLine reports false while the app runs (restored by restoreOnline())
+export async function bootApp({ session = null, storage = {}, holdSession = false, offline = false } = {}) {
+  const A = await loadApp();
+  resetStorage();
+  A.__testState.resetActiveDataNamespace();
+  localStorage.setItem("trainapp_onboarding_completed_v1", "true");
+  for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
+  const S = globalThis.__nrSupabase;
+  S.session = session;
+  S.holdGetSession = holdSession;
+  if (offline) Object.defineProperty(globalThis.navigator, "onLine", { value: false, configurable: true });
+  await mount(React.createElement(A.App));
+  const video = document.querySelector("video");
+  if (video) await act(async () => video.dispatchEvent(new Event("ended")));
+  await flush(20, 5);
+  return { A, S };
+}
+export function restoreOnline() {
+  try {
+    delete globalThis.navigator.onLine;
+  } catch {}
+}

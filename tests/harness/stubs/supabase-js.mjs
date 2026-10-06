@@ -6,6 +6,8 @@
 //   __nrSupabase.rpc[fn]        — (args) => ({ data, error }) handler for supabase.rpc(fn)
 //   __nrSupabase.failNetwork    — true → every call rejects/returns a "Failed to fetch" error
 //   __nrSupabase.calls          — log of every call: { kind, table|fn, op, args }
+//   __nrSupabase.holdGetSession — true → getSession() stays pending (like the SDK retrying an
+//                                 expired-token refresh while offline) until releaseGetSession()
 //   __nrSupabase.reset()        — back to defaults
 //
 // Supported query-builder subset (what index.html uses): select, insert, update, upsert, delete,
@@ -21,6 +23,13 @@ function state() {
       failNetwork: false,
       calls: [],
       authListeners: [],
+      holdGetSession: false,
+      pendingGetSession: [],
+      releaseGetSession(session = null) {
+        const waiting = s.pendingGetSession;
+        s.pendingGetSession = [];
+        waiting.forEach((resolve) => resolve({ data: { session }, error: null }));
+      },
       reset() {
         s.session = null;
         s.tables = {};
@@ -28,6 +37,8 @@ function state() {
         s.failNetwork = false;
         s.calls = [];
         s.authListeners = [];
+        s.holdGetSession = false;
+        s.pendingGetSession = [];
       },
       emitAuth(event, session) {
         s.session = session;
@@ -111,6 +122,7 @@ export function createClient(url, key) {
   const auth = {
     async getSession() {
       s.calls.push({ kind: "auth", op: "getSession" });
+      if (s.holdGetSession) return new Promise((resolve) => s.pendingGetSession.push(resolve));
       if (s.failNetwork) return { data: { session: null }, error: netError() };
       return { data: { session: s.session }, error: null };
     },

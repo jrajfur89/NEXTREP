@@ -83,7 +83,7 @@
     "react": "https://esm.sh/react@18.3.1",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
     "lucide-react": "https://esm.sh/lucide-react@0.454.0?deps=react@18.3.1&external=react",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.117.2"
   }
 }
 </script>
@@ -1150,6 +1150,25 @@ function restoreAccountNamespace(snap) {
 function clearAccountNamespace(userId) {
   for (const k of accountNamespaceKeys(userId)) localStorage.removeItem(k);
 }
+// Stage 4A.2: after a SUCCESSFUL server-side account deletion nothing of that account stays on
+// the device — its whole workspace (data + sync queue/meta/conflicts via clearAccountNamespace,
+// init marker, cloud-restore pointer, device id, migration statuses) and its backups. The guest
+// workspace, other accounts and device-level keys (onboarding, migration markers) are untouched.
+function purgeDeletedAccountData(userId) {
+  if (userId == null || userId === "") return false;
+  const ns = getLocalDataNamespace(userId);
+  if (ns === "guest") return false;
+  clearAccountNamespace(userId);
+  clearAccountInitMarker(userId);
+  clearLastCloudRestorePointer(userId);
+  for (const name of ["device_id", "migration_v1_status", "migration_workout_identity"]) {
+    try {
+      localStorage.removeItem(getStorageKey(name, userId));
+    } catch {}
+  }
+  saveBackupList(loadBackupList().filter((b) => backupOwnerNamespace(b) !== ns));
+  return true;
+}
 const stillSameAccount = async (userId, expectedRefUserId) =>
   getActiveDataNamespace() === getLocalDataNamespace(userId) && expectedRefUserId() === userId && (await currentSessionUserId()) === userId;
 
@@ -1467,6 +1486,8 @@ async function saveDataToCloud() {
     return { error: "Nie udało się sprawdzić sesji logowania." };
   }
   if (!user) return { error: "Musisz być zalogowany, aby zapisać dane w chmurze." };
+  // Stage 4A.2: only this account's own workspace may ever be uploaded as its data.
+  if (!isActiveNamespaceFor(user.id)) return { error: "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę." };
 
   const payload = {};
   for (const [field, localKey] of CLOUD_SYNC_FIELDS) {
@@ -2591,6 +2612,11 @@ function cancelAllScheduledSyncRetries() {
 
 // --- Debounce helper for future automatic sync (point 10). ---
 let _scheduleSyncTimer = null;
+// Stage 4A.2: drops a debounced sync that was scheduled for the previous workspace.
+function cancelScheduledSync() {
+  if (_scheduleSyncTimer) clearTimeout(_scheduleSyncTimer);
+  _scheduleSyncTimer = null;
+}
 function scheduleSync(delayMs = 1500, runner = runSync) {
   // TEMPORARY DIAGNOSTIC — zero behavior change, only logging.
   console.log("[sync diag] scheduleSync() called", { delayMs, hadExistingTimer: !!_scheduleSyncTimer });
@@ -7586,9 +7612,11 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
     setDeleting(true);
     setDeleteError("");
     try {
+      const deletedUserId = authUser ? authUser.id : null;
       const { error } = await supabase.rpc("delete_user");
       if (error) throw error;
       await supabase.auth.signOut();
+      purgeDeletedAccountData(deletedUserId); // only after delete_user succeeded
       setConfirmDelete(false);
       onNavigate("more");
     } catch (e) {
@@ -15016,22 +15044,35 @@ function App() {
     };
   }, []);
   const expectedNs = !supabase ? "guest" : authLoaded ? getLocalDataNamespace(authUserId) : offlineGuestAck ? "guest" : null;
-  const dataNamespaceLoaded = dataNs !== null && dataNs === expectedNs;
+  // Stage 4A.2: a session that appears while a GUEST workout is open (e.g. recovered by the SDK
+  // after "Kontynuuj bez logowania", or a login in another tab) never tears that workout down.
+  // The switch to the account's workspace is held — runtime only — until the workout is finished,
+  // interrupted or cancelled; meanwhile everything keeps writing ONLY the guest workspace.
+  const guestWorkoutOpen = dataNs === "guest" && (activeWorkoutPlan !== undefined || !!editSessionTarget);
+  const holdForGuestWorkout = guestWorkoutOpen && !!expectedNs && expectedNs !== "guest";
+  const workspaceNs = holdForGuestWorkout ? "guest" : expectedNs;
+  const heldSwitchRef = useRef(false);
+  if (holdForGuestWorkout) heldSwitchRef.current = true;
+  else if (expectedNs === "guest") heldSwitchRef.current = false;
+  const [sessionRecoveredNotice, setSessionRecoveredNotice] = useState(false);
+  const dataNamespaceLoaded = dataNs !== null && dataNs === workspaceNs;
   // Stage 4A.2: an account namespace is usable only once its data source is decided.
   // accountInit = { ns, status: "checking"|"choice"|"error_check"|"loading_cloud"|"error_load"|"ready", local, cloud, error, transient }
   const [accountInit, setAccountInit] = useState({ ns: null, status: "checking" });
-  const accountInitReady = expectedNs === "guest" || (accountInit.ns === dataNs && accountInit.status === "ready");
+  const accountInitReady = workspaceNs === "guest" || (accountInit.ns === dataNs && accountInit.status === "ready");
   const dataReady = dataNamespaceLoaded && accountInitReady;
   useEffect(() => {
-    if (!expectedNs) return;
-    const targetUserId = expectedNs === "guest" ? null : authUserId;
-    const targetNs = expectedNs;
+    if (!workspaceNs) return;
+    const targetUserId = workspaceNs === "guest" ? null : authUserId;
+    const targetNs = workspaceNs;
     // Switches are serialised: each one finishes (activate → reset → load) before the next starts.
     nsSwitchChainRef.current = nsSwitchChainRef.current
       .then(async () => {
         // Let an in-flight sync of the previous account finish writing ITS namespace first
         // (bounded; sync additionally refuses to apply anything once the account changed).
         for (let i = 0; i < 200 && (isSyncRunInProgress() || isAccountInitBusy()); i++) await new Promise((r) => setTimeout(r, 50));
+        cancelAllScheduledSyncRetries(); // Stage 4A.2: no retry / debounced sync of the previous workspace survives the switch
+        cancelScheduledSync();
         activateDataNamespace(targetUserId);
         // Drop every piece of UI state that could still hold the previous namespace's objects.
         pendingTemplatePlans.clear();
@@ -15069,10 +15110,14 @@ function App() {
           setAccountInit({ ns: targetNs, status: "ready" });
         }
         setDataNs(targetNs);
+        if (targetUserId && heldSwitchRef.current) {
+          heldSwitchRef.current = false;
+          setSessionRecoveredNotice(true); // the held switch just happened — say so
+        }
         if (targetUserId && !(getAccountInitMarker(targetUserId) || {}).status) runAccountInitCheck(targetUserId, targetNs);
       })
       .catch((e) => console.error("[namespace] switch failed", e));
-  }, [expectedNs]);
+  }, [workspaceNs]);
 
   // FIX 1 (B): as soon as a session exists (fresh login or app start with a stored session), fill
   // missing sync_meta baselines — protects accounts that were migrated but never synced. Silent,
@@ -15126,7 +15171,7 @@ function App() {
   }, [refreshServerPro]);
   const [, setProTick] = useState(0);
   const serverProActive =
-    serverPro.active && serverPro.userId === authUserId && (!serverPro.expires_at || Date.now() < Date.parse(serverPro.expires_at));
+    serverPro.active && serverPro.userId === authUserId && !holdForGuestWorkout && (!serverPro.expires_at || Date.now() < Date.parse(serverPro.expires_at));
   useEffect(() => {
     if (!serverProActive || !serverPro.expires_at) return;
     const ms = Date.parse(serverPro.expires_at) - Date.now() + 500;
@@ -15201,6 +15246,9 @@ function App() {
     }
   }, [authLoaded, authUser, dataReady]);
 
+  // Stage 4A.2: changes are queued for sync only when the active workspace belongs to the session
+  // (never while a guest workout holds the switch to a just-recovered account).
+  const queueForSession = () => !!authUserRef.current && isActiveNamespaceFor(authUserRef.current.id);
   const updateExercises = useCallback((updater) => {
     console.log("[sync diag] updateExercises() CALLED");
     setExercises((prev) => {
@@ -15210,7 +15258,7 @@ function App() {
       saveKey(STORAGE_KEYS.exercises, next);
       createBackupSnapshot("auto");
       console.log("[sync diag] updateExercises() authUserRef.current =", authUserRef.current);
-      if (authUserRef.current) {
+      if (queueForSession()) {
         const diff = diffById(prev, next);
         const enqueued = queueChangesForDiff("exercises", diff);
         console.log("[sync diag] updateExercises() queueChangesForDiff returned", enqueued);
@@ -15227,7 +15275,7 @@ function App() {
       const next = typeof updater === "function" ? updater(prev) : updater;
       saveKey(STORAGE_KEYS.plans, next);
       createBackupSnapshot("auto");
-      if (authUserRef.current) {
+      if (queueForSession()) {
         let any = false;
         any = queueChangesForDiff("plans", diffById(prev, next)) || any;
         // Nested: plan_items and plan_item_sets both carry stable uid()-generated ids, so they
@@ -15255,7 +15303,7 @@ function App() {
       const next = typeof updater === "function" ? updater(prev) : updater;
       saveKey(STORAGE_KEYS.history, next);
       createBackupSnapshot("auto");
-      if (authUserRef.current) {
+      if (queueForSession()) {
         let any = false;
         any = queueChangesForDiff("workouts", diffById(prev, next)) || any;
         // Nested: workout_exercises and workout_sets both carry stable ids — session.exercises[].id
@@ -15287,7 +15335,7 @@ function App() {
       const next = typeof updater === "function" ? updater(prev) : updater;
       saveKey(STORAGE_KEYS.measurements, next);
       createBackupSnapshot("auto");
-      if (authUserRef.current) {
+      if (queueForSession()) {
         if (queueChangesForDiff("measurements", diffById(prev, next))) scheduleSync();
       }
       return next;
@@ -15299,7 +15347,7 @@ function App() {
       const next = typeof updater === "function" ? updater(prev) : updater;
       saveKey(STORAGE_KEYS.customFields, next);
       createBackupSnapshot("auto");
-      if (authUserRef.current) {
+      if (queueForSession()) {
         // Identified by `key`, never `legacy_id` — nextrep_custom_fields has no such column.
         if (queueChangesForDiff("custom_fields", diffById(prev, next, "key"), "key")) scheduleSync();
       }
@@ -15310,7 +15358,7 @@ function App() {
   const saveUserName = useCallback((name) => {
     setUserName(name);
     saveKey(STORAGE_KEYS.userName, name);
-    if (authUserRef.current) {
+    if (queueForSession()) {
       // nextrep_profiles has exactly one row per user_id and no id column of its own — "self" is
       // a fixed, stable recordId sentinel for that single row, not a guess at a missing id.
       const version = bumpRecordVersion("profile", "self");
@@ -15855,6 +15903,15 @@ function App() {
   return (
     <>
       <React.Fragment key={`${screen}:${navResetKey}`}>{screenContent}</React.Fragment>
+      {sessionRecoveredNotice && (
+        <div className="fixed inset-x-0 bottom-24 z-50 px-4 flex justify-center" data-testid="session-recovered-notice">
+          <div className="w-full max-w-sm bg-neutral-900 border border-orange-500/60 rounded-2xl p-4 shadow-lg">
+            <p className="text-neutral-50 text-sm font-semibold mb-1">Sesja konta została odzyskana</p>
+            <p className="text-neutral-400 text-xs leading-relaxed mb-3">Aplikacja przełączyła się na dane Twojego konta. Trening wykonany bez logowania pozostał w danych gościa.</p>
+            <button onClick={() => setSessionRecoveredNotice(false)} className="w-full py-2 rounded-xl bg-orange-500 text-neutral-950 font-bold text-sm">OK</button>
+          </div>
+        </div>
+      )}
       {proModalOpen && (
         <ProUnlockModal proStatus={proStatus} serverPro={serverProForModal} onClose={() => setProModalOpen(false)} onSetManualPro={setManualPro} onGrantAdUnlock={grantAdUnlock} />
       )}
