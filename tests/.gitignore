@@ -1,0 +1,4 @@
+# installed by `npm install` — never commit
+node_modules/
+# generated from ../index.html by harness/build.mjs on every run
+harness/.build/

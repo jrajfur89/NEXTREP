@@ -1,0 +1,18 @@
+{
+  "name": "nextrep-tests",
+  "private": true,
+  "description": "Regression tests for NEXTREP (index.html). New suite written 2026-10-06 - see README.md.",
+  "type": "module",
+  "scripts": {
+    "build": "node harness/build.mjs",
+    "test": "node harness/build.mjs && node --test --test-reporter=spec \"unit/**/*.test.mjs\" \"ui/**/*.test.mjs\"",
+    "test:unit": "node harness/build.mjs && node --test --test-reporter=spec \"unit/**/*.test.mjs\"",
+    "test:ui": "node harness/build.mjs && node --test --test-reporter=spec \"ui/**/*.test.mjs\""
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0",
+    "jsdom": "25.0.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
