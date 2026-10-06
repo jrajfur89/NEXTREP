@@ -193,6 +193,11 @@ Aktywny trening nie może zostać przypadkowo przeniesiony między kontami.
 
 Przy zmianie workspace musi zostać zamknięty lub zapisany w odpowiednim namespace.
 
+Stage 4A.2: jeżeli podczas treningu gościa pojawi się sesja konta (np. odzyskana przez SDK),
+trening nie jest odmontowywany. Przełączenie na workspace konta jest odroczone do zakończenia lub
+przerwania treningu, a do tego czasu wszystkie zapisy trafiają wyłącznie do workspace gościa.
+Po przełączeniu aplikacja pokazuje komunikat o odzyskanej sesji.
+
 ---
 
 # 9. Dane chmurowe
@@ -650,7 +655,7 @@ Dane te nie są automatycznie przypisane do konta tylko dlatego, że użytkownik
 
 ---
 
-# 26. Anonymous → Account
+# 26. Anonymous / Guest → Account (Stage 4A.4)
 
 Migracja danych anonimowych do konta jest osobną operacją.
 
@@ -695,7 +700,7 @@ Błąd migracji nie może prowadzić do utraty lokalnych danych.
 
 ---
 
-# 27. Istniejące konto + lokalne dane
+# 27. Istniejące konto + lokalne dane (Stage 4A.5)
 
 Jeżeli użytkownik loguje się na istniejące konto i na urządzeniu istnieją lokalne dane, NEXTREP nie powinien automatycznie scalać danych bez jasnej decyzji.
 
@@ -718,7 +723,7 @@ Automatyczne połączenie nie jest domyślną operacją.
 
 ---
 
-# 28. Before-restore
+# 28. Before-restore (Stage 4A.3)
 
 Przed operacją:
 
@@ -738,6 +743,9 @@ Jeżeli cloud restore zakończy się błędem, lokalny stan powinien zostać odt
 
 Nie wolno przywrócić snapshotu należącego do innego konta.
 
+Status: **OPEN**. Mechanizm istnieje w kodzie (`loadAccountFromCloud`, `resolveDeviceSnapshot`,
+`restoreDeviceSnapshot`), ale nie ma testów w aktualnym zestawie, a Test E nie został powtórzony.
+
 ---
 
 # 29. Logout
@@ -753,6 +761,12 @@ Przed wylogowaniem NEXTREP powinien:
 5. przejść do workspace anonimowego lub ekranu logowania zgodnie z aktualnym flow aplikacji.
 
 Dane użytkownika nie są usuwane z LocalStorage tylko dlatego, że użytkownik się wylogował.
+
+Usunięcie konta (Stage 4A.2) różni się od logout: dopiero po skutecznym `delete_user` i
+wylogowaniu NEXTREP usuwa lokalny workspace usuniętego konta (dane, kolejkę i metadane sync,
+marker inicjalizacji, wskaźnik restore, device ID, statusy migracji) oraz jego kopie zapasowe.
+Workspace gościa, inne konta i ich kopie oraz klucze urządzenia (onboarding) pozostają.
+Błąd `delete_user` nie usuwa niczego lokalnie.
 
 ---
 
@@ -821,6 +835,11 @@ login offline
 ```
 
 jest nadal OPEN.
+
+Stan repo (2026-10-06): surowy „Failed to fetch” został zastąpiony komunikatem o braku sieci, a
+użytkownik pozostaje w ekranie logowania (testy automatyczne). Nie jest potwierdzone, że przy
+niepotwierdzonej sesji offline można pracować w lokalnym workspace konta (aplikacja proponuje tryb
+gościa). Test H nie został powtórzony, dlatego status pozostaje OPEN.
 
 ---
 
@@ -1023,7 +1042,11 @@ Kod i dokumentacja w repozytorium są nadrzędne wobec opisów znajdujących si�
 * PUSH,
 * PULL,
 * conflict store,
-* account source selection.
+* account source selection,
+* Stage 4A.2 (`f2fe328`): odroczone przełączenie workspace podczas treningu gościa, strażnik
+  kolejki/sesji i `saveDataToCloud`, anulowanie timerów sync przy zmianie workspace, czyszczenie
+  lokalnych danych po usunięciu konta (testy automatyczne 172/172; production smoke jeszcze
+  niewykonany).
 
 ## TESTED
 

@@ -34,6 +34,32 @@ Current status:
 
 **IN PROGRESS / TESTING**
 
+## 2.1 Stage 4A steps
+
+Numbering below is the source of truth (same as `STAGE_STATUS.md` §10).
+
+| Step | Area | Status | Section in this plan |
+| ---- | ---- | ------ | -------------------- |
+| 4A.1 | Storage / sync / auth audit | IMPLEMENTED | — |
+| 4A.2 | Account workspace isolation | IMPLEMENTED / TESTED / DEPLOYED — production smoke pending | §4, §5 |
+| 4A.3 | Account source selection | IMPLEMENTED / TESTING | §6, §17 |
+| 4A.4 | Anonymous/Guest → Account migration | PLANNED / PARTIALLY IMPLEMENTED | §7 |
+| 4A.5 | Existing account + local data / merge conflicts | TESTING | §8, §13–§16 |
+| 4A.6 | Offline operation | TESTING | §18–§20 |
+| 4A.7 | Server PRO transition | IMPLEMENTED / TESTING (transitional) | §21, §22 |
+| 4A.8 | Remove local PRO | PLANNED (local PRO still exists and must not be removed yet) | §23 |
+| 4A.9 | Final regression | PLANNED (not executed) | §25–§27 |
+
+The `Stage 4A.x` comments in `index.html` use an older, shifted numbering (most `4A.1` comments =
+roadmap 4A.2, older `4A.2` comments = roadmap 4A.3; the `4A.2` comments from `f2fe328` match the
+roadmap). Do not use code comments to decide the stage of a change.
+
+4A.2 (`f2fe328`) adds to the isolation already validated earlier: deferred workspace switch while a
+guest workout is open (the workout is not unmounted when an account session is recovered), queue /
+session guard, `saveDataToCloud` active-workspace guard, sync timer cancellation on workspace switch,
+account-local cleanup after a successful account deletion, and Supabase JS pinned to `2.117.2`.
+Automated suite: 172/172 at stage close. Production smoke still to be executed.
+
 Already validated:
 
 * account namespace isolation
@@ -137,7 +163,7 @@ This allows other devices to receive the deletion while offline.
 
 ---
 
-# 4. WORKSPACE MODEL
+# 4. WORKSPACE MODEL (Stage 4A.2)
 
 The local application uses separate namespaces.
 
@@ -172,7 +198,7 @@ This includes:
 
 ---
 
-# 5. ACCOUNT SWITCHING
+# 5. ACCOUNT SWITCHING (Stage 4A.2)
 
 Target sequence:
 
@@ -198,9 +224,13 @@ show application
 
 The application must not expose the new account until the correct namespace has been loaded.
 
+Exception (4A.2): if an account session appears while a guest workout is open, the switch is
+deferred — the workout stays open and keeps writing only to the guest workspace; the switch to the
+account workspace happens after the workout is finished or interrupted, followed by a notice.
+
 ---
 
-# 6. ACCOUNT SOURCE SELECTION
+# 6. ACCOUNT SOURCE SELECTION (Stage 4A.3)
 
 After authentication, NEXTREP determines:
 
@@ -246,7 +276,10 @@ Merge must be deliberate.
 
 ---
 
-# 7. ANONYMOUS → ACCOUNT
+# 7. ANONYMOUS / GUEST → ACCOUNT MIGRATION (Stage 4A.4)
+
+This is the actual migration of guest data into an account. It is separate from account source
+selection (§6, Stage 4A.3), which only chooses which of the account's own datasets to use.
 
 Target migration:
 
@@ -300,7 +333,7 @@ verifying
 
 ---
 
-# 8. LOCAL + CLOUD DATA
+# 8. LOCAL + CLOUD DATA (Stage 4A.5)
 
 When both local and cloud data exist, the final architecture must support record-level merging.
 
@@ -558,6 +591,11 @@ Current status:
 
 **OPEN / FAILED TEST**
 
+Repo check (2026-10-06): the code contains a before-restore mechanism (`loadAccountFromCloud`
+creates a `before-restore` backup and a restore pointer; `resolveDeviceSnapshot` /
+`restoreDeviceSnapshot` restore it with account/namespace checks). It has no tests in the current
+automated suite and Test E has not been repeated, so the status stays OPEN.
+
 Required behaviour:
 
 ```text
@@ -591,6 +629,12 @@ This is the first current technical fix.
 Current status:
 
 **OPEN / FAILED TEST**
+
+Repo check (2026-10-06): logging in offline now shows the network message instead of a raw
+"Failed to fetch" and stays in the login flow (covered by automated tests). When a stored session
+cannot be confirmed offline, the app shows "Nie można potwierdzić sesji" and offers to continue as
+guest; continuing in the account's own local workspace in that case is not implemented/confirmed.
+Test H has not been repeated. Status stays OPEN.
 
 Authentication and account initialization must be treated separately.
 

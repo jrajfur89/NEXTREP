@@ -114,9 +114,24 @@ SHOW APP
 
 Aplikacja nie może pokazać danych poprzedniego konta podczas przełączania.
 
+Stage 4A.2 (`f2fe328`) dodatkowo:
+
+* jeżeli w trakcie treningu gościa pojawi się sesja konta (np. odzyskana przez SDK), przełączenie
+  workspace jest odroczone do zakończenia albo przerwania treningu; trening nie jest odmontowywany,
+  a zapisy trafiają wyłącznie do workspace gościa,
+* zmiany trafiają do kolejki sync tylko wtedy, gdy aktywny workspace należy do bieżącej sesji,
+* `saveDataToCloud` wysyła wyłącznie aktywny workspace konta z sesji,
+* przy każdej zmianie workspace anulowane są zaplanowane ponowienia sync i debounce,
+* po skutecznym `delete_user` i wylogowaniu usuwane są lokalne dane i kopie zapasowe tylko
+  usuniętego konta.
+
 ---
 
-# 5. Anonymous → Account
+# 5. Account source selection po zalogowaniu (Stage 4A.3)
+
+> Ta sekcja opisuje **wybór źródła danych konta** (Stage 4A.3), a nie migrację danych gościa.
+> Właściwa migracja Guest/Anonymous → Account to osobny etap **4A.4**
+> (`STAGE_4A_PLAN.md` §7, `ACCOUNT_DATA_MODEL.md` §26) i nie jest tu opisana.
 
 Migracja danych anonimowych do konta jest osobnym procesem.
 
@@ -181,7 +196,7 @@ Nie wykonujemy automatycznego scalania obu źródeł.
 
 ---
 
-# 6. Source selection
+# 6. Source selection (Stage 4A.3)
 
 Obecny model posiada mechanizm wyboru źródła danych.
 
@@ -231,6 +246,11 @@ LOCAL STATE
 ```
 
 Obecnie `before-restore` wymaga dalszej implementacji i testów.
+
+Stan repo (2026-10-06): w kodzie istnieje mechanizm before-restore (`loadAccountFromCloud` tworzy
+kopię `before-restore` i wskaźnik; `resolveDeviceSnapshot` / `restoreDeviceSnapshot` odtwarzają ją
+z kontrolą konta i namespace). Nie ma testów w aktualnym zestawie automatycznym, a Test E nie
+został powtórzony — status pozostaje **OPEN**.
 
 ---
 
@@ -309,6 +329,12 @@ Aktualny status:
 ```text
 OPEN / FAILED TEST
 ```
+
+Stan repo (2026-10-06): login offline pokazuje komunikat o braku sieci zamiast surowego
+„Failed to fetch” i pozostaje w ekranie logowania (testy automatyczne). Gdy zapisanej sesji nie da
+się potwierdzić offline, aplikacja pokazuje „Nie można potwierdzić sesji” i proponuje tryb gościa;
+dalsza praca w lokalnym workspace konta w tej sytuacji nie jest potwierdzona. Test H nie został
+powtórzony — status pozostaje **OPEN**.
 
 Nie należy udawać sukcesu uwierzytelnienia bez odpowiedniej lokalnej sesji / mechanizmu.
 
@@ -989,7 +1015,11 @@ Nie należy:
 * account source selection,
 * Supabase sync state,
 * stable IDs,
-* podstawowa obsługa offline changes.
+* podstawowa obsługa offline changes,
+* Stage 4A.2 (`f2fe328`, testy automatyczne 172/172, wdrożone; production smoke jeszcze niewykonany): odroczone
+  przełączenie workspace podczas treningu gościa, strażnik kolejki/sesji, strażnik
+  `saveDataToCloud`, anulowanie timerów sync przy zmianie workspace, czyszczenie lokalnych danych
+  po usunięciu konta, Supabase JS przypięty do `2.117.2`.
 
 ## TESTING
 

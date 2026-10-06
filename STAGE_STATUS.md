@@ -59,7 +59,7 @@
 | Login                        | TESTED      |                                |
 | Logout                       | IMPLEMENTED |                                |
 | Password reset               | IMPLEMENTED |                                |
-| Account deletion             | TESTED      | Secured RPC                    |
+| Account deletion             | TESTED      | Secured RPC; local cleanup of the deleted account after success — Stage 4A.2 (automated tests) |
 | Email confirmation handling  | IMPLEMENTED |                                |
 | Google login                 | DEPRECATED  | Removed from product direction |
 | Service-role frontend access | DEPRECATED  | Must never be used             |
@@ -151,6 +151,12 @@
 | Local PRO isolation                  | TESTED      |                         |
 | Backup filtering by workspace        | IMPLEMENTED |                         |
 | Account switch synchronization guard | TESTED      |                         |
+| Guest workout kept open when an account session is recovered (deferred workspace switch) | IMPLEMENTED / TESTED (automated) | Stage 4A.2, `f2fe328` |
+| Sync queue only for the session's own workspace | IMPLEMENTED / TESTED (automated) | Stage 4A.2 |
+| `saveDataToCloud` active-workspace guard | IMPLEMENTED / TESTED (automated) | Stage 4A.2 |
+| Sync retry / debounce timers cancelled on workspace switch | IMPLEMENTED / TESTED (automated) | Stage 4A.2 |
+| Local cleanup after successful account deletion | IMPLEMENTED / TESTED (automated) | Stage 4A.2; guest, other accounts and their backups untouched |
+| Supabase JS pinned to `2.117.2` | IMPLEMENTED / DEPLOYED | Stage 4A.2; import on production not yet confirmed by smoke |
 
 ---
 
@@ -178,17 +184,52 @@
 
 Stage 4A started as a planned architectural phase. Implementation is now underway.
 
-| Step | Area                          | Status                          |
-| ---- | ----------------------------- | ------------------------------- |
-| 4A.1 | Storage / sync / auth audit   | IMPLEMENTED                     |
-| 4A.2 | Account workspace isolation   | TESTED                          |
-| 4A.3 | Account source selection      | IMPLEMENTED / TESTING           |
-| 4A.4 | Anonymous → account migration | PLANNED / PARTIALLY IMPLEMENTED |
-| 4A.5 | Existing account + local data | TESTING                         |
-| 4A.6 | Offline operation             | TESTING                         |
-| 4A.7 | Server PRO transition         | IMPLEMENTED / TESTING           |
-| 4A.8 | Remove local PRO              | PLANNED                         |
-| 4A.9 | Final regression              | PLANNED                         |
+| Step | Area                                          | Status                                                  |
+| ---- | --------------------------------------------- | ------------------------------------------------------- |
+| 4A.1 | Storage / sync / auth audit                   | IMPLEMENTED                                             |
+| 4A.2 | Account workspace isolation                   | IMPLEMENTED / TESTED / DEPLOYED — production smoke pending |
+| 4A.3 | Account source selection                      | IMPLEMENTED / TESTING                                   |
+| 4A.4 | Anonymous/Guest → account migration           | PLANNED / PARTIALLY IMPLEMENTED                         |
+| 4A.5 | Existing account + local data / merge conflicts | TESTING                                               |
+| 4A.6 | Offline operation                             | TESTING                                                 |
+| 4A.7 | Server PRO transition                         | IMPLEMENTED / TESTING                                   |
+| 4A.8 | Remove local PRO                              | PLANNED                                                 |
+| 4A.9 | Final regression                              | PLANNED                                                 |
+
+## Stage numbering — source of truth
+
+This table (and `STAGE_4A_PLAN.md`) is the source of truth for Stage 4A numbering.
+
+The `Stage 4A.x` comments in `index.html` use an older, shifted numbering and must not be used to
+decide which roadmap step a piece of code belongs to:
+
+* most `Stage 4A.1` comments (per-user namespaces, account switching) describe roadmap **4A.2**,
+* the older `Stage 4A.2` comments (account data source initialisation / choice handlers) describe roadmap **4A.3**,
+* the `Stage 4A.2` comments added in `f2fe328` already match roadmap **4A.2**.
+
+The same shift exists in `NEXTREP_PROJECT_STATE.md` ("Stage 4A Step 1" = 4A.2, "Step 2" = 4A.3).
+The comments are intentionally not renamed now.
+
+## 4A.2 — Account workspace isolation
+
+Code: `f2fe328` (`fix: harden workspace isolation for stage 4a.2`), deployed to production
+(Vercel deployment `dpl_HQEsQ3mwYoJpJtkS8jVUxd6PND6d`, READY, alias `nextrep-theta.vercel.app`).
+
+Covers:
+
+* guest / per-user namespace isolation,
+* safe A → guest → B → A (data, workout draft, local PRO),
+* a guest workout is not unmounted when an account session is recovered — the workspace switch is deferred until the workout is finished or interrupted, then a notice is shown,
+* sync queue / session guard (changes are queued only for the session's own workspace),
+* `saveDataToCloud` uploads only the active workspace of the session's account,
+* sync retry and debounce timers are cancelled on every workspace switch,
+* after a successful `delete_user` + logout only the deleted account's local data and backups are removed,
+* Supabase JS pinned to `@supabase/supabase-js@2.117.2`.
+
+Validation: automated suite 172/172 at stage close (`tests/`, 13 new tests for 4A.2), progression
+cross-version unexplained = 0, isolated Chromium replay of the recovered-session and delete paths.
+Production smoke (SDK import on the real domain, guest start) not yet executed — 4A.2 is not marked
+COMPLETED until it passes.
 
 ---
 
@@ -196,8 +237,8 @@ Stage 4A started as a planned architectural phase. Implementation is now underwa
 
 | Issue                       | Status      | Description                                                                     |
 | --------------------------- | ----------- | ------------------------------------------------------------------------------- |
-| Before-restore              | OPEN        | Pre-cloud local state is not correctly restored                                 |
-| Offline login               | OPEN        | Offline login currently reaches fetch failure instead of intended recovery flow |
+| Before-restore              | OPEN        | Code has a before-restore mechanism (`loadAccountFromCloud` → backup + pointer, `resolveDeviceSnapshot`, `restoreDeviceSnapshot`), but it has no tests in the current suite and Test E was not repeated — cannot be confirmed |
+| Offline login               | OPEN        | Confirmed by tests: offline login shows the network message (no raw "Failed to fetch") and stays in the login flow. Not confirmed: continuing in the account's local workspace with an unconfirmed session while offline (app offers guest instead); Test H not repeated |
 | Different-record merge      | TESTING     | Requires E2E confirmation                                                       |
 | Nested merge                | TESTING     | Requires E2E confirmation                                                       |
 | Conflict E2E                | OPEN        | Needs complete end-to-end validation                                            |
@@ -361,7 +402,7 @@ Manual deployment verification remains required.
 | `STAGE_STATUS.md`          | IN PROGRESS |
 | `STAGE_4A_PLAN.md`         | IMPLEMENTED |
 | `ACCOUNT_DATA_MODEL.md`    | IMPLEMENTED |
-| `SYNC_AND_MIGRATION.md`    | PLANNED     |
+| `SYNC_AND_MIGRATION.md`    | IMPLEMENTED |
 | `PRO_ENTITLEMENT_MODEL.md` | PLANNED     |
 | `DESIGN.md`                | PLANNED     |
 | `PROGRESSION.md`           | PLANNED     |

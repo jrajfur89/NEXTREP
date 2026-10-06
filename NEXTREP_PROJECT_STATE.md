@@ -434,6 +434,16 @@ Device identity is also account-scoped.
 
 Stage 4A Step 1 has been implemented and manually validated.
 
+> Numbering note: "Step 1" here (and `Stage 4A.1` comments in `index.html`) is the older, shifted
+> numbering. In the roadmap (`STAGE_STATUS.md` §10, source of truth) this work is **4A.2 — Account
+> workspace isolation**.
+
+4A.2 hardening (`f2fe328`, deployed; production smoke pending): a guest workout is not unmounted
+when an account session is recovered (deferred workspace switch + notice), queue/session guard,
+`saveDataToCloud` active-workspace guard, sync timers cancelled on workspace switch, account-local
+cleanup after a successful account deletion, Supabase JS pinned to `2.117.2`. Automated tests
+172/172 at stage close.
+
 Validated scenarios:
 
 1. Guest → Account A
@@ -456,6 +466,10 @@ The application now waits for the correct account namespace/data to be loaded be
 **Status: IMPLEMENTED / TESTING**
 
 Stage 4A Step 2 has been implemented.
+
+> Numbering note: "Step 2" here (and the older `Stage 4A.2` comments in `index.html`) corresponds to
+> roadmap **4A.3 — Account source selection**. Anonymous/Guest → Account migration is a separate step,
+> **4A.4**.
 
 After account login, NEXTREP can distinguish:
 
@@ -511,6 +525,10 @@ restore exact pre-cloud local state
 
 Current implementation did not correctly restore the pre-cloud state.
 
+Repo check (2026-10-06): the code now contains a before-restore mechanism (`loadAccountFromCloud`,
+`resolveDeviceSnapshot`, `restoreDeviceSnapshot`), but it has no tests in the current automated suite
+and Test E has not been repeated. Status stays OPEN.
+
 Required fix:
 
 * capture pre-restore state
@@ -530,6 +548,11 @@ Current finding:
 When the application is already running and connectivity is later disabled, local training can continue.
 
 However, logging in while offline currently results in a fetch failure instead of the intended account initialization/recovery flow.
+
+Repo check (2026-10-06): offline login now shows the network message (no raw "Failed to fetch") and
+stays in the login flow — covered by automated tests. When a stored session cannot be confirmed
+offline, the app offers to continue as guest; using the account's local workspace in that case is not
+confirmed. Test H has not been repeated. Status stays OPEN.
 
 Required distinction:
 
@@ -992,7 +1015,9 @@ Current sub-status:
 | Area                         | Status                |
 | ---------------------------- | --------------------- |
 | Account namespace isolation  | TESTED / VALIDATED    |
-| Account source selection     | IMPLEMENTED / TESTING |
+| 4A.2 workspace isolation hardening (`f2fe328`) | IMPLEMENTED / TESTED (automated) / DEPLOYED — production smoke pending |
+| Account source selection (4A.3) | IMPLEMENTED / TESTING |
+| Anonymous/Guest → account migration (4A.4) | PLANNED / PARTIALLY IMPLEMENTED |
 | before-restore               | OPEN / FAILED TEST    |
 | Offline login                | OPEN / FAILED TEST    |
 | Different-record merge       | TESTING               |
@@ -1589,7 +1614,8 @@ SYNC
 └── Offline sync             TESTING
 
 STAGE 4A
-└── IN PROGRESS / TESTING
+├── Overall                  IN PROGRESS / TESTING
+└── 4A.2 Workspace isolation IMPLEMENTED / TESTED / DEPLOYED — production smoke pending
 
 ADMIN
 ├── Stage 1                  IMPLEMENTED / TESTED
