@@ -2226,8 +2226,33 @@ async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId) {
   return { planIdMap, planItemIdMap };
 }
 
+// Hotfix I-1 — backward compatibility: an older V1 run stored this workout exercise under
+// "<workoutLegacyId>-posN". When the canonical row (legacy_id = ex.id) does not exist yet, that ONE
+// historical row is re-keyed to ex.id (same row uuid, so its workout_sets stay attached) instead of a
+// second row being created next to it. Only when it is unambiguous: exactly one such row, in the same
+// workout and pointing at the same exercise. A canonical row that already exists wins and the
+// historical row is left untouched; nothing is ever deleted here. Read errors throw (no guessing).
+async function adoptV1PosWorkoutExercise(userId, canonicalLegacyId, posLegacyId, workoutId, mappedExerciseId) {
+  const table = "nextrep_workout_exercises";
+  const { data: canonical, error: canErr } = await supabase.from(table).select("id").eq("user_id", userId).eq("legacy_id", canonicalLegacyId).limit(1);
+  if (canErr) throw new Error(`${table}: odczyt istniejącego rekordu nie powiódł się — ${canErr.message}`);
+  if (canonical && canonical.length) return;
+  const { data: old, error: oldErr } = await supabase.from(table).select("id, workout_id, exercise_id").eq("user_id", userId).eq("legacy_id", posLegacyId).limit(2);
+  if (oldErr) throw new Error(`${table}: odczyt istniejącego rekordu nie powiódł się — ${oldErr.message}`);
+  if (!old || old.length !== 1) return;
+  const row = old[0];
+  if (row.workout_id !== workoutId || (row.exercise_id ?? null) !== (mappedExerciseId ?? null)) return;
+  const { error: updErr } = await supabase.from(table).update({ legacy_id: canonicalLegacyId }).eq("id", row.id).eq("user_id", userId);
+  if (updErr) throw new Error(`${table}: aktualizacja rekordu nie powiodła się — ${updErr.message}`);
+}
+
 async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, deviceId) {
   const workoutIdMap = {};
+  // Hotfix I-1: an ex.id is a usable identity only if it is unique in this history (old data may repeat
+  // one across sessions — normalizeWorkoutIdentity only reports that); a repeated one keeps the old
+  // "-posN" id, so one cloud row is never moved between workouts.
+  const wexIdCount = new Map();
+  for (const s of historyList) for (const ex of (s && Array.isArray(s.exercises) ? s.exercises : [])) if (ex && ex.id != null && ex.id !== "") wexIdCount.set(String(ex.id), (wexIdCount.get(String(ex.id)) || 0) + 1);
   for (const session of historyList) {
     if (!session || session.id == null) continue;
     const workoutLegacyId = String(session.id);
@@ -2252,10 +2277,12 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
     for (let pos = 0; pos < exs.length; pos++) {
       const wex = exs[pos];
       if (!wex) continue;
-      // history exercises have no id of their own in localStorage — the legacy id is
-      // deliberately deterministic (workout legacy id + position) so re-running the migration
-      // finds the same row again instead of creating a new one.
-      const wexLegacyId = `${workoutLegacyId}-pos${pos}`;
+      // Hotfix I-1: the identity of a workout exercise is its stable local session.exercises[].id —
+      // the same legacy_id the sync engine pushes and matches on PULL. The old deterministic
+      // "<workoutLegacyId>-posN" is only the fallback for an exercise without an id, and remains the
+      // base of the legacy ids of id-less sets below (unchanged, so existing set rows keep theirs).
+      const wexPosLegacyId = `${workoutLegacyId}-pos${pos}`;
+      const wexLegacyId = wex.id != null && wex.id !== "" && wexIdCount.get(String(wex.id)) === 1 ? String(wex.id) : wexPosLegacyId;
       const mappedExerciseId = wex.exerciseId != null ? exerciseIdMap[String(wex.exerciseId)] || null : null;
       const wexRow = {
         workout_id: workoutId,
@@ -2265,13 +2292,14 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
         exercise_type: wex.type || "",
         sets_detail: Array.isArray(wex.setsDetail) ? wex.setsDetail : [],
       };
+      if (wexLegacyId !== wexPosLegacyId) await adoptV1PosWorkoutExercise(userId, wexLegacyId, wexPosLegacyId, workoutId, mappedExerciseId);
       const workoutExerciseId = await upsertByLegacyId("nextrep_workout_exercises", userId, wexLegacyId, wexRow, deviceId);
 
       const sets = Array.isArray(wex.sets) ? wex.sets : [];
       for (let si = 0; si < sets.length; si++) {
         const s = sets[si];
         if (!s) continue;
-        const setLegacyId = String(s.id != null ? s.id : `${wexLegacyId}-set${si}`);
+        const setLegacyId = String(s.id != null ? s.id : `${wexPosLegacyId}-set${si}`);
         await upsertByLegacyId(
           "nextrep_workout_sets",
           userId,

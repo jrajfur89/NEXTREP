@@ -60,7 +60,9 @@ czy bundle pochodzi z aktualnego `index.html` (md5). Jeśli nie, test kończy si
 | `ui/source-selection.test.mjs` | 14 | Stage 4A.3 w pełnej `<App/>`: stany ekranu wyboru źródła, wczytanie z chmury + potwierdzenie / powrót do kopii, blokada przez szkic treningu, restart podczas wczytywania (A–D), retry, urządzenie → pusta chmura (sukces, błąd, zmiana chmury, dane gościa) |
 | `ui/source-selection-closure.test.mjs` | 20 | Stage 4A.3 w pełnej `<App/>`: scenariusze A–J z audytu (nowe konto, tylko chmura, konto zainicjalizowane, A → B → A, dane gościa, sesja odzyskana przy starcie, błąd sieci), nieznany marker, „wróć do danych z urządzenia” tylko gdy możliwe, cykl życia wskaźnika restore, przerwana wysyłka po restarcie, blokady w UI, brak starego „Pobierz / Przywróć dane z chmury” |
 | `ui/source-selection-dead-ends.test.mjs` | 7 | Stage 4A.3: żadna akcja wyboru źródła nie zostawia spinnera bez przycisków (nieudane sprawdzenie konta przy wczytaniu z chmury, wysyłce, pustych danych, ponowieniach i „Wybierz ponownie”), nieaktualna akcja nie działa dalej i nie przejmuje ekranu nowego przepływu |
-| **Razem** | **268** | |
+| `unit/v1-workout-exercise-identity.test.mjs` | 10 | Hotfix I-1: migracja V1 zapisuje ćwiczenia treningu z `legacy_id = ex.id` (jak sync; id powtórzone w kilku sesjach zostaje przy `-posN`), więc PULL po uploadzie nie dubluje ćwiczeń ani serii (objętość i werdykt progresji bez zmian), idempotencja V1 → V1 → PULL → PULL, tożsamość serii bez zmian, zgodność z wierszami `<workoutId>-posN` (przejęcie jednego jednoznacznego wiersza, bez drugiego rekordu; wiersz kanoniczny wygrywa; inny / niejednoznaczny wiersz nietknięty), narzędzie naprawcze |
+| `ui/v1-identity-device-upload.test.mjs` | 1 | Hotfix I-1 w pełnej `<App/>`: 4A.3 urządzenie → pusta chmura → sync → reload → sync, historia, objętość i progresja bez zmian |
+| **Razem** | **279** | |
 
 Poprawki po production smoke test (19 testów dopisanych do 140): podwójna kropka w tekstach
 overshoot/stagnacji (+ strażnik „..” na macierzy 4 × 2000 przypadków), `ChartCard showDelta`
