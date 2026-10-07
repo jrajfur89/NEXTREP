@@ -1045,8 +1045,8 @@ Kod i dokumentacja w repozytorium są nadrzędne wobec opisów znajdujących si�
 * account source selection,
 * Stage 4A.2 (`f2fe328`): odroczone przełączenie workspace podczas treningu gościa, strażnik
   kolejki/sesji i `saveDataToCloud`, anulowanie timerów sync przy zmianie workspace, czyszczenie
-  lokalnych danych po usunięciu konta (testy automatyczne 172/172; production smoke jeszcze
-  niewykonany).
+  lokalnych danych po usunięciu konta (testy automatyczne 172/172; production smoke
+  PASS WITH NOT EXECUTED ITEMS; etap COMPLETED).
 
 ## TESTED
 

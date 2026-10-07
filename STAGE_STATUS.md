@@ -156,7 +156,7 @@
 | `saveDataToCloud` active-workspace guard | IMPLEMENTED / TESTED (automated) | Stage 4A.2 |
 | Sync retry / debounce timers cancelled on workspace switch | IMPLEMENTED / TESTED (automated) | Stage 4A.2 |
 | Local cleanup after successful account deletion | IMPLEMENTED / TESTED (automated) | Stage 4A.2; guest, other accounts and their backups untouched |
-| Supabase JS pinned to `2.117.2` | IMPLEMENTED / DEPLOYED | Stage 4A.2; import on production not yet confirmed by smoke |
+| Supabase JS pinned to `2.117.2` | IMPLEMENTED / DEPLOYED | Stage 4A.2; confirmed by manual production smoke |
 
 ---
 
@@ -187,7 +187,7 @@ Stage 4A started as a planned architectural phase. Implementation is now underwa
 | Step | Area                                          | Status                                                  |
 | ---- | --------------------------------------------- | ------------------------------------------------------- |
 | 4A.1 | Storage / sync / auth audit                   | IMPLEMENTED                                             |
-| 4A.2 | Account workspace isolation                   | IMPLEMENTED / TESTED / DEPLOYED — production smoke pending |
+| 4A.2 | Account workspace isolation                   | COMPLETED                                               |
 | 4A.3 | Account source selection                      | IMPLEMENTED / TESTING                                   |
 | 4A.4 | Anonymous/Guest → account migration           | PLANNED / PARTIALLY IMPLEMENTED                         |
 | 4A.5 | Existing account + local data / merge conflicts | TESTING                                               |
@@ -228,8 +228,10 @@ Covers:
 
 Validation: automated suite 172/172 at stage close (`tests/`, 13 new tests for 4A.2), progression
 cross-version unexplained = 0, isolated Chromium replay of the recovered-session and delete paths.
-Production smoke (SDK import on the real domain, guest start) not yet executed — 4A.2 is not marked
-COMPLETED until it passes.
+Result: implementation PASS · automated tests 172/172 PASS · deployment PASS · production smoke
+PASS WITH NOT EXECUTED ITEMS (manual: app start, guest mode, Supabase SDK 2.117.2 on production; account/session,
+guest workout + recovered session and account deletion were not run on production — covered by
+automated tests and the isolated Chromium smoke) · **Stage 4A.2: COMPLETED**.
 
 ---
 

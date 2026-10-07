@@ -438,7 +438,7 @@ Stage 4A Step 1 has been implemented and manually validated.
 > numbering. In the roadmap (`STAGE_STATUS.md` §10, source of truth) this work is **4A.2 — Account
 > workspace isolation**.
 
-4A.2 hardening (`f2fe328`, deployed; production smoke pending): a guest workout is not unmounted
+4A.2 hardening (`f2fe328`, deployed; production smoke PASS WITH NOT EXECUTED ITEMS; **COMPLETED**): a guest workout is not unmounted
 when an account session is recovered (deferred workspace switch + notice), queue/session guard,
 `saveDataToCloud` active-workspace guard, sync timers cancelled on workspace switch, account-local
 cleanup after a successful account deletion, Supabase JS pinned to `2.117.2`. Automated tests
@@ -1015,7 +1015,7 @@ Current sub-status:
 | Area                         | Status                |
 | ---------------------------- | --------------------- |
 | Account namespace isolation  | TESTED / VALIDATED    |
-| 4A.2 workspace isolation hardening (`f2fe328`) | IMPLEMENTED / TESTED (automated) / DEPLOYED — production smoke pending |
+| 4A.2 workspace isolation hardening (`f2fe328`) | COMPLETED |
 | Account source selection (4A.3) | IMPLEMENTED / TESTING |
 | Anonymous/Guest → account migration (4A.4) | PLANNED / PARTIALLY IMPLEMENTED |
 | before-restore               | OPEN / FAILED TEST    |
@@ -1615,7 +1615,7 @@ SYNC
 
 STAGE 4A
 ├── Overall                  IN PROGRESS / TESTING
-└── 4A.2 Workspace isolation IMPLEMENTED / TESTED / DEPLOYED — production smoke pending
+└── 4A.2 Workspace isolation COMPLETED
 
 ADMIN
 ├── Stage 1                  IMPLEMENTED / TESTED

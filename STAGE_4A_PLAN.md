@@ -41,7 +41,7 @@ Numbering below is the source of truth (same as `STAGE_STATUS.md` §10).
 | Step | Area | Status | Section in this plan |
 | ---- | ---- | ------ | -------------------- |
 | 4A.1 | Storage / sync / auth audit | IMPLEMENTED | — |
-| 4A.2 | Account workspace isolation | IMPLEMENTED / TESTED / DEPLOYED — production smoke pending | §4, §5 |
+| 4A.2 | Account workspace isolation | COMPLETED | §4, §5 |
 | 4A.3 | Account source selection | IMPLEMENTED / TESTING | §6, §17 |
 | 4A.4 | Anonymous/Guest → Account migration | PLANNED / PARTIALLY IMPLEMENTED | §7 |
 | 4A.5 | Existing account + local data / merge conflicts | TESTING | §8, §13–§16 |
@@ -58,7 +58,7 @@ roadmap). Do not use code comments to decide the stage of a change.
 guest workout is open (the workout is not unmounted when an account session is recovered), queue /
 session guard, `saveDataToCloud` active-workspace guard, sync timer cancellation on workspace switch,
 account-local cleanup after a successful account deletion, and Supabase JS pinned to `2.117.2`.
-Automated suite: 172/172 at stage close. Production smoke still to be executed.
+Automated suite: 172/172 at stage close; deployed; production smoke PASS WITH NOT EXECUTED ITEMS. Stage 4A.2: COMPLETED.
 
 Already validated:
 

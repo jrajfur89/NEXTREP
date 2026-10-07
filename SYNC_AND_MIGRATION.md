@@ -1016,7 +1016,7 @@ Nie należy:
 * Supabase sync state,
 * stable IDs,
 * podstawowa obsługa offline changes,
-* Stage 4A.2 (`f2fe328`, testy automatyczne 172/172, wdrożone; production smoke jeszcze niewykonany): odroczone
+* Stage 4A.2 (`f2fe328`, testy automatyczne 172/172, wdrożone; production smoke PASS WITH NOT EXECUTED ITEMS; etap COMPLETED): odroczone
   przełączenie workspace podczas treningu gościa, strażnik kolejki/sesji, strażnik
   `saveDataToCloud`, anulowanie timerów sync przy zmianie workspace, czyszczenie lokalnych danych
   po usunięciu konta, Supabase JS przypięty do `2.117.2`.
