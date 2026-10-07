@@ -40,10 +40,10 @@ Numbering below is the source of truth (same as `STAGE_STATUS.md` §10).
 
 | Step | Area | Status | Section in this plan |
 | ---- | ---- | ------ | -------------------- |
-| 4A.1 | Storage / sync / auth audit | IMPLEMENTED | — |
+| 4A.1 | Storage / sync / auth audit | COMPLETED | — |
 | 4A.2 | Account workspace isolation | COMPLETED | §4, §5 |
-| 4A.3 | Account source selection | IMPLEMENTED / TESTING | §6, §17 |
-| 4A.4 | Anonymous/Guest → Account migration | PLANNED / PARTIALLY IMPLEMENTED | §7 |
+| 4A.3 | Account source selection | COMPLETED | §6, §17 |
+| 4A.4 | Anonymous/Guest → Account migration | NOT STARTED (planned) | §7 |
 | 4A.5 | Existing account + local data / merge conflicts | TESTING | §8, §13–§16 |
 | 4A.6 | Offline operation | TESTING | §18–§20 |
 | 4A.7 | Server PRO transition | IMPLEMENTED / TESTING (transitional) | §21, §22 |
@@ -60,6 +60,10 @@ session guard, `saveDataToCloud` active-workspace guard, sync timer cancellation
 account-local cleanup after a successful account deletion, and Supabase JS pinned to `2.117.2`.
 Automated suite: 172/172 at stage close; deployed; production smoke PASS WITH NOT EXECUTED ITEMS. Stage 4A.2: COMPLETED.
 
+4A.3 (account source selection) is COMPLETED — see §6 for the final semantics. Automated suite
+268/268 at stage close, progression cross-version unexplained = 0, no Supabase schema changes.
+Before-restore: CLOSED / VERIFIED (§17).
+
 Already validated:
 
 * account namespace isolation
@@ -67,12 +71,12 @@ Already validated:
 * runtime state isolation
 * active workout isolation
 * account-scoped device identity
+* account source selection (Stage 4A.3)
+* before-restore (Stage 4A.3)
 
 Currently being fixed/tested:
 
-* account source selection
-* before-restore
-* offline login
+* offline login (Stage 4A.6)
 * merge
 * conflicts
 * tombstones
@@ -252,7 +256,7 @@ Possible states:
 
 ```text
 → use local
-→ optionally upload later
+→ the cloud is checked again and, while still empty, the device data is uploaded
 ```
 
 ### No local + cloud
@@ -273,6 +277,30 @@ Possible states:
 No automatic local+cloud merge is performed merely because both datasets exist.
 
 Merge must be deliberate.
+
+## 6.1 Final semantics (Stage 4A.3 — COMPLETED)
+
+After login the account:
+
+* does not synchronise before its data source is chosen (`ready` and not `syncPaused`);
+* recognises its local and cloud state (guest data never counts as account data);
+* lets the user choose device / cloud / empty safely, according to the available sources;
+* cloud restore takes a before-restore snapshot first; an interrupted cloud restore is resumable
+  (retry, or go back to the state before it);
+* the initial device → empty cloud upload is resumable; the cloud is re-checked right before it,
+  own partial rows can be resumed, rows of another device stop it;
+* destructive operations (cloud load, start empty) respect an active workout draft, the unsent sync
+  queue and open conflicts — they are refused while any of them exists;
+* source selection respects account / workspace isolation;
+* operations are protected against an in-flight sync and against stale async actions.
+
+Boundaries — 4A.3 does NOT implement:
+
+* Guest → Account migration — Stage 4A.4 (NOT STARTED);
+* local/cloud merge of two independent datasets — Stage 4A.5;
+* offline login — Stage 4A.6.
+
+4A.3 chooses ONE source; it never merges two.
 
 ---
 
@@ -589,12 +617,12 @@ It must not silently recreate or silently delete the record without an explicit 
 
 Current status:
 
-**OPEN / FAILED TEST**
+**CLOSED / VERIFIED (Stage 4A.3)**
 
-Repo check (2026-10-06): the code contains a before-restore mechanism (`loadAccountFromCloud`
-creates a `before-restore` backup and a restore pointer; `resolveDeviceSnapshot` /
-`restoreDeviceSnapshot` restore it with account/namespace checks). It has no tests in the current
-automated suite and Test E has not been repeated, so the status stays OPEN.
+Verified by automated tests: snapshot before the destructive clear; correct account and namespace;
+restore works; account / namespace mismatch blocked; interrupted restore resumable (the retry never
+snapshots partial cloud data); the referenced backup is protected by the retention (also when the
+device clock moved back); confirming the cloud ends the pointer's lifecycle.
 
 Required behaviour:
 
@@ -620,15 +648,13 @@ Requirements:
 * user must be able to return to the pre-cloud state
 * restore must not silently mix cloud and local datasets
 
-This is the first current technical fix.
-
 ---
 
 # 18. OFFLINE LOGIN
 
 Current status:
 
-**OPEN / FAILED TEST**
+**OPEN / FAILED TEST — target Stage 4A.6**
 
 Repo check (2026-10-06): logging in offline now shows the network message instead of a raw
 "Failed to fetch" and stays in the login flow (covered by automated tests). When a stored session
@@ -888,7 +914,8 @@ Account source selection / switching behaviour.
 
 ### Test E
 
-Local → cloud → restore local using the pre-restore snapshot.
+Local → cloud → restore local using the pre-restore snapshot. Covered by the Stage 4A.3 automated
+tests (before-restore CLOSED / VERIFIED); a manual run on production remains a check, not a blocker.
 
 ### Test H
 
@@ -903,8 +930,8 @@ These tests must be repeated after the current fixes.
 Current execution order:
 
 ```text
-1. before-restore fix
-2. offline login fix
+1. before-restore fix — DONE (Stage 4A.3)
+2. offline login fix (Stage 4A.6)
 3. Test C
 4. Test E
 5. Test H
@@ -984,13 +1011,11 @@ without explicit approval.
 
 # 31. NEXT IMMEDIATE TASK
 
-The next implementation task is:
+`before-restore` was closed in Stage 4A.3 (CLOSED / VERIFIED).
 
-> **Fix `before-restore`.**
+The next steps follow the roadmap: Stage 4A.4 (Guest → Account migration, NOT STARTED) and
 
-Immediately after that:
-
-> **Fix offline login.**
+> **Fix offline login** (Stage 4A.6).
 
 Then repeat:
 

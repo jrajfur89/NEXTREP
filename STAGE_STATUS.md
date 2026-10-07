@@ -164,15 +164,15 @@
 
 | Area                           | Status                | Notes                    |
 | ------------------------------ | --------------------- | ------------------------ |
-| Detect local account data      | IMPLEMENTED           |                          |
-| Detect cloud account data      | IMPLEMENTED           |                          |
-| Local-only choice              | IMPLEMENTED / TESTING |                          |
-| Cloud-only choice              | IMPLEMENTED / TESTING |                          |
-| Empty account choice           | IMPLEMENTED / TESTING |                          |
-| No automatic local+cloud merge | IMPLEMENTED           | Deliberate decision      |
-| Guest auto-import              | DEPRECATED            | Must not happen silently |
-| Failed cloud check handling    | IMPLEMENTED           |                          |
-| Source-selection regression    | TESTING               |                          |
+| Detect local account data      | TESTED                | Stage 4A.3               |
+| Detect cloud account data      | TESTED                | Stage 4A.3               |
+| Local-only choice              | TESTED                | Device → confirmed-empty cloud is uploaded (resumable) |
+| Cloud-only choice              | TESTED                | Before-restore snapshot, resumable load, confirm / roll back |
+| Empty account choice           | TESTED                | Blocked by draft / unsent queue / open conflicts |
+| No automatic local+cloud merge | IMPLEMENTED           | Deliberate decision — merge is Stage 4A.5 |
+| Guest auto-import              | DEPRECATED            | Must not happen silently — guest → account is Stage 4A.4 |
+| Failed cloud check handling    | TESTED                |                          |
+| Source-selection regression    | TESTED                | Scenarios A–J, Stage 4A.3 |
 
 ---
 
@@ -186,10 +186,10 @@ Stage 4A started as a planned architectural phase. Implementation is now underwa
 
 | Step | Area                                          | Status                                                  |
 | ---- | --------------------------------------------- | ------------------------------------------------------- |
-| 4A.1 | Storage / sync / auth audit                   | IMPLEMENTED                                             |
+| 4A.1 | Storage / sync / auth audit                   | COMPLETED                                               |
 | 4A.2 | Account workspace isolation                   | COMPLETED                                               |
-| 4A.3 | Account source selection                      | IMPLEMENTED / TESTING                                   |
-| 4A.4 | Anonymous/Guest → account migration           | PLANNED / PARTIALLY IMPLEMENTED                         |
+| 4A.3 | Account source selection                      | COMPLETED                                               |
+| 4A.4 | Anonymous/Guest → account migration           | NOT STARTED (planned)                                   |
 | 4A.5 | Existing account + local data / merge conflicts | TESTING                                               |
 | 4A.6 | Offline operation                             | TESTING                                                 |
 | 4A.7 | Server PRO transition                         | IMPLEMENTED / TESTING                                   |
@@ -233,14 +233,46 @@ PASS WITH NOT EXECUTED ITEMS (manual: app start, guest mode, Supabase SDK 2.117.
 guest workout + recovered session and account deletion were not run on production — covered by
 automated tests and the isolated Chromium smoke) · **Stage 4A.2: COMPLETED**.
 
+## 4A.3 — Account source selection
+
+**COMPLETED** (single commit `feat: complete stage 4a.3 account source selection`; not deployed yet).
+
+* account source selection hardened — no sync before the source is chosen;
+* cloud / device / empty source flows protected;
+* cloud restore resumable (persistent `loading_cloud`, before-restore snapshot written before the clear);
+* device → empty cloud upload resumable (persistent `uploading_device`; own partial rows resume, foreign rows stop it);
+* destructive actions (cloud load, start empty) blocked by an active workout draft, unsent sync queue or open conflicts;
+* sync races protected (waits for an in-flight sync / bootstrap; stale async actions cannot act or take over the screen);
+* cloud fetch pagination and V1 verification pagination (>1000 rows);
+* legacy unsafe "Pobierz / Przywróć dane z chmury" (user_data) removed from the UI; the old "Przenieś dane do konta" is a guarded repair tool only;
+* before-restore tested — **CLOSED / VERIFIED**;
+* account / workspace isolation preserved (guest, A/B);
+* 268/268 automated tests PASS, progression cross-version unexplained = 0;
+* no Supabase schema changes.
+
+Not part of 4A.3: Guest → Account migration (4A.4), local/cloud merge (4A.5), offline login (4A.6).
+
+### Stage 4A.3 deferred technical debt — NON-BLOCKING FOR 4A.3
+
+| ID | Item |
+| -- | ---- |
+| F4 | V1 can overwrite default-atlas exercise rows without a version bump |
+| F5 | V1 does not revive a remote-deleted row (boundary: 4A.5) |
+| F6 | the exercise query in `checkCloudAccountData` has no pagination (the atlas is far below the limit) |
+| F7 | `abandonInterruptedCloudLoad` relies partly on the UI guard (the backup is not deleted) |
+| F8 | the fake Supabase `neq` has different NULL semantics than PostgreSQL / Supabase |
+| F9 | offset pagination: classic edge case with a concurrent hard delete |
+| F10 | unused `reloadLocalData` parameter in `AccountScreen` |
+| F11 | the V1 repair tool does not bump `version` |
+
 ---
 
 # 11. CURRENT STAGE 4A OPEN ISSUES
 
 | Issue                       | Status      | Description                                                                     |
 | --------------------------- | ----------- | ------------------------------------------------------------------------------- |
-| Before-restore              | OPEN        | Code has a before-restore mechanism (`loadAccountFromCloud` → backup + pointer, `resolveDeviceSnapshot`, `restoreDeviceSnapshot`), but it has no tests in the current suite and Test E was not repeated — cannot be confirmed |
-| Offline login               | OPEN        | Confirmed by tests: offline login shows the network message (no raw "Failed to fetch") and stays in the login flow. Not confirmed: continuing in the account's local workspace with an unconfirmed session while offline (app offers guest instead); Test H not repeated |
+| Before-restore              | CLOSED / VERIFIED | Stage 4A.3: snapshot before the destructive clear, account + namespace checked, restore works, mismatch blocked, interrupted restore resumable, referenced backup protected by retention (also with a clock moved back), pointer cleared on confirm — automated tests |
+| Offline login               | OPEN — target Stage 4A.6 | Confirmed by tests: offline login shows the network message (no raw "Failed to fetch") and stays in the login flow. Not confirmed: continuing in the account's local workspace with an unconfirmed session while offline (app offers guest instead); Test H not repeated |
 | Different-record merge      | TESTING     | Requires E2E confirmation                                                       |
 | Nested merge                | TESTING     | Requires E2E confirmation                                                       |
 | Conflict E2E                | OPEN        | Needs complete end-to-end validation                                            |
@@ -417,8 +449,8 @@ Manual deployment verification remains required.
 The immediate priority is:
 
 ```text
-1. Fix before-restore
-2. Fix offline login
+1. Fix before-restore — DONE (Stage 4A.3, CLOSED / VERIFIED)
+2. Fix offline login (Stage 4A.6)
 3. Re-run affected manual tests
 4. Validate different-record merge
 5. Validate nested merge
@@ -429,7 +461,7 @@ The immediate priority is:
 10. Validate delete vs update
 11. Validate offline sync + reconnect
 12. Finish integrity cleanup
-13. Run account/source-selection regression
+13. Run account/source-selection regression — automated A–J done in Stage 4A.3
 14. Implement PWA offline startup
 15. Run final E2E synchronization test
 ```

@@ -177,7 +177,7 @@ Możliwe scenariusze:
 
 ```text
 → można rozpocząć z danych urządzenia
-→ później synchronizacja / PUSH
+→ chmura jest sprawdzana ponownie i — jeśli nadal pusta — dane urządzenia są do niej wysyłane
 ```
 
 ### Brak danych lokalnych + dane cloud
@@ -193,6 +193,38 @@ Możliwe scenariusze:
 ```
 
 Nie wykonujemy automatycznego scalania obu źródeł.
+
+## 5.1 Stan finalny (Stage 4A.3 — COMPLETED)
+
+Trwały marker inicjalizacji konta (`nextrep_user_<id>_account_init_v1`, osobny dla każdego konta):
+
+| Stan | Znaczenie |
+| ---- | --------- |
+| brak markera (albo nieznany / uszkodzony status) | sprawdzenie danych lokalnych i cloud → wybór źródła albo konto `new` |
+| `ready` | normalny workspace konta (`source`: `new` / `device` / `cloud` / `empty`) |
+| `loading_cloud` | wczytywanie z chmury w toku albo przerwane — wznawialne (ponów / wróć do stanu sprzed wczytania); częściowe dane nie są traktowane jako dane urządzenia |
+| `pending_cloud_confirm` | dane z chmury wczytane — potwierdź chmurę albo wróć do snapshotu urządzenia |
+| `uploading_device` | początkowa wysyłka danych urządzenia do pustej chmury w toku albo przerwana — wznawialna |
+
+Synchronizacja (runSync, bootstrap sync_meta) jest zablokowana, dopóki marker nie ma statusu
+`ready`, a `syncPaused` na to nie pozwala.
+
+Zasady:
+
+* „Wczytaj z chmury” jest blokowane przez rozpoczęty trening (draft), niewysłaną kolejkę sync i
+  nierozwiązane konflikty (`pending`, `resolved_pending_push`); „Zacznij od pustych danych” ma te
+  same blokady;
+* wczytanie z chmury tworzy snapshot before-restore i zapisuje marker `loading_cloud` PRZED
+  wyczyszczeniem danych; ponowienie używa tego samego snapshotu;
+* wysyłka urządzenia ponownie sprawdza chmurę tuż przed zapisem i zapisuje `uploading_device` przed
+  pierwszym zapisem; własne częściowo wysłane wiersze (ten sam `device_id`) mogą zostać wznowione,
+  wiersze innego urządzenia albo bez urządzenia zatrzymują wysyłkę (powrót do wyboru, nic nie jest
+  nadpisywane);
+* operacje czekają na trwający sync / bootstrap i po każdym oczekiwaniu ponownie sprawdzają sesję,
+  konto, workspace i marker; nieaktualne akcje (zastąpione nowszym przepływem) zatrzymują się;
+* pobieranie z chmury i weryfikacja V1 są stronicowane (>1000 wierszy).
+
+Stage 4A.3 wybiera jedno źródło — nie scala dwóch niezależnych zestawów danych (to Stage 4A.5).
 
 ---
 
@@ -245,12 +277,10 @@ ROLLBACK
 LOCAL STATE
 ```
 
-Obecnie `before-restore` wymaga dalszej implementacji i testów.
-
-Stan repo (2026-10-06): w kodzie istnieje mechanizm before-restore (`loadAccountFromCloud` tworzy
-kopię `before-restore` i wskaźnik; `resolveDeviceSnapshot` / `restoreDeviceSnapshot` odtwarzają ją
-z kontrolą konta i namespace). Nie ma testów w aktualnym zestawie automatycznym, a Test E nie
-został powtórzony — status pozostaje **OPEN**.
+Status: **CLOSED / VERIFIED (Stage 4A.3)** — snapshot przed destrukcyjnym wyczyszczeniem, właściwe
+konto i namespace, działające przywrócenie, blokada przy niezgodności konta / namespace, wznawialne
+przerwane wczytanie, ochrona aktywnej kopii przez retencję (również przy cofniętym zegarze),
+koniec życia wskaźnika `last_cloud_restore` po potwierdzeniu chmury — testy automatyczne.
 
 ---
 
@@ -327,7 +357,7 @@ Natomiast obecny przepływ ponownego logowania przy braku internetu wymaga dalsz
 Aktualny status:
 
 ```text
-OPEN / FAILED TEST
+OPEN / FAILED TEST — target Stage 4A.6
 ```
 
 Stan repo (2026-10-06): login offline pokazuje komunikat o braku sieci zamiast surowego
@@ -1012,7 +1042,9 @@ Nie należy:
 * conflict store,
 * sync runtime lock,
 * different-record merge mechanism,
-* account source selection,
+* account source selection (Stage 4A.3 — COMPLETED, testy automatyczne 268/268),
+* before-restore (Stage 4A.3 — CLOSED / VERIFIED),
+* stronicowanie pobierania z chmury i weryfikacji V1,
 * Supabase sync state,
 * stable IDs,
 * podstawowa obsługa offline changes,
@@ -1028,15 +1060,13 @@ Nie należy:
 * nested merge,
 * offline sync,
 * account switching,
-* source selection,
 * history synchronization,
 * tombstone mechanism,
 * device/integrity cleanup.
 
 ## OPEN
 
-* before-restore,
-* offline login,
+* offline login (Stage 4A.6),
 * final conflict E2E,
 * Conflict Center finalization,
 * conflict resolution,
@@ -1059,8 +1089,8 @@ Nie należy:
 Priorytet Stage 4A:
 
 ```text
-1. before-restore
-2. offline login
+1. before-restore — DONE (Stage 4A.3, CLOSED / VERIFIED)
+2. offline login (Stage 4A.6)
 3. Test C
 4. Test E
 5. Test H

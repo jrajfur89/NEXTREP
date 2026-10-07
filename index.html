@@ -126,7 +126,7 @@ import {
   ChevronUp, ChevronDown, Search, Heart, ArrowUpDown, Footprints,
   CircleDot, Zap, Hexagon, Circle, Hand, PersonStanding, CalendarPlus, CalendarDays,
   AlertTriangle, Layers, ChevronDown as CaretDown, Download, Upload, MessageSquare, Activity, Lock, MoreHorizontal, MoreVertical,
-  Mail, Eye, EyeOff, LogOut, UserCircle2, ShieldAlert, UploadCloud, DownloadCloud, RotateCcw, Database, RefreshCw, WifiOff,
+  Mail, Eye, EyeOff, LogOut, UserCircle2, ShieldAlert, UploadCloud, Database, RefreshCw, WifiOff,
   BarChart3, LineChart, CheckCircle2
 } from "lucide-react";
 
@@ -1070,6 +1070,11 @@ function clearAccountInitMarker(userId) {
 }
 // Sync (runSync + bootstrap) may only touch an account that has chosen its data source and
 // whose sync isn't paused by that choice.
+// Stage 4A.3: the statuses the app knows how to continue from; anything else is treated like no marker.
+const ACCOUNT_INIT_STATUSES = new Set(["ready", "pending_cloud_confirm", "loading_cloud", "uploading_device"]);
+function isKnownAccountInitStatus(status) {
+  return ACCOUNT_INIT_STATUSES.has(status);
+}
 function isAccountSyncAllowed(userId) {
   const m = getAccountInitMarker(userId);
   return !!m && m.status === "ready" && !m.syncPaused;
@@ -1109,24 +1114,36 @@ function hasLocalAccountData(userId) {
 // Light cloud check: limit(1) per table (+ only legacy_id of exercises, to ignore the default
 // atlas pushed by the V1 migration). Throws on ANY error — a network failure is "unknown",
 // never "empty".
-async function checkCloudAccountData(userId) {
+// Stage 4A.3 option ignoreDeviceId: rows written by THAT device (an interrupted upload of this
+// device's own data) don't count; rows of any other device — or without a device — do. With it,
+// a profile name equal to localUserName doesn't count either (the upload wrote it).
+async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "" } = {}) {
   if (!supabase) throw new Error("Supabase nie jest skonfigurowane.");
+  // Without ignoreDeviceId: one query. With it: rows of other devices + rows without a device.
+  const variants = (build) => (ignoreDeviceId ? [build().neq("device_id", ignoreDeviceId), build().is("device_id", null)] : [build()]);
   const one = async (table) => {
-    const { data, error } = await supabase.from(table).select("id").eq("user_id", userId).is("deleted_at", null).limit(1);
-    if (error) throw new Error(error.message || `błąd odczytu ${table}`);
-    return Array.isArray(data) && data.length > 0;
+    for (const q of variants(() => supabase.from(table).select("id").eq("user_id", userId).is("deleted_at", null))) {
+      const { data, error } = await q.limit(1);
+      if (error) throw new Error(error.message || `błąd odczytu ${table}`);
+      if (Array.isArray(data) && data.length > 0) return true;
+    }
+    return false;
   };
   const workouts = await one("nextrep_workouts");
   const plans = await one("nextrep_plans");
   const measurements = await one("nextrep_measurements");
   const customFields = await one("nextrep_custom_fields");
-  const { data: exRows, error: exErr } = await supabase.from("nextrep_exercises").select("legacy_id").eq("user_id", userId).is("deleted_at", null);
-  if (exErr) throw new Error(exErr.message || "błąd odczytu nextrep_exercises");
   const defaults = new Set(DEFAULT_EXERCISES.map((e) => String(e.id)));
-  const customExercises = (exRows || []).some((r) => r && r.legacy_id != null && !defaults.has(String(r.legacy_id)));
+  let customExercises = false;
+  for (const q of variants(() => supabase.from("nextrep_exercises").select("legacy_id").eq("user_id", userId).is("deleted_at", null))) {
+    const { data: exRows, error: exErr } = await q;
+    if (exErr) throw new Error(exErr.message || "błąd odczytu nextrep_exercises");
+    if ((exRows || []).some((r) => r && r.legacy_id != null && !defaults.has(String(r.legacy_id)))) customExercises = true;
+  }
   const { data: prof, error: profErr } = await supabase.from("nextrep_profiles").select("display_name").eq("user_id", userId).limit(1);
   if (profErr) throw new Error(profErr.message || "błąd odczytu nextrep_profiles");
-  const displayName = Array.isArray(prof) && prof[0] && typeof prof[0].display_name === "string" && prof[0].display_name.trim() !== "";
+  const cloudName = Array.isArray(prof) && prof[0] && typeof prof[0].display_name === "string" ? prof[0].display_name.trim() : "";
+  const displayName = cloudName !== "" && !(ignoreDeviceId && cloudName === String(localUserName || "").trim());
   const details = { workouts, plans, measurements, customFields, customExercises, displayName };
   return { hasData: Object.values(details).some(Boolean), details };
 }
@@ -1171,6 +1188,66 @@ function purgeDeletedAccountData(userId) {
 }
 const stillSameAccount = async (userId, expectedRefUserId) =>
   getActiveDataNamespace() === getLocalDataNamespace(userId) && expectedRefUserId() === userId && (await currentSessionUserId()) === userId;
+
+// Stage 4A.3: a destructive source-selection step (cloud load, empty start, device upload) must not
+// overlap a sync pass that already started — runSync()'s lock and the sync_meta bootstrap are the
+// only writers that could still be busy. New runs are already refused by isAccountSyncAllowed(); this
+// waits for the in-flight ones. false = still busy after the timeout → the caller does nothing.
+const SOURCE_SELECTION_SYNC_WAIT_MS = 30000;
+async function waitForSyncIdle(timeoutMs = SOURCE_SELECTION_SYNC_WAIT_MS) {
+  const startedAt = Date.now();
+  while (isSyncRunInProgress() || isSyncBootstrapInProgress()) {
+    if (Date.now() - startedAt >= timeoutMs) return false;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return true;
+}
+const SYNC_STILL_RUNNING_TEXT = "Synchronizacja nadal trwa — spróbuj ponownie za chwilę. Dane nie zostały zmienione.";
+
+// Stage 4A.3: what "Wczytaj z chmury" / "Zacznij od pustych danych" would destroy that no backup
+// holds — a started workout (draft), changes not sent yet (sync queue) and unresolved sync
+// conflicts. While any of them exists the operation is refused; nothing is merged (that is Stage
+// 4A.5). Technical sync_meta alone never blocks: it doesn't represent unsent data.
+// operation: "cloud" (load from the cloud) | "empty" (start with empty data).
+const CLOUD_RESTORE_OPEN_CONFLICT_STATUSES = new Set(["pending", "resolved_pending_push"]);
+function cloudRestoreBlocker(userId, operation = "cloud") {
+  const what = operation === "empty" ? "rozpoczęciem od pustych danych" : "wczytaniem danych z chmury";
+  const action = operation === "empty" ? "Rozpoczęcie od pustych danych" : "Wczytanie danych z chmury";
+  const read = (name) => {
+    try {
+      const raw = localStorage.getItem(getStorageKey(name, userId));
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+  if (localStorage.getItem(getStorageKey("active_workout_draft", userId)) != null) {
+    return {
+      reason: "draft",
+      message:
+        `Masz rozpoczęty trening. Zakończ, przerwij lub porzuć go przed ${what} — ta operacja usunęłaby go z tego urządzenia. Wybierz dane z urządzenia, zakończ lub porzuć trening, a potem w „Moje konto” wybierz ponownie źródło danych.`,
+    };
+  }
+  const queue = read("sync_queue");
+  const unsent = Array.isArray(queue) ? queue.filter(Boolean).length : 0;
+  if (unsent > 0) {
+    return {
+      reason: "queue",
+      count: unsent,
+      message: `Na tym urządzeniu są zmiany, które nie zostały jeszcze wysłane do chmury (${unsent}). ${action} usunęłoby je, dlatego jest zablokowane. Dane nie zostały zmienione.`,
+    };
+  }
+  const conflicts = read("sync_conflicts");
+  const open = Array.isArray(conflicts) ? conflicts.filter((c) => c && CLOUD_RESTORE_OPEN_CONFLICT_STATUSES.has(c.status)).length : 0;
+  if (open > 0) {
+    return {
+      reason: "conflicts",
+      count: open,
+      message: `Na tym urządzeniu są nierozwiązane konflikty synchronizacji (${open}). ${action} usunęłoby je, dlatego jest zablokowane. Dane nie zostały zmienione.`,
+    };
+  }
+  return null;
+}
 
 // ---- "Wczytaj z urządzenia" after "Wczytaj z chmury" (Stage 4A.2 fix) ----
 // Loading the cloud replaces the namespace's content, so afterwards the namespace no longer holds
@@ -1229,7 +1306,7 @@ function clearLastCloudRestorePointer(userId) {
 function resolveDeviceSnapshot(userId) {
   const p = getLastCloudRestorePointer(userId);
   const marker = getAccountInitMarker(userId);
-  const unsettledCloud = !!(marker && marker.status === "pending_cloud_confirm");
+  const unsettledCloud = !!(marker && (marker.status === "pending_cloud_confirm" || marker.status === "loading_cloud")); // Stage 4A.3: an interrupted load is unsettled too
   if (!p) return { status: unsettledCloud ? "invalid" : "none" };
   const ns = getLocalDataNamespace(userId);
   if (p.userId !== userId || p.namespace !== ns) return { status: "invalid" };
@@ -1269,6 +1346,12 @@ function restoreDeviceSnapshot(userId, snapshot) {
 // sent to the cloud and nothing is deleted there.
 async function startAccountEmpty(userId, currentRefUserId, cloudHasData) {
   if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  // Stage 4A.3: no sync pass that already started may still be writing this namespace.
+  if (!(await waitForSyncIdle())) return { ok: false, error: SYNC_STILL_RUNNING_TEXT };
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  // Stage 4A.3: a draft / unsent queue / open conflicts are not in the before-reset backup.
+  const blocker = cloudRestoreBlocker(userId, "empty");
+  if (blocker) return { ok: false, blocked: blocker.reason, error: blocker.message };
   _accountInitBusy = true;
   try {
     if (hasLocalAccountData(userId).hasData) createBackupSnapshot("before-reset", { force: true });
@@ -1285,17 +1368,57 @@ async function startAccountEmpty(userId, currentRefUserId, cloudHasData) {
 // cloud record is applied (with its version meta, so later sync continues cleanly). The previous
 // local state is kept in memory (and in a backup) and put back on ANY failure or if the account
 // changes meanwhile — a failed cloud load never loses local data.
+//
+// Stage 4A.3 hardening:
+//  - waits for a sync pass that already started (waitForSyncIdle) and re-checks session, account,
+//    namespace and the init marker afterwards — any change cancels without touching anything;
+//  - refuses while a started workout, unsent changes or unresolved conflicts exist (cloudRestoreBlocker);
+//  - BEFORE the namespace is cleared, persists marker { status: "loading_cloud", backupId, ... } and the
+//    restore pointer, so a refresh / killed PWA mid-load is recognised on the next start: the partly
+//    written data is never taken for device data, and the user can retry or go back (resumable).
+//  - a retry of an interrupted load reuses the SAME before-restore backup (idempotent): the partial
+//    cloud data on the device is never backed up as if it were the device's own data.
 async function loadAccountFromCloud(userId, currentRefUserId) {
   if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (!(await waitForSyncIdle())) return { ok: false, error: SYNC_STILL_RUNNING_TEXT };
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const markerNow = getAccountInitMarker(userId);
+  if (markerNow && markerNow.status === "ready") return { ok: false, alreadyReady: true }; // decided meanwhile (e.g. another tab)
+  const resuming = !!(markerNow && markerNow.status === "loading_cloud" && markerNow.userId === userId && markerNow.namespace === getLocalDataNamespace(userId));
+  const blocker = cloudRestoreBlocker(userId);
+  if (blocker) return { ok: false, blocked: blocker.reason, error: blocker.message };
   _accountInitBusy = true;
+  const markerKey = getStorageKey("account_init", userId);
+  const pointerKey = getStorageKey("last_cloud_restore", userId);
   const before = snapshotAccountNamespace(userId);
-  const giveBack = () => restoreAccountNamespace(before);
+  const markerBefore = localStorage.getItem(markerKey);
+  const pointerBefore = localStorage.getItem(pointerKey);
+  // A first attempt that fails gives back everything (data, marker, pointer). A failed RETRY of an
+  // interrupted load gives back the data it found and keeps "loading_cloud": still unsettled.
+  const giveBack = () => {
+    restoreAccountNamespace(before);
+    if (resuming) return;
+    if (markerBefore == null) localStorage.removeItem(markerKey);
+    else localStorage.setItem(markerKey, markerBefore);
+    if (pointerBefore == null) localStorage.removeItem(pointerKey);
+    else localStorage.setItem(pointerKey, pointerBefore);
+  };
   try {
-    let deviceSnapshot = null;
-    if (hasLocalAccountData(userId).hasData) {
-      deviceSnapshot = createBackupSnapshot("before-restore", { force: true, meta: { kind: BEFORE_CLOUD_RESTORE_KIND, userId, source: "cloud-restore" } });
-      if (!deviceSnapshot) return { ok: false, error: "Nie udało się utworzyć kopii danych z urządzenia — dane z chmury nie zostały wczytane." };
+    let backupId = null;
+    if (resuming) {
+      backupId = markerNow.backupId || null;
+      if (!getLastCloudRestorePointer(userId)) setLastCloudRestorePointer(userId, backupId);
+    } else {
+      if (hasLocalAccountData(userId).hasData) {
+        const deviceSnapshot = createBackupSnapshot("before-restore", { force: true, meta: { kind: BEFORE_CLOUD_RESTORE_KIND, userId, source: "cloud-restore" } });
+        if (!deviceSnapshot) return { ok: false, error: "Nie udało się utworzyć kopii danych z urządzenia — dane z chmury nie zostały wczytane." };
+        backupId = deviceSnapshot.backupId;
+      }
+      // Persistent "in progress" state — written BEFORE the first destructive step.
+      setLastCloudRestorePointer(userId, backupId);
+      setAccountInitMarker(userId, { status: "loading_cloud", source: "cloud", syncPaused: true, userId, namespace: getLocalDataNamespace(userId), backupId, noSnapshot: !backupId });
     }
+    const deviceSnapshot = backupId ? { backupId } : null;
     clearAccountNamespace(userId);
     let pull;
     try {
@@ -1332,6 +1455,77 @@ async function loadAccountFromCloud(userId, currentRefUserId) {
     return { ok: false, error: (e && e.message) || String(e) };
   } finally {
     _accountInitBusy = false;
+  }
+}
+
+// Stage 4A.3: an interrupted cloud load whose device had NO data before it (nothing to restore):
+// "go back" = drop the partly written cloud data and decide the source again. Only this account's
+// namespace is touched; nothing is sent anywhere.
+async function abandonInterruptedCloudLoad(userId, currentRefUserId) {
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const m = getAccountInitMarker(userId);
+  if (!m || m.status !== "loading_cloud") return { ok: false, discarded: true };
+  _accountInitBusy = true;
+  try {
+    clearAccountNamespace(userId);
+    clearLastCloudRestorePointer(userId);
+    clearAccountInitMarker(userId);
+    return { ok: true };
+  } finally {
+    _accountInitBusy = false;
+  }
+}
+
+// Stage 4A.3: "Wczytaj z urządzenia" while the cloud was found EMPTY — the device data becomes the
+// account's data and is uploaded with the existing migration V1 (upsert by legacy_id, the same rows
+// and format the sync engine uses; nothing in localStorage is changed by it). Immediately before the
+// upload the cloud is checked again: if it is no longer empty nothing is uploaded and the caller
+// returns to the source choice. BEFORE the first cloud write a persistent marker
+// { status: "uploading_device", userId, namespace, deviceId } is stored, so a failed or killed upload
+// is recognised (also after a restart): a retry then ignores the rows THIS device wrote
+// (ignoreDeviceId) and upserts the rest (idempotent), while rows of any other device still stop it.
+// The caller sets "ready" only after { ok: true } — a failed upload never leaves a "ready" account.
+async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (!(await waitForSyncIdle())) return { ok: false, error: SYNC_STILL_RUNNING_TEXT };
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const markerNow = getAccountInitMarker(userId);
+  if (markerNow && markerNow.status === "ready") return { ok: false, alreadyReady: true };
+  const ns = getLocalDataNamespace(userId);
+  const resuming = !!(markerNow && markerNow.status === "uploading_device" && markerNow.userId === userId && markerNow.namespace === ns && markerNow.deviceId);
+  const deviceId = resuming ? markerNow.deviceId : getOrCreateDeviceId();
+  let cloud;
+  try {
+    cloud = await checkCloudAccountData(userId, resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId) } : {});
+  } catch (e) {
+    return { ok: false, error: authErrorText(e) };
+  }
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (cloud.hasData) {
+    // someone else's data is in the cloud now: stop, never overwrite, decide the source again
+    if (resuming) clearAccountInitMarker(userId);
+    return { ok: false, cloudChanged: true, cloud };
+  }
+  _accountInitBusy = true;
+  try {
+    if (!resuming) setAccountInitMarker(userId, { status: "uploading_device", source: "device", syncPaused: true, userId, namespace: ns, deviceId, startedAt: new Date().toISOString() });
+    const result = await runMigrationV1();
+    if (!result || !result.success) return { ok: false, error: (result && result.error) ? authErrorText(result.error) : "Nie udało się wysłać danych do chmury." };
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: authErrorText(e) };
+  } finally {
+    _accountInitBusy = false;
+  }
+}
+function readAccountUserName(userId) {
+  try {
+    const raw = localStorage.getItem(getStorageKey("user_name", userId));
+    const v = raw ? JSON.parse(raw) : "";
+    return typeof v === "string" ? v : "";
+  } catch {
+    return "";
   }
 }
 
@@ -1511,6 +1705,8 @@ async function saveDataToCloud() {
 // localStorage, never calls saveKey, and never touches app state — it only hands the caller the
 // raw cloud data so it can be shown as a preview. Restoring it is a separate, later step.
 // Returns { error: null, found: bool, data: {...} | null } — `data` is null when found is false.
+// Stage 4A.3: LEGACY — no longer reachable from the UI (see AccountScreen); kept, unused, so the
+// historical user_data rows stay readable. Cloud data is loaded only through source selection.
 async function fetchDataFromCloud() {
   if (!supabase) return { error: "Konta nie są jeszcze skonfigurowane.", found: false, data: null };
 
@@ -1547,6 +1743,8 @@ async function fetchDataFromCloud() {
 // left untouched locally — a missing cloud value is never treated as "clear the local one".
 // Returns { error: null, restoredKeys: string[] } — restoredKeys lists which of the 6 keys were
 // actually written (i.e. had a non-null value to restore).
+// Stage 4A.3: LEGACY — not reachable from the UI any more (it overwrote local data without a backup
+// and outside source selection). Kept unused; do not wire it back without the 4A.3 guards.
 async function restoreDataFromCloud(fetchedCloudData) {
   if (!fetchedCloudData) return { error: "Brak pobranych danych do przywrócenia.", restoredKeys: [] };
 
@@ -1609,10 +1807,12 @@ function getMigrationStatus() {
   }
 }
 
-function setMigrationStatus(status, extra = {}) {
+// Stage 4A.3: `userId` pins the write to the namespace the migration started in — a workspace switch
+// while it runs must never redirect the status into another account's namespace.
+function setMigrationStatus(status, extra = {}, userId) {
   try {
     localStorage.setItem(
-      getStorageKey("migration_v1_status"),
+      userId !== undefined ? getStorageKey("migration_v1_status", userId) : getStorageKey("migration_v1_status"),
       JSON.stringify({ status, updatedAt: new Date().toISOString(), ...extra })
     );
   } catch (e) {
@@ -2209,22 +2409,29 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
   // record that's genuinely absent remotely blocks `completed`. Read-only throughout: only ever
   // SELECT, never insert/update/delete.
   const results = {};
+  // Stage 4A.3: the remote rows are read with fetchRemoteTable (paginated, same user filter, stable
+  // order, any page error = whole read fails) — a single response is capped at 1000 rows, which made
+  // bigger accounts fail verification. What is compared did not change.
+  const readAll = async (pullTable, table) => {
+    try {
+      return await fetchRemoteTable(pullTable, userId);
+    } catch (e) {
+      throw new Error(`${table}: odczyt rekordów zdalnych nie powiódł się — ${(e && e.message) || e}`);
+    }
+  };
   const tableMap = [
-    ["exercises", "nextrep_exercises", (x) => String(x.id)],
-    ["plans", "nextrep_plans", (x) => String(x.id)],
-    ["history", "nextrep_workouts", (x) => String(x.id)],
-    ["measurements", "nextrep_measurements", (x) => String(x.id)],
+    ["exercises", "nextrep_exercises", (x) => String(x.id), "exercises"],
+    ["plans", "nextrep_plans", (x) => String(x.id), "plans"],
+    ["history", "nextrep_workouts", (x) => String(x.id), "workouts"],
+    ["measurements", "nextrep_measurements", (x) => String(x.id), "measurements"],
   ];
 
-  for (const [localKey, table, legacyIdOf] of tableMap) {
+  for (const [localKey, table, legacyIdOf, pullTable] of tableMap) {
     const localItems = localEligible[localKey] || [];
     const localLegacyIds = localItems.map(legacyIdOf);
 
-    const { data: remoteRows, error, count } = await supabase
-      .from(table)
-      .select("legacy_id", { count: "exact" })
-      .eq("user_id", userId);
-    if (error) throw new Error(`${table}: odczyt rekordów zdalnych nie powiódł się — ${error.message}`);
+    const remoteRows = await readAll(pullTable, table);
+    const count = remoteRows.length;
 
     const remoteLegacyIds = new Set((remoteRows || []).map((r) => r.legacy_id));
     const missing = localLegacyIds.filter((lid) => !remoteLegacyIds.has(lid));
@@ -2247,11 +2454,8 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
     const localItems = localEligible.customFields || [];
     const localFieldKeys = localItems.map((f) => String(f.key));
 
-    const { data: remoteRows, error, count } = await supabase
-      .from("nextrep_custom_fields")
-      .select("field_key", { count: "exact" })
-      .eq("user_id", userId);
-    if (error) throw new Error(`nextrep_custom_fields: odczyt rekordów zdalnych nie powiódł się — ${error.message}`);
+    const remoteRows = await readAll("custom_fields", "nextrep_custom_fields");
+    const count = remoteRows.length;
 
     const remoteFieldKeys = new Set((remoteRows || []).map((r) => r.field_key));
     const missing = localFieldKeys.filter((k) => !remoteFieldKeys.has(k));
@@ -2322,17 +2526,27 @@ async function runMigrationV1(onProgress) {
     return { success: false, error: "Nie udało się sprawdzić sesji logowania." };
   }
   if (!user) return { success: false, error: "Musisz być zalogowany, aby przenieść dane do konta." };
+  // Stage 4A.3: the local data read below must be THIS account's namespace, and every status write
+  // stays in it (statusUserId) even if the active workspace changes while the upload runs. Cloud rows
+  // are written for user.id only (and RLS rejects them under another session).
+  if (!isActiveNamespaceFor(user.id)) return { success: false, error: "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę." };
+  const statusUserId = user.id;
 
-  setMigrationStatus("in_progress");
+  setMigrationStatus("in_progress", {}, statusUserId);
   onProgress?.("preparing");
 
   const { errors: validationErrors, data: local } = await validateLocalDataForMigration();
   if (validationErrors.length) {
-    setMigrationStatus("failed", { error: validationErrors.join(" ") });
+    setMigrationStatus("failed", { error: validationErrors.join(" ") }, statusUserId);
     return { success: false, error: `Dane lokalne są uszkodzone: ${validationErrors.join(" ")}` };
   }
 
   const deviceId = getOrCreateDeviceId();
+  if (!isActiveNamespaceFor(statusUserId)) {
+    // the workspace changed while the local data was read — nothing has been sent
+    setMigrationStatus("failed", { error: "Zmiana konta w trakcie przygotowania migracji." }, statusUserId);
+    return { success: false, error: "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę." };
+  }
 
   try {
     // Moved to run FIRST: nextrep_exercises/plans/plan_items/plan_item_sets/workouts/
@@ -2384,7 +2598,7 @@ async function runMigrationV1(onProgress) {
     );
 
     if (!allLocalRecordsFound) {
-      setMigrationStatus("failed", { error: "Część lokalnych rekordów nie została odnaleziona w Supabase.", verification });
+      setMigrationStatus("failed", { error: "Część lokalnych rekordów nie została odnaleziona w Supabase.", verification }, statusUserId);
       return {
         success: false,
         error: "Migracja zakończona, ale część lokalnych rekordów nie została odnaleziona w Supabase (po legacy_id). Spróbuj ponownie.",
@@ -2392,17 +2606,38 @@ async function runMigrationV1(onProgress) {
       };
     }
     if (!deviceIntegrityOk) {
-      setMigrationStatus("failed", { error: "Niektóre rekordy nadal nie mają device_id lub version po naprawie.", verification });
+      setMigrationStatus("failed", { error: "Niektóre rekordy nadal nie mają device_id lub version po naprawie.", verification }, statusUserId);
       return { success: false, error: "Migracja zakończona, ale część rekordów nadal nie ma uzupełnionego device_id lub version. Spróbuj ponownie.", verification };
     }
 
-    setMigrationStatus("completed", { verification });
+    setMigrationStatus("completed", { verification }, statusUserId);
     onProgress?.("done");
     return { success: true, verification };
   } catch (e) {
-    setMigrationStatus("failed", { error: e?.message || "Nieznany błąd migracji." });
+    setMigrationStatus("failed", { error: e?.message || "Nieznany błąd migracji." }, statusUserId);
     return { success: false, error: e?.message || "Nie udało się przenieść danych do konta." };
   }
+}
+
+// Stage 4A.3: the old manual "Przenieś dane do konta" stays only as a controlled REPAIR tool for an
+// account that is already initialised with sync ON. It may never bypass source selection: no marker,
+// a paused sync (the cloud holds other data — an upload would overwrite it), an unsettled cloud load /
+// device upload, a workspace that isn't the session's, or any account operation in progress → BLOCKED,
+// with nothing sent. The normal "device data → empty cloud" case is part of source selection itself.
+async function manualMigrationBlocker() {
+  const userId = await currentSessionUserId();
+  if (!userId) return "Musisz być zalogowany, aby przenieść dane do konta.";
+  if (!isActiveNamespaceFor(userId)) return "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę.";
+  if (isAccountInitBusy() || isSyncRunInProgress() || isSyncBootstrapInProgress()) return "Trwa inna operacja na danych tego konta — spróbuj ponownie za chwilę.";
+  const m = getAccountInitMarker(userId);
+  if (!m || m.status !== "ready") return "Najpierw wybierz źródło danych tego konta (Moje konto → „Wybierz ponownie źródło danych”).";
+  if (m.syncPaused) return "Synchronizacja tego konta jest wstrzymana, bo w chmurze są inne dane niż na tym urządzeniu. Przeniesienie danych mogłoby je nadpisać — wybierz ponownie źródło danych.";
+  return null;
+}
+async function runManualMigrationV1(onProgress) {
+  const blocked = await manualMigrationBlocker();
+  if (blocked) return { success: false, blocked: true, error: blocked };
+  return runMigrationV1(onProgress);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -3631,7 +3866,21 @@ function collectLocalSyncKeys(localSnapshot) {
   return keys;
 }
 
+// Stage 4A.3: counted so source selection can wait until no bootstrap is still writing sync_meta
+// (it also runs outside runSync's lock — see waitForSyncIdle).
+let _syncBootstrapRuns = 0;
+function isSyncBootstrapInProgress() {
+  return _syncBootstrapRuns > 0;
+}
 async function bootstrapSyncMetaForExistingData() {
+  _syncBootstrapRuns++;
+  try {
+    return await bootstrapSyncMetaForExistingDataUnlocked();
+  } finally {
+    _syncBootstrapRuns--;
+  }
+}
+async function bootstrapSyncMetaForExistingDataUnlocked() {
   const result = { success: true, skipped: null, created: 0, createdInSync: 0, createdRemoteNewer: 0, skippedExistingMeta: 0, skippedPendingLocal: 0, skippedRemoteDeleted: 0, localOnly: 0 };
   if (!supabase) return { ...result, skipped: "no_supabase" };
   if (typeof navigator !== "undefined" && navigator.onLine === false) return { ...result, skipped: "offline" };
@@ -3837,11 +4086,44 @@ const PULL_TABLE_TO_SUPABASE = {
 // including for nextrep_profiles). select("*") is fine here: we work only with whatever columns
 // actually come back rather than assuming any — nextrep_profiles simply won't have
 // id/legacy_id/version/device_id/deleted_at in its rows, and nothing below reads those for it.
+//
+// Stage 4A.3: one PostgREST response is capped (Supabase default max_rows = 1000), so a single
+// select silently returned an INCOMPLETE table for bigger accounts. The table is now read page by
+// page in a stable order (id; user_id for nextrep_profiles, which has no id) until the total
+// reported with the first page is reached, or an empty page comes back. The next page starts after
+// the rows actually received, so a server cap smaller than the page size can't end it early. Any
+// page error fails the whole fetch — a partial table is never returned as if it were complete.
+const REMOTE_FETCH_PAGE_SIZE = 500;
 async function fetchRemoteTable(pullTable, userId) {
   const supabaseTable = PULL_TABLE_TO_SUPABASE[pullTable];
-  const { data, error } = await supabase.from(supabaseTable).select("*").eq("user_id", userId);
-  if (error) throw error;
-  return Array.isArray(data) ? data : [];
+  const orderColumn = pullTable === "profiles" ? "user_id" : "id";
+  const rows = [];
+  const seenIds = new Set();
+  let total = null;
+  let from = 0;
+  for (;;) {
+    let query = supabase.from(supabaseTable);
+    query = from === 0 ? query.select("*", { count: "exact" }) : query.select("*");
+    const { data, error, count } = await query.eq("user_id", userId).order(orderColumn, { ascending: true }).range(from, from + REMOTE_FETCH_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = Array.isArray(data) ? data : [];
+    if (from === 0 && typeof count === "number") total = count;
+    if (page.length === 0) break;
+    let added = 0;
+    for (const row of page) {
+      const id = row && row.id != null ? row.id : null;
+      if (id != null) {
+        if (seenIds.has(id)) continue; // a row inserted meanwhile can shift one row into the next page
+        seenIds.add(id);
+      }
+      rows.push(row);
+      added++;
+    }
+    if (added === 0) throw new Error(`Niespójne stronicowanie ${supabaseTable}`); // never loop or return a guess
+    from += page.length;
+    if (total != null && from >= total) break;
+  }
+  return rows;
 }
 
 // Resolves the LOCAL record a remote row identifies — legacy_id is how a remote row names its
@@ -5028,8 +5310,10 @@ function createBackupSnapshot(reason, options = {}) {
       ...(options.meta && typeof options.meta === "object" ? options.meta : {}), // e.g. kind/userId/source of a device snapshot
       data: readAllAppData(),
     };
-    const list = loadBackupList();
+    let list = loadBackupList();
     list.push(snapshot);
+    // Stage 4A.3: before-cloud-load snapshots are outside BACKUP_LIMIT, but bounded per namespace.
+    if (snapshot.kind === BEFORE_CLOUD_RESTORE_KIND) list = pruneBeforeCloudRestoreBackups(list, snapshot.namespace, snapshot.userId, snapshot.backupId);
     // keep BACKUP_LIMIT per namespace (one account's backups never push out another's)
     const owner = (b) => backupOwnerNamespace(b);
     // the device snapshot taken before "Wczytaj z chmury" is never trimmed away by later backups
@@ -5042,6 +5326,32 @@ function createBackupSnapshot(reason, options = {}) {
     console.error("createBackupSnapshot failed", e);
     return null;
   }
+}
+
+// Stage 4A.3: retention of the device snapshots taken before "Wczytaj z chmury": per namespace, the
+// BEFORE_CLOUD_RESTORE_KEEP newest stay, plus any snapshot that this account's restore pointer or
+// init marker (loading / pending cloud load) still refers to. Other namespaces (other accounts, the
+// guest) and other kinds of backups are never touched. `keepBackupId` (the snapshot being created
+// right now) is always kept — even if older entries carry later timestamps (device clock moved back),
+// the snapshot a cloud load is about to rely on can never be pruned before it is referenced.
+const BEFORE_CLOUD_RESTORE_KEEP = 2;
+function pruneBeforeCloudRestoreBackups(list, ns, userId, keepBackupId = null) {
+  const isMine = (b) => b && b.kind === BEFORE_CLOUD_RESTORE_KIND && backupOwnerNamespace(b) === ns;
+  const keep = new Set(
+    list
+      .filter(isMine)
+      .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))
+      .slice(0, BEFORE_CLOUD_RESTORE_KEEP)
+      .map((b) => b.backupId)
+  );
+  if (keepBackupId) keep.add(keepBackupId);
+  if (userId) {
+    const p = getLastCloudRestorePointer(userId);
+    if (p && p.backupId) keep.add(p.backupId);
+    const m = getAccountInitMarker(userId);
+    if (m && m.backupId) keep.add(m.backupId);
+  }
+  return list.filter((b) => !isMine(b) || keep.has(b.backupId));
 }
 
 // A snapshot's data is only ever restored field-by-field, and only for fields that are actually
@@ -7306,7 +7616,14 @@ function ConflictCenterScreen({ onNavigate, exercises, isOnline }) {
 
 
 // Stage 4A.2 — full-screen account initialisation (shows NO app data while undecided).
-function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceRestorePossible }) {
+function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceSnapshotStatus, onAbandonCloud, onRetryUpload, onAbandonUpload }) {
+  // Stage 4A.3: "go back to the device data" is offered only when that restore can really happen.
+  const deviceRestorePossible = deviceSnapshotStatus === "ok";
+  const snapshotNote = deviceRestorePossible
+    ? null
+    : deviceSnapshotStatus === "no_snapshot"
+    ? "Przed wczytaniem na urządzeniu nie było danych tego konta."
+    : "Kopii danych z urządzenia nie da się już bezpiecznie przywrócić z tego miejsca.";
   const shell = (children) => (
     <div className="min-h-screen bg-app-depth font-body flex items-center justify-center px-6 py-10" data-testid="account-init">
       <FontStyles />
@@ -7322,11 +7639,18 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
       {label}
     </button>
   );
-  if (init.status === "checking" || init.status === "loading_cloud") {
+  const errorLine = init.error ? (
+    <p className="text-red-400 text-sm mt-3" data-testid="init-error">
+      {init.error}
+    </p>
+  ) : null;
+  if (init.status === "checking" || init.status === "loading_cloud" || init.status === "uploading") {
     return shell(
       <div className="text-center">
         <p className="font-display text-2xl text-neutral-50 tracking-wide">NEXTREP</p>
-        <p className="text-neutral-400 text-sm mt-2">{init.status === "checking" ? "Sprawdzanie danych konta…" : "Pobieranie danych z chmury…"}</p>
+        <p className="text-neutral-400 text-sm mt-2" data-testid="init-progress">
+          {init.status === "checking" ? "Sprawdzanie danych konta…" : init.status === "loading_cloud" ? "Pobieranie danych z chmury…" : "Wysyłanie danych z urządzenia do chmury…"}
+        </p>
         {email && <p className="text-neutral-600 text-xs mt-1 break-all">{email}</p>}
       </div>
     );
@@ -7352,7 +7676,7 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
         {deviceRestorePossible ? (
           <p className="text-neutral-400 text-sm mb-4">Kopia Twoich wcześniejszych danych z urządzenia jest zachowana — możesz jeszcze do nich wrócić.</p>
         ) : (
-          <p className="text-neutral-400 text-sm mb-4">Przed wczytaniem na urządzeniu nie było danych tego konta.</p>
+          <p className="text-neutral-400 text-sm mb-4">{snapshotNote}</p>
         )}
         {btn("Zostań przy danych z chmury", onConfirmCloud, true, "init-confirm-cloud")}
         {deviceRestorePossible && btn("Wróć do danych z urządzenia", onChooseLocal, false, "init-local")}
@@ -7365,6 +7689,42 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
       </>
     );
   }
+  // Stage 4A.3: a cloud load was interrupted (refresh / closed app). The data on the device may be
+  // partial and is not used; the only ways out are a new load or going back to the state before it.
+  if (init.status === "cloud_interrupted") {
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">WCZYTYWANIE Z CHMURY ZOSTAŁO PRZERWANE</p>
+        <p className="text-neutral-300 text-sm mb-2">Dane na tym urządzeniu mogą być niekompletne, dlatego nie są używane.</p>
+        {deviceRestorePossible ? (
+          <p className="text-neutral-400 text-sm mb-4">Kopia Twoich danych sprzed wczytania jest zachowana.</p>
+        ) : (
+          <p className="text-neutral-400 text-sm mb-4">{snapshotNote}</p>
+        )}
+        {btn("Ponów wczytanie z chmury", onChooseCloud, true, "init-retry-cloud")}
+        {deviceRestorePossible
+          ? btn("Wróć do danych sprzed wczytania", onChooseLocal, false, "init-local")
+          : btn("Wróć do wyboru źródła danych", onAbandonCloud, false, "init-abandon-cloud")}
+        <p className="text-neutral-600 text-xs mt-2">Synchronizacja ruszy dopiero po Twoim wyborze.</p>
+        {errorLine}
+      </>
+    );
+  }
+  if (init.status === "error_upload" || init.status === "upload_interrupted") {
+    const interrupted = init.status === "upload_interrupted";
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">{interrupted ? "WYSYŁANIE DANYCH ZOSTAŁO PRZERWANE" : "NIE UDAŁO SIĘ WYSŁAĆ DANYCH"}</p>
+        <p className="text-neutral-300 text-sm mb-1">
+          {interrupted ? "Wysyłanie danych z urządzenia do chmury nie zostało dokończone — część danych mogła już trafić do chmury." : "Wysyłanie danych z urządzenia do chmury nie powiodło się."}
+        </p>
+        <p className="text-neutral-400 text-sm mb-4">Dane na tym urządzeniu nie zostały zmienione. Synchronizacja pozostaje wyłączona.</p>
+        {btn(interrupted ? "Ponów wysyłanie" : "Spróbuj ponownie", onRetryUpload, true, "init-retry-upload")}
+        {btn("Wróć do wyboru źródła danych", onAbandonUpload, false, "init-abandon-upload")}
+        {errorLine}
+      </>
+    );
+  }
   if (init.status === "error_load") {
     return shell(
       <>
@@ -7373,6 +7733,7 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
         <p className="text-neutral-400 text-sm mb-4">Dane na tym urządzeniu nie zostały zmienione.</p>
         {btn("Spróbuj ponownie", onChooseCloud, true, "init-retry-cloud")}
         {btn("Wróć do wyboru", onBack, false, "init-back")}
+        {errorLine}
       </>
     );
   }
@@ -7422,12 +7783,6 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
   const [signingOut, setSigningOut] = useState(false);
   const [cloudSaving, setCloudSaving] = useState(false);
   const [cloudMessage, setCloudMessage] = useState(null); // { ok: bool, text: string } | null
-  const [cloudFetching, setCloudFetching] = useState(false);
-  const [cloudFetchMessage, setCloudFetchMessage] = useState(null); // { ok: bool, text: string } | null
-  const [fetchedCloudData, setFetchedCloudData] = useState(null); // preview only — never written to localStorage
-  const [confirmRestore, setConfirmRestore] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [restoreMessage, setRestoreMessage] = useState(null); // { ok: bool, text: string } | null
   const [migrationStatus, setMigrationStatusState] = useState(() => getMigrationStatus());
   const [migrationStage, setMigrationStage] = useState(null); // null | "preparing" | "exercises" | "plans" | "history" | "measurements" | "checking" | "done"
   const [migrationResult, setMigrationResult] = useState(null); // { ok: bool, text: string } | null
@@ -7480,56 +7835,6 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
     setCloudMessage(error ? { ok: false, text: error } : { ok: true, text: "Dane zapisane w chmurze." });
   };
 
-  const handleFetchFromCloud = async () => {
-    setCloudFetching(true);
-    setCloudFetchMessage(null);
-    setFetchedCloudData(null);
-    setRestoreMessage(null);
-    setConfirmRestore(false);
-    const { error, found, data } = await fetchDataFromCloud();
-    setCloudFetching(false);
-    if (error) {
-      setCloudFetchMessage({ ok: false, text: error });
-      return;
-    }
-    if (!found) {
-      setCloudFetchMessage({ ok: false, text: "Brak zapisanych danych w chmurze." });
-      return;
-    }
-    setFetchedCloudData(data);
-    const countOf = (key) => (Array.isArray(data[key]) ? data[key].length : data[key] ? 1 : 0);
-    const summary = [
-      `${countOf(STORAGE_KEYS.exercises)} ${plWord(countOf(STORAGE_KEYS.exercises), "ćwiczenie", "ćwiczenia", "ćwiczeń")}`,
-      `${countOf(STORAGE_KEYS.plans)} ${plWord(countOf(STORAGE_KEYS.plans), "plan", "plany", "planów")}`,
-      `${countOf(STORAGE_KEYS.history)} ${plWord(countOf(STORAGE_KEYS.history), "trening", "treningi", "treningów")} w historii`,
-      `${countOf(STORAGE_KEYS.measurements)} ${plWord(countOf(STORAGE_KEYS.measurements), "pomiar", "pomiary", "pomiarów")}`,
-    ].join(", ");
-    setCloudFetchMessage({ ok: true, text: `Dane z chmury są gotowe do przywrócenia. Znaleziono: ${summary}.` });
-  };
-
-  // Only ever acts on data already sitting in `fetchedCloudData` from a prior fetch — this never
-  // triggers a fetch of its own. After writing to localStorage it calls the app's existing
-  // `reloadLocalData` (the same function the app uses on first load) so the UI picks up the
-  // restored values through the one existing state mechanism, then clears the preview so the
-  // button can't be pressed again on stale data.
-  const handleRestoreFromCloud = async () => {
-    setRestoring(true);
-    setRestoreMessage(null);
-    const { error } = await restoreDataFromCloud(fetchedCloudData);
-    if (error) {
-      setRestoring(false);
-      setConfirmRestore(false);
-      setRestoreMessage({ ok: false, text: error });
-      return;
-    }
-    if (reloadLocalData) await reloadLocalData();
-    setFetchedCloudData(null);
-    setCloudFetchMessage(null);
-    setConfirmRestore(false);
-    setRestoring(false);
-    setRestoreMessage({ ok: true, text: "Dane zostały przywrócone z chmury." });
-  };
-
   const MIGRATION_STAGE_LABELS = {
     preparing: "Przygotowywanie...",
     exercises: "Ćwiczenia...",
@@ -7543,7 +7848,7 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
   const handleMigrateToCloud = async () => {
     setMigrationStage("preparing");
     setMigrationResult(null);
-    const result = await runMigrationV1((stage) => setMigrationStage(stage));
+    const result = await runManualMigrationV1((stage) => setMigrationStage(stage)); // Stage 4A.3: guarded repair tool
     // FIX 1 (A): only after a SUCCESSFUL migration — give every migrated record its sync_meta
     // baseline right away, so the first edit after migration bumps past the migrated version.
     // Logged-in/online checks live inside the bootstrap; any failure is silent and retried by
@@ -7712,31 +8017,12 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
               <p className={`text-xs mb-2 leading-relaxed ${cloudMessage.ok ? "text-lime-400" : "text-red-400"}`}>{cloudMessage.text}</p>
             )}
 
-            <button
-              onClick={handleFetchFromCloud}
-              disabled={cloudFetching}
-              className="w-full flex items-center gap-3 rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4 text-left active:scale-[0.98] mb-2 disabled:opacity-50"
-            >
-              <DownloadCloud size={19} className="text-sky-400 flex-shrink-0" />
-              <span className="text-sky-400 font-semibold text-sm">{cloudFetching ? "Pobieranie..." : "Pobierz dane z chmury"}</span>
-            </button>
-            {cloudFetchMessage && (
-              <p className={`text-xs mb-2 leading-relaxed ${cloudFetchMessage.ok ? "text-lime-400" : "text-red-400"}`}>{cloudFetchMessage.text}</p>
-            )}
-
-            {fetchedCloudData && (
-              <button
-                onClick={() => setConfirmRestore(true)}
-                disabled={restoring}
-                className="w-full flex items-center gap-3 rounded-2xl border border-lime-500/30 bg-lime-500/5 p-4 text-left active:scale-[0.98] mb-2 disabled:opacity-50"
-              >
-                <RotateCcw size={19} className="text-lime-400 flex-shrink-0" />
-                <span className="text-lime-400 font-semibold text-sm">{restoring ? "Przywracanie..." : "Przywróć dane z chmury"}</span>
-              </button>
-            )}
-            {restoreMessage && (
-              <p className={`text-xs mb-2 leading-relaxed ${restoreMessage.ok ? "text-lime-400" : "text-red-400"}`}>{restoreMessage.text}</p>
-            )}
+            {/* Stage 4A.3: the old "Pobierz / Przywróć dane z chmury" (legacy user_data) overwrote this device's
+                data without a backup and outside source selection — removed from the UI. The safe way to use
+                the cloud data is "Wybierz ponownie źródło danych" → "Wczytaj z chmury" (backup + confirmation). */}
+            <p className="text-neutral-500 text-xs leading-relaxed mb-3 px-1" data-testid="cloud-load-hint">
+              Aby wczytać dane z chmury, użyj „Wybierz ponownie źródło danych” — przed wczytaniem powstaje kopia danych z tego urządzenia.
+            </p>
 
             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 mb-2">
               <p className="text-neutral-100 font-semibold text-sm flex items-center gap-2 mb-1.5">
@@ -7823,34 +8109,6 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
               </button>
               <button onClick={handleDelete} disabled={deleting} className="flex-1 py-3 rounded-xl bg-red-500 disabled:opacity-50 text-neutral-950 font-bold">
                 {deleting ? "Usuwanie..." : "Usuń konto"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {confirmRestore && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6" onClick={() => !restoring && setConfirmRestore(false)}>
-          <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-            <p className="font-display text-xl text-neutral-50 tracking-wide mb-2">PRZYWRÓCIĆ DANE?</p>
-            <p className="text-neutral-400 text-sm mb-2 leading-relaxed">
-              Uwaga: przywrócenie danych z chmury zastąpi odpowiednie dane zapisane obecnie na tym urządzeniu. Czy
-              chcesz kontynuować?
-            </p>
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => setConfirmRestore(false)}
-                disabled={restoring}
-                className="flex-1 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold disabled:opacity-50"
-              >
-                Anuluj
-              </button>
-              <button
-                onClick={handleRestoreFromCloud}
-                disabled={restoring}
-                className="flex-1 py-3 rounded-xl bg-lime-500 disabled:opacity-50 text-neutral-950 font-bold"
-              >
-                {restoring ? "Przywracanie..." : "Przywróć dane"}
               </button>
             </div>
           </div>
@@ -15059,12 +15317,17 @@ function App() {
   // Stage 4A.2: an account namespace is usable only once its data source is decided.
   // accountInit = { ns, status: "checking"|"choice"|"error_check"|"loading_cloud"|"error_load"|"ready", local, cloud, error, transient }
   const [accountInit, setAccountInit] = useState({ ns: null, status: "checking" });
+  // Stage 4A.3: every source-selection action takes a token; a newer action or a workspace switch
+  // makes older ones stale — a stale action stops at its next account check (its ref returns null)
+  // and never touches the screen of the flow that replaced it.
+  const initOpRef = useRef(0);
   const accountInitReady = workspaceNs === "guest" || (accountInit.ns === dataNs && accountInit.status === "ready");
   const dataReady = dataNamespaceLoaded && accountInitReady;
   useEffect(() => {
     if (!workspaceNs) return;
     const targetUserId = workspaceNs === "guest" ? null : authUserId;
     const targetNs = workspaceNs;
+    initOpRef.current++; // Stage 4A.3: actions of the previous workspace / session are stale from now on
     // Switches are serialised: each one finishes (activate → reset → load) before the next starts.
     nsSwitchChainRef.current = nsSwitchChainRef.current
       .then(async () => {
@@ -15099,11 +15362,18 @@ function App() {
         if (targetUserId) {
           const marker = getAccountInitMarker(targetUserId);
           if (marker && marker.status === "pending_cloud_confirm") fixLastCloudRestoreFingerprint(targetUserId);
+          // Stage 4A.3: a settled account has nothing to roll back — a leftover restore pointer must not
+          // offer an old snapshot in a later source choice.
+          if (marker && marker.status === "ready" && getLastCloudRestorePointer(targetUserId)) clearLastCloudRestorePointer(targetUserId);
           setAccountInit(
             marker && marker.status === "ready"
               ? { ns: targetNs, status: "ready" }
               : marker && marker.status === "pending_cloud_confirm"
               ? { ns: targetNs, status: "cloud_loaded" }
+              : marker && marker.status === "loading_cloud"
+              ? { ns: targetNs, status: "cloud_interrupted" } // Stage 4A.3: data on the device may be partial — never used as device data
+              : marker && marker.status === "uploading_device"
+              ? { ns: targetNs, status: "upload_interrupted" } // Stage 4A.3: own partial upload may be in the cloud
               : { ns: targetNs, status: "checking" }
           );
         } else {
@@ -15114,7 +15384,9 @@ function App() {
           heldSwitchRef.current = false;
           setSessionRecoveredNotice(true); // the held switch just happened — say so
         }
-        if (targetUserId && !(getAccountInitMarker(targetUserId) || {}).status) runAccountInitCheck(targetUserId, targetNs);
+        // Stage 4A.3: no marker — or one with an unknown / damaged status (never "ready", never synced,
+        // nothing cleared) — means the source is decided again by the normal safe check.
+        if (targetUserId && !isKnownAccountInitStatus((getAccountInitMarker(targetUserId) || {}).status)) runAccountInitCheck(targetUserId, targetNs);
       })
       .catch((e) => console.error("[namespace] switch failed", e));
   }, [workspaceNs]);
@@ -15417,6 +15689,13 @@ function App() {
   const initUserId = authUserId;
   const initNs = expectedNs;
   const sameInit = () => (authUserRef.current && authUserRef.current.id) === initUserId && getActiveDataNamespace() === initNs;
+  // Stage 4A.3 (F2): token per action. `refFor(op)` is the account ref handed to the domain functions:
+  // it returns null once the action is stale, so they stop at their next stillSameAccount check.
+  const beginInitOp = () => ++initOpRef.current;
+  const isCurrentOp = (op) => initOpRef.current === op && sameInit();
+  const refFor = (op) => () => (initOpRef.current === op && authUserRef.current ? authUserRef.current.id : null);
+  const ACCOUNT_CHECK_FAILED_TEXT = "Nie udało się potwierdzić konta, więc operacja została przerwana. Dane nie zostały zmienione — spróbuj ponownie.";
+  const failText = (e) => (e && e.message ? authErrorText(e) : "Operacja nie powiodła się. Dane nie zostały zmienione — spróbuj ponownie.");
   const finishInit = async () => {
     await reloadLocalData();
     if (!sameInit()) return;
@@ -15437,24 +15716,107 @@ function App() {
     } else if (afterCloudLoad) {
       setAccountInit({ ...accountInit, error: DEVICE_SNAPSHOT_ERRORS[r.status] || DEVICE_SNAPSHOT_ERRORS.invalid });
       return; // nothing restored, nothing cleared, not a success
+    } else if (accountInit.local && accountInit.local.hasData && accountInit.cloud && accountInit.cloud.hasData === false) {
+      // Stage 4A.3: device data + a cloud confirmed EMPTY → the device data becomes this account's
+      // data and is uploaded first; the account is "ready" only after a successful upload.
+      await runDeviceUpload();
+      return;
     }
     // the cloud just loaded (or checked) has data → device data stays paused against it
     const cloudHasData = afterCloudLoad ? true : !!(accountInit.cloud && accountInit.cloud.hasData);
     setAccountInitMarker(initUserId, { status: "ready", source: "device", syncPaused: cloudHasData });
     await finishInit();
   };
+  // Stage 4A.3: upload of the device data to a confirmed-empty cloud (first attempt, retry after an
+  // error, or resume after a restart — the persistent "uploading_device" marker tells them apart).
+  const runDeviceUpload = async () => {
+    if (!sameInit()) return;
+    const op = beginInitOp();
+    const prev = accountInit;
+    setAccountInit({ ...prev, status: "uploading", error: null });
+    let u;
+    try {
+      u = await uploadAccountDataToEmptyCloud(initUserId, refFor(op));
+    } catch (e) {
+      u = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return; // superseded — the newer flow owns the screen
+    if (u.discarded) u = { ok: false, error: ACCOUNT_CHECK_FAILED_TEXT }; // never leave the spinner up
+    if (!u.ok && !u.cloudChanged && !u.alreadyReady) {
+      // an unfinished upload stays recognisable: show its own retry screen, otherwise the previous one
+      const m = getAccountInitMarker(initUserId);
+      if (m && m.status === "uploading_device") setAccountInit({ ns: initNs, status: prev.status === "upload_interrupted" ? "upload_interrupted" : "error_upload", error: u.error });
+      else setAccountInit({ ...prev, error: u.error });
+      return;
+    }
+    if (u.alreadyReady) {
+      await finishInit();
+      return;
+    }
+    if (u.cloudChanged) {
+      setAccountInit({
+        ns: initNs,
+        status: "choice",
+        local: hasLocalAccountData(initUserId),
+        cloud: u.cloud,
+        deviceSnapshot: null,
+        error: "Dane w chmurze zmieniły się w międzyczasie, więc nic nie zostało wysłane. Wybierz ponownie, których danych chcesz używać.",
+      });
+      return;
+    }
+    setAccountInitMarker(initUserId, { status: "ready", source: "device", syncPaused: false });
+    await finishInit();
+  };
+  // Stage 4A.3: give up an unfinished upload — the device data stays as it is; rows this device
+  // already sent now count as cloud data in the normal check (nothing is deleted or merged).
+  const abandonDeviceUpload = async () => {
+    if (!sameInit()) return;
+    const m = getAccountInitMarker(initUserId);
+    if (m && m.status === "uploading_device") clearAccountInitMarker(initUserId);
+    setAccountInit({ ns: initNs, status: "checking" });
+    runAccountInitCheck(initUserId, initNs);
+  };
   const chooseEmpty = async () => {
-    const r = await startAccountEmpty(initUserId, () => authUserRef.current && authUserRef.current.id, !!(accountInit.cloud && accountInit.cloud.hasData));
+    if (!sameInit()) return;
+    const op = beginInitOp();
+    const prev = accountInit;
+    let r;
+    try {
+      r = await startAccountEmpty(initUserId, refFor(op), !!(prev.cloud && prev.cloud.hasData));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return;
     if (r.ok) await finishInit();
+    else setAccountInit({ ...prev, error: r.discarded ? ACCOUNT_CHECK_FAILED_TEXT : r.error }); // Stage 4A.3: blocked / sync running / account check failed
   };
   const chooseCloud = async () => {
     if (!sameInit()) return;
     const prev = accountInit;
+    // Stage 4A.3: a started workout / unsent changes / open conflicts block the load up front.
+    const blocker = cloudRestoreBlocker(initUserId);
+    if (blocker) {
+      setAccountInit({ ...prev, error: blocker.message });
+      return;
+    }
+    const op = beginInitOp();
     setAccountInit({ ...prev, status: "loading_cloud", error: null });
-    const r = await loadAccountFromCloud(initUserId, () => authUserRef.current && authUserRef.current.id);
-    if (r.discarded || !sameInit()) return; // the account changed meanwhile — result dropped
+    let r;
+    try {
+      r = await loadAccountFromCloud(initUserId, refFor(op));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return; // superseded (account / workspace changed) — result dropped
+    if (r.alreadyReady) {
+      await finishInit();
+      return;
+    }
     if (!r.ok) {
-      setAccountInit({ ...prev, status: "error_load", error: r.error });
+      const m = getAccountInitMarker(initUserId);
+      if (m && m.status === "loading_cloud") setAccountInit({ ns: initNs, status: "cloud_interrupted", error: r.discarded ? ACCOUNT_CHECK_FAILED_TEXT : r.error }); // interrupted load stays recognisable
+      else if (r.blocked || r.discarded) setAccountInit({ ...prev, error: r.discarded ? ACCOUNT_CHECK_FAILED_TEXT : r.error }); // nothing changed — back to the screen it came from
+      else setAccountInit({ ...prev, status: "error_load", error: r.error });
       return;
     }
     // Load the cloud state into React, fingerprint it, and STAY on the confirmation step: sync is
@@ -15465,10 +15827,34 @@ function App() {
     setSyncQueueState(loadSyncQueue());
     setAccountInit({ ns: initNs, status: "cloud_loaded", cloud: prev.cloud, local: prev.local });
   };
+  // Stage 4A.3: interrupted load, device had no data before it → drop the partial data, decide again.
+  const abandonInterruptedCloud = async () => {
+    if (!sameInit()) return;
+    const op = beginInitOp();
+    const prev = accountInit;
+    let r;
+    try {
+      r = await abandonInterruptedCloudLoad(initUserId, refFor(op));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return;
+    if (!r.ok) {
+      setAccountInit({ ...prev, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
+      return;
+    }
+    await reloadLocalData();
+    if (!sameInit()) return;
+    setSyncQueueState(loadSyncQueue());
+    setAccountInit({ ns: initNs, status: "checking" });
+    runAccountInitCheck(initUserId, initNs);
+  };
   const confirmCloud = async () => {
     if (!sameInit()) return;
+    // Stage 4A.3: the user keeps the cloud data — no rollback needed any more, so the pointer goes
+    // FIRST (a crash in between leaves "pending" without a way back, never a stale pointer under "ready").
+    clearLastCloudRestorePointer(initUserId); // the before-restore backup itself stays in the list
     setAccountInitMarker(initUserId, { status: "ready", source: "cloud", syncPaused: false });
-    clearLastCloudRestorePointer(initUserId); // settled — the before-restore backup itself stays in the list
     await finishInit();
   };
   const workOffline = async () => {
@@ -15485,7 +15871,10 @@ function App() {
         onChooseCloud={chooseCloud}
         onChooseEmpty={chooseEmpty}
         onConfirmCloud={confirmCloud}
-        deviceRestorePossible={initUserId ? resolveDeviceSnapshot(initUserId).status !== "no_snapshot" : false}
+        deviceSnapshotStatus={initUserId ? resolveDeviceSnapshot(initUserId).status : "none"}
+        onAbandonCloud={abandonInterruptedCloud}
+        onRetryUpload={runDeviceUpload}
+        onAbandonUpload={abandonDeviceUpload}
         onRetry={() => runAccountInitCheck(initUserId, initNs)}
         onWorkOffline={workOffline}
         onBack={() => setAccountInit({ ...accountInit, status: "choice", error: null })}
@@ -15866,11 +16255,29 @@ function App() {
     case "account":
       return (
         <AccountScreen
-          onRechooseDataSource={() => {
+          onRechooseDataSource={async () => {
             if (!authUserId) return;
-            clearAccountInitMarker(authUserId);
-            setAccountInit({ ns: dataNs, status: "checking" });
-            runAccountInitCheck(authUserId, dataNs);
+            const uid = authUserId;
+            const ns = dataNs;
+            const op = beginInitOp();
+            // Stage 4A.3: removing the marker first refuses every NEW sync / bootstrap run; a pass that
+            // already started finishes its writes before the data is checked again.
+            clearAccountInitMarker(uid);
+            clearLastCloudRestorePointer(uid); // Stage 4A.3: a settled account's old snapshot is never offered again
+            cancelAllScheduledSyncRetries(); // queued retries / a debounced sync of the old choice must not fire now
+            cancelScheduledSync();
+            setAccountInit({ ns, status: "checking" });
+            await waitForSyncIdle(); // on timeout the check still runs — every destructive choice waits again
+            if (initOpRef.current !== op) return; // superseded — the newer flow owns the screen
+            // another account / workspace now → its own switch shows its screen. Otherwise always go on to
+            // the (read-only) check, even if a session re-check would fail right now: never leave "checking" up.
+            if ((authUserRef.current && authUserRef.current.id) !== uid || getActiveDataNamespace() !== ns) return;
+            const decided = getAccountInitMarker(uid);
+            if (decided && decided.status === "ready") {
+              setAccountInit({ ns, status: "ready" }); // decided meanwhile (e.g. another tab) — leave it
+              return;
+            }
+            runAccountInitCheck(uid, ns);
           }}
           onNavigate={goToScreen}
           authUser={authUser}

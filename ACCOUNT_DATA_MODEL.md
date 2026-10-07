@@ -721,6 +721,9 @@ Połącz dane
 
 Automatyczne połączenie nie jest domyślną operacją.
 
+„Połącz dane” to cel Stage 4A.5 (NOT STARTED). Obecny wybór źródła (Stage 4A.3) oferuje wyłącznie
+dane z urządzenia, z chmury albo puste dane — jedno źródło, bez scalania.
+
 ---
 
 # 28. Before-restore (Stage 4A.3)
@@ -743,8 +746,26 @@ Jeżeli cloud restore zakończy się błędem, lokalny stan powinien zostać odt
 
 Nie wolno przywrócić snapshotu należącego do innego konta.
 
-Status: **OPEN**. Mechanizm istnieje w kodzie (`loadAccountFromCloud`, `resolveDeviceSnapshot`,
-`restoreDeviceSnapshot`), ale nie ma testów w aktualnym zestawie, a Test E nie został powtórzony.
+Status: **CLOSED / VERIFIED (Stage 4A.3)**. Snapshot (kopia `BEFORE_CLOUD_RESTORE`) jest przypisany
+do konta i namespace; przywrócenie sprawdza użytkownika i namespace; wskaźnik `last_cloud_restore`
+jest czyszczony po finalnym potwierdzeniu chmury; retencja zostawia 2 najnowsze kopie na konto
+oraz kopię, do której odwołuje się trwający restore. Zweryfikowane testami automatycznymi.
+
+## 28.1 Marker inicjalizacji konta (Stage 4A.3)
+
+Klucz `nextrep_user_<id>_account_init_v1` — osobny dla każdego konta i jego namespace (konto A i B
+mają oddzielne markery i oddzielne kopie). Workspace gościa nie uczestniczy w wyborze źródła konta.
+
+| Stan | Znaczenie |
+| ---- | --------- |
+| brak markera (albo nieznany status) | źródło nie wybrane — sprawdzenie danych i wybór; synchronizacja wyłączona |
+| `loading_cloud` | wczytywanie z chmury w toku / przerwane; dane na urządzeniu mogą być częściowe |
+| `pending_cloud_confirm` | dane z chmury wczytane, czekają na potwierdzenie albo powrót do snapshotu |
+| `uploading_device` | początkowa wysyłka danych urządzenia do pustej chmury w toku / przerwana |
+| `ready` | źródło wybrane; `source`: `new` (nowe, puste konto), `device`, `cloud`, `empty`; synchronizacja tylko gdy `syncPaused` = false |
+
+Przerwane operacje (`loading_cloud`, `uploading_device`) nigdy nie są traktowane jak zwykłe dane
+lokalne konta — po restarcie aplikacja pokazuje ich własny ekran (ponów / wróć).
 
 ---
 
@@ -834,7 +855,7 @@ login offline
 → failed to fetch
 ```
 
-jest nadal OPEN.
+jest nadal OPEN (target: Stage 4A.6).
 
 Stan repo (2026-10-06): surowy „Failed to fetch” został zastąpiony komunikatem o braku sieci, a
 użytkownik pozostaje w ekranie logowania (testy automatyczne). Nie jest potwierdzone, że przy
@@ -1042,7 +1063,7 @@ Kod i dokumentacja w repozytorium są nadrzędne wobec opisów znajdujących si�
 * PUSH,
 * PULL,
 * conflict store,
-* account source selection,
+* account source selection (Stage 4A.3 — COMPLETED),
 * Stage 4A.2 (`f2fe328`): odroczone przełączenie workspace podczas treningu gościa, strażnik
   kolejki/sesji i `saveDataToCloud`, anulowanie timerów sync przy zmianie workspace, czyszczenie
   lokalnych danych po usunięciu konta (testy automatyczne 172/172; production smoke
@@ -1052,6 +1073,8 @@ Kod i dokumentacja w repozytorium są nadrzędne wobec opisów znajdujących si�
 
 * izolacja kont,
 * zmiana workspace,
+* wybór źródła konta i marker inicjalizacji (Stage 4A.3, 268/268),
+* before-restore (Stage 4A.3 — CLOSED / VERIFIED),
 * device identity,
 * podstawowe PUSH/PULL,
 * różne rekordy na różnych urządzeniach,
@@ -1059,8 +1082,7 @@ Kod i dokumentacja w repozytorium są nadrzędne wobec opisów znajdujących si�
 
 ## OPEN
 
-* before-restore,
-* offline login,
+* offline login (Stage 4A.6),
 * pełne tombstones po stronie lokalnej,
 * pełna obsługa offline sync,
 * Conflict Center,
@@ -1133,11 +1155,13 @@ Najbliższe prace nie polegają na zmianie podstawowego modelu danych.
 Priorytetem jest dokończenie istniejącej architektury:
 
 ```text
-BEFORE-RESTORE
+BEFORE-RESTORE            (DONE — Stage 4A.3, CLOSED / VERIFIED)
       ↓
-OFFLINE LOGIN
+SOURCE SELECTION TESTS    (DONE — Stage 4A.3)
       ↓
-SOURCE SELECTION TESTS
+GUEST → ACCOUNT MIGRATION (Stage 4A.4 — NOT STARTED)
+      ↓
+OFFLINE LOGIN             (Stage 4A.6)
       ↓
 MERGE / CONFLICT
       ↓

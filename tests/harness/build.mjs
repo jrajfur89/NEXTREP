@@ -53,6 +53,8 @@ const extra = `
 const __testState = {
   get activeDataNamespace() { return _activeDataNamespace; },
   resetActiveDataNamespace() { _activeDataNamespace = null; },
+  // a test that simulates a killed app leaves an operation in flight forever — clear its module flag
+  resetAccountInitBusy() { if (typeof _accountInitBusy !== "undefined") _accountInitBusy = false; },
 };
 `;
 code = code.replace(RENDER_LINE, `${extra}\nexport { ${names.join(", ")}, __testState };`);

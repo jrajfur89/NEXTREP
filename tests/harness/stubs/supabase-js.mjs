@@ -8,11 +8,18 @@
 //   __nrSupabase.calls          — log of every call: { kind, table|fn, op, args }
 //   __nrSupabase.holdGetSession — true → getSession() stays pending (like the SDK retrying an
 //                                 expired-token refresh while offline) until releaseGetSession()
+//   __nrSupabase.queryHook      — optional (query) => error|null, called before every table query
+//                                 executes (e.g. fail one page of a paginated read)
+//   __nrSupabase.maxRows        — optional server-side cap on rows per read (like PostgREST max_rows)
+//   __nrSupabase.queryGate      — optional async (query) => void, awaited before a table query
+//                                 executes (pause a query deterministically until the test lets go)
 //   __nrSupabase.reset()        — back to defaults
 //
 // Supported query-builder subset (what index.html uses): select, insert, update, upsert, delete,
 // eq, neq, is, match, not, limit, order, in, gte, lte, gt, lt, range, single, maybeSingle.
-// Filters eq/neq/is/match/in/gte/lte/gt/lt are applied; order/range/not are recorded only.
+// Filters eq/neq/is/match/in/gte/lte/gt/lt are applied; order (one column) and range (offset
+// window) are applied to reads; select(cols, { count: "exact" }) returns the total before range.
+// `not` is recorded only.
 
 function state() {
   if (!globalThis.__nrSupabase) {
@@ -25,6 +32,9 @@ function state() {
       authListeners: [],
       holdGetSession: false,
       pendingGetSession: [],
+      queryHook: null,
+      queryGate: null,
+      maxRows: null,
       releaseGetSession(session = null) {
         const waiting = s.pendingGetSession;
         s.pendingGetSession = [];
@@ -39,6 +49,9 @@ function state() {
         s.authListeners = [];
         s.holdGetSession = false;
         s.pendingGetSession = [];
+        s.queryHook = null;
+        s.queryGate = null;
+        s.maxRows = null;
       },
       emitAuth(event, session) {
         s.session = session;
@@ -48,6 +61,14 @@ function state() {
     globalThis.__nrSupabase = s;
   }
   return globalThis.__nrSupabase;
+}
+
+// Column defaults of the real schema (version DEFAULT 1, updated_at DEFAULT now(), deleted_at NULL on
+// the versioned nextrep_* data tables) — so rows inserted through the fake look like real rows.
+const VERSIONED_TABLES = new Set(["nextrep_exercises", "nextrep_plans", "nextrep_plan_items", "nextrep_plan_item_sets", "nextrep_workouts", "nextrep_workout_exercises", "nextrep_workout_sets", "nextrep_measurements", "nextrep_custom_fields"]);
+function dbDefaults(table) {
+  if (!VERSIONED_TABLES.has(table)) return {};
+  return { version: 1, updated_at: new Date().toISOString(), deleted_at: null };
 }
 
 const netError = () => Object.assign(new TypeError("Failed to fetch"), { name: "TypeError" });
@@ -60,12 +81,15 @@ class Query {
     this.filters = [];
     this.limitN = null;
     this.singleMode = null;
+    this.orderBy = null;
+    this.rangeWin = null;
+    this.countMode = null;
   }
   _log(op, args) {
     state().calls.push({ kind: "table", table: this.table, op, args });
     return this;
   }
-  select(cols) { if (this.op === "select") this.op = "select"; this.cols = cols; return this._log("select", [cols]); }
+  select(cols, opts) { if (this.op === "select") this.op = "select"; this.cols = cols; if (opts && opts.count) this.countMode = opts.count; return this._log("select", opts ? [cols, opts] : [cols]); }
   insert(rows) { this.op = "insert"; this.payload = rows; return this._log("insert", [rows]); }
   update(patch) { this.op = "update"; this.payload = patch; return this._log("update", [patch]); }
   upsert(rows, opts) { this.op = "upsert"; this.payload = rows; return this._log("upsert", [rows, opts]); }
@@ -80,20 +104,24 @@ class Query {
   lt(c, v) { this.filters.push((r) => r[c] < v); return this._log("lt", [c, v]); }
   match(obj) { this.filters.push((r) => Object.entries(obj || {}).every(([k, v]) => r[k] === v)); return this._log("match", [obj]); }
   not(...a) { return this._log("not", a); }
-  order(...a) { return this._log("order", a); }
-  range(...a) { return this._log("range", a); }
+  order(col, opts) { this.orderBy = { col, asc: !(opts && opts.ascending === false) }; return this._log("order", [col, opts]); }
+  range(from, to) { this.rangeWin = [from, to]; return this._log("range", [from, to]); }
   limit(n) { this.limitN = n; return this._log("limit", [n]); }
   single() { this.singleMode = "single"; return this; }
   maybeSingle() { this.singleMode = "maybe"; return this; }
   _exec() {
     const s = state();
     if (s.failNetwork) return { data: null, error: netError() };
+    if (s.queryHook) {
+      const hookError = s.queryHook(this);
+      if (hookError) return { data: null, error: hookError };
+    }
     const rows = (s.tables[this.table] = s.tables[this.table] || []);
     const match = (r) => this.filters.every((f) => f(r));
     let data = null;
     if (this.op === "insert" || this.op === "upsert") {
       const list = Array.isArray(this.payload) ? this.payload : [this.payload];
-      const out = list.map((r) => ({ id: r.id || `fake-${Math.random().toString(36).slice(2)}`, ...r }));
+      const out = list.map((r) => ({ id: r.id || `fake-${Math.random().toString(36).slice(2)}`, ...dbDefaults(this.table), ...r }));
       rows.push(...out);
       data = out;
     } else if (this.op === "update") {
@@ -103,16 +131,30 @@ class Query {
       s.tables[this.table] = rows.filter((r) => !match(r));
     } else {
       data = rows.filter(match);
+      if (this.orderBy) {
+        const { col, asc } = this.orderBy;
+        data = [...data].sort((a, b) => (a[col] === b[col] ? 0 : (a[col] < b[col] ? -1 : 1) * (asc ? 1 : -1)));
+      }
     }
+    const totalBeforeWindow = Array.isArray(data) ? data.length : 0;
+    if (this.op === "select" && this.rangeWin) data = data.slice(this.rangeWin[0], this.rangeWin[1] + 1);
     if (this.limitN != null) data = data.slice(0, this.limitN);
+    if (this.op === "select" && s.maxRows != null && Array.isArray(data)) data = data.slice(0, s.maxRows);
     if (this.singleMode) {
       if (data.length === 0) return this.singleMode === "maybe" ? { data: null, error: null } : { data: null, error: { code: "PGRST116", message: "no rows" } };
       data = data[0];
     }
+    if (this.countMode) return { data, error: null, count: totalBeforeWindow };
     return { data, error: null, count: Array.isArray(data) ? data.length : data ? 1 : 0 };
   }
   then(res, rej) {
-    return Promise.resolve().then(() => this._exec()).then(res, rej);
+    return Promise.resolve()
+      .then(async () => {
+        const gate = state().queryGate;
+        if (gate) await gate(this);
+        return this._exec();
+      })
+      .then(res, rej);
   }
 }
 

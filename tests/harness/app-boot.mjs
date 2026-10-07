@@ -22,7 +22,9 @@ export async function bootGuestApp(seed = {}) {
 //   storage      — { "full_key": value }
 //   holdSession  — getSession() stays pending (SDK still trying to refresh, e.g. offline)
 //   offline      — navigator.onLine reports false while the app runs (restored by restoreOnline())
-export async function bootApp({ session = null, storage = {}, holdSession = false, offline = false } = {}) {
+//   tables       — rows of the fake Supabase tables ({ table: [rows] }), deep-copied
+//   setupFake    — (fakeSupabase) => void, called right before mounting (e.g. install a queryHook)
+export async function bootApp({ session = null, storage = {}, holdSession = false, offline = false, tables = null, setupFake = null } = {}) {
   const A = await loadApp();
   resetStorage();
   A.__testState.resetActiveDataNamespace();
@@ -31,6 +33,8 @@ export async function bootApp({ session = null, storage = {}, holdSession = fals
   const S = globalThis.__nrSupabase;
   S.session = session;
   S.holdGetSession = holdSession;
+  if (tables) S.tables = JSON.parse(JSON.stringify(tables));
+  if (setupFake) setupFake(S);
   if (offline) Object.defineProperty(globalThis.navigator, "onLine", { value: false, configurable: true });
   await mount(React.createElement(A.App));
   const video = document.querySelector("video");

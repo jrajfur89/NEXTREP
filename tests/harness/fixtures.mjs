@@ -20,7 +20,7 @@ export const hist = (...perfs) => perfs.map(([sets, date]) => ({ sets, date: dat
 export async function quiet(fn) {
   const orig = console.log;
   console.log = (...a) => {
-    if (typeof a[0] === "string" && /\[(sync|push|pull) diag\]/.test(a[0])) return;
+    if (typeof a[0] === "string" && /\[(sync|push|pull|migration) diag\]/.test(a[0])) return;
     orig(...a);
   };
   try {

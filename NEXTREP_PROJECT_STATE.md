@@ -463,7 +463,7 @@ The application now waits for the correct account namespace/data to be loaded be
 
 # 13. ACCOUNT SOURCE SELECTION
 
-**Status: IMPLEMENTED / TESTING**
+**Status: COMPLETED (Stage 4A.3)**
 
 Stage 4A Step 2 has been implemented.
 
@@ -495,15 +495,22 @@ When guest data exists, it must not be silently imported into another account.
 
 Anonymous → account migration and deliberate local/cloud merge remain separate operations.
 
+Stage 4A.3 (COMPLETED): no sync before the source is chosen; device / cloud / empty choices are
+protected (draft / unsent queue / open conflicts block destructive choices); the cloud load keeps a
+before-restore snapshot and is resumable; the initial device → empty cloud upload is resumable;
+in-flight sync and stale async actions cannot interfere; cloud reads and V1 verification are
+paginated; the legacy unsafe "Pobierz / Przywróć dane z chmury" was removed from the UI. Guest →
+Account migration (4A.4) and local/cloud merge (4A.5) are NOT part of it.
+
 ---
 
 # 14. CURRENT OPEN ACCOUNT ISSUES
 
-Two important problems remain.
+One important problem remains (offline login, §15). Before-restore was closed in Stage 4A.3.
 
 ## 14.1 Before-restore
 
-**Status: OPEN / FAILED TEST**
+**Status: CLOSED / VERIFIED (Stage 4A.3)**
 
 During Test E, the expected behaviour was:
 
@@ -523,13 +530,14 @@ load cloud data
 restore exact pre-cloud local state
 ```
 
-Current implementation did not correctly restore the pre-cloud state.
+The original implementation did not correctly restore the pre-cloud state.
 
-Repo check (2026-10-06): the code now contains a before-restore mechanism (`loadAccountFromCloud`,
-`resolveDeviceSnapshot`, `restoreDeviceSnapshot`), but it has no tests in the current automated suite
-and Test E has not been repeated. Status stays OPEN.
+Stage 4A.3 verified the fix with automated tests: snapshot before the destructive clear, correct
+account and namespace, restore works, mismatch blocked, interrupted restore resumable, the
+referenced backup protected by retention (including a clock-skew regression), the restore pointer
+ends on cloud confirm.
 
-Required fix:
+Required fix (all done):
 
 * capture pre-restore state
 * bind it to the correct account/workspace
@@ -541,7 +549,7 @@ Required fix:
 
 # 15. OFFLINE LOGIN
 
-**Status: OPEN / FAILED TEST**
+**Status: OPEN / FAILED TEST — target Stage 4A.6**
 
 Current finding:
 
@@ -1016,10 +1024,10 @@ Current sub-status:
 | ---------------------------- | --------------------- |
 | Account namespace isolation  | TESTED / VALIDATED    |
 | 4A.2 workspace isolation hardening (`f2fe328`) | COMPLETED |
-| Account source selection (4A.3) | IMPLEMENTED / TESTING |
-| Anonymous/Guest → account migration (4A.4) | PLANNED / PARTIALLY IMPLEMENTED |
-| before-restore               | OPEN / FAILED TEST    |
-| Offline login                | OPEN / FAILED TEST    |
+| Account source selection (4A.3) | COMPLETED |
+| Anonymous/Guest → account migration (4A.4) | NOT STARTED |
+| before-restore               | CLOSED / VERIFIED (4A.3) |
+| Offline login                | OPEN — target 4A.6    |
 | Different-record merge       | TESTING               |
 | Nested merge                 | TESTING               |
 | Conflict detection E2E       | OPEN                  |
@@ -1039,8 +1047,8 @@ Current sub-status:
 
 The current order is:
 
-1. Fix `before-restore`
-2. Fix offline login flow
+1. Fix `before-restore` — DONE (Stage 4A.3)
+2. Fix offline login flow (Stage 4A.6)
 3. Re-run Test C
 4. Re-run Test E
 5. Re-run Test H
@@ -1615,7 +1623,21 @@ SYNC
 
 STAGE 4A
 ├── Overall                  IN PROGRESS / TESTING
-└── 4A.2 Workspace isolation COMPLETED
+├── 4A.1 Audit               COMPLETED
+├── 4A.2 Workspace isolation COMPLETED
+├── 4A.3 Source selection    COMPLETED
+├── 4A.4 Guest → account     NOT STARTED
+├── 4A.5 Merge / conflicts   TESTING (stage not started; mechanisms exist)
+├── 4A.6 Offline operation   TESTING (offline login OPEN)
+├── 4A.7 Server PRO          IMPLEMENTED / TESTING (transitional)
+├── 4A.8 Remove local PRO    PLANNED
+└── 4A.9 Final regression    PLANNED
+
+REGRESSION BASELINE (Stage 4A.3 close)
+├── Automated tests          268/268 PASS
+├── Progression cross-version unexplained = 0
+├── BEFORE-RESTORE           CLOSED / VERIFIED
+└── OFFLINE LOGIN            OPEN / Stage 4A.6
 
 ADMIN
 ├── Stage 1                  IMPLEMENTED / TESTED
@@ -1640,9 +1662,9 @@ PWA
 
 The next technical task is:
 
-> **Stage 4A — fix `before-restore` and offline login, then repeat the affected manual tests.**
+> **Stage 4A — `before-restore` is closed (4A.3). Next: Stage 4A.4 (Guest → Account migration, NOT STARTED) and offline login (4A.6), then repeat the affected manual tests.**
 
-No new architecture should be introduced before those two issues are resolved and validated.
+Stage 4A.3 deferred technical debt (F4–F11, NON-BLOCKING) is listed in `STAGE_STATUS.md` §10.
 
 After that:
 
