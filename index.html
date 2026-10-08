@@ -2086,7 +2086,9 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         // F-3 (review P1): soft-deleted cloud rows with the same identities → stop before the backup / any write
         let collisions;
         try {
-          collisions = await v1DeletedRowCollisions(userId, prepared.dataset);
+          // the exercise list V1 will really upload (the default atlas when the guest has none — guestMigrationEntries)
+          const ex = prepared.present && prepared.present.exercises && prepared.dataset.exercises.length ? prepared.dataset.exercises : DEFAULT_EXERCISES.map(normalizeExercise);
+          collisions = await v1DeletedRowCollisions(userId, { ...prepared.dataset, exercises: ex });
         } catch (e) {
           return { ok: false, error: authErrorText(e) };
         }
@@ -2144,13 +2146,14 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
       setAccountInitMarker(userId, { status: "ready", source: "guest", syncPaused: false });
       // Stage 4A.4 Part 2: the completed marker — this guest data (fingerprint) is now in this account.
       // It keeps the guest data bound to it (F-4) and protects the backup; no user data in it.
-      let cleanupStatus = "failed";
+      let cleanupStatus = "not_started"; // the completed marker could not be written → nothing was cleaned
       try {
         const gmNow = getGuestMigrationMarker();
         if (gmNow && gmNow.attemptId === attemptId && gmNow.targetUserId === userId) {
           setGuestMigrationMarker({ status: "completed", targetUserId: userId, fingerprint, backupId, attemptId, startedAt: gmNow.startedAt || null, completedAt: new Date().toISOString(), cleanup: "pending" });
         }
         // D1: cleanup of the moved guest data — never a condition of the account's success
+        cleanupStatus = "failed";
         cleanupStatus = (await cleanupMigratedGuestData(userId, currentRefUserId)).status;
       } catch (e) {
         console.error("guest cleanup after migration failed", e); // the account is ready; cleanup is retried later
@@ -17129,7 +17132,8 @@ function App() {
       runAccountInitCheck(initUserId, initNs, r.error); // the offer no longer applies — decide again
       return;
     }
-    setAccountInit({ ...prev, error: r.error }); // nothing was written — back to the offer, with the reason
+    // nothing was written — back to the offer, with the reason; a deleted-row collision can't be retried (4A.5)
+    setAccountInit({ ...prev, ...(r.blocked === "deleted_collision" ? { migrationBlocked: true } : {}), error: r.error });
   };
   // "Nie teraz": the account starts as a new, empty account; the guest data stays where it is. Nothing is
   // backed up, marked or sent.

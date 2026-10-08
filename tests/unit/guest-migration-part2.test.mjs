@@ -594,3 +594,38 @@ describe("soft-deleted cloud row with the same identity → refused BEFORE the f
     assert.equal(marker().status, "migrating_guest");
   });
 });
+
+describe("review P3 follow-ups", () => {
+  test("guest WITHOUT an exercise list vs a deleted built-in row in the account → refused by the collision check itself", async () => {
+    seedGuest();
+    localStorage.removeItem(key(null, "exercises"));
+    localStorage.removeItem(key(null, "history"));
+    localStorage.setItem(key(null, "history"), JSON.stringify([{ ...GUEST.history[0], exercises: [{ ...GUEST.history[0].exercises[0], exerciseId: "bench_press" }] }]));
+    S.tables.nextrep_exercises = [{ id: "d", user_id: UA, legacy_id: "bench_press", device_id: "phone", version: 2, deleted_at: "2026-10-01T00:00:00.000Z" }];
+    const collisions = await quiet(() => A.v1DeletedRowCollisions(UA, { exercises: A.DEFAULT_EXERCISES.map(A.normalizeExercise) }));
+    assert.ok(collisions.some((c) => c.table === "exercises"));
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.ok, false);
+    assert.equal(cloudWrites(S).length, 0);
+  });
+  test("completed marker cannot be written → still a success, cleanup reported as not started, guest data kept", async () => {
+    seedGuest();
+    const proto = Object.getPrototypeOf(localStorage);
+    const orig = proto.setItem;
+    proto.setItem = function (k, v) {
+      if (k === GM_KEY && String(v).includes('"completed"')) throw new Error("QuotaExceededError");
+      return orig.call(this, k, v);
+    };
+    let r;
+    try {
+      r = await migrate();
+    } finally {
+      proto.setItem = orig;
+    }
+    assert.equal(r.ok, true);
+    assert.equal(r.cleanup, "not_started");
+    assert.equal(marker().status, "ready");
+    assert.ok(localStorage.getItem(key(null, "history")), "guest data kept");
+  });
+});
