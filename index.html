@@ -1569,25 +1569,49 @@ function readNamespaceJson(name, userId) {
     return null; // same reading as everywhere else in the app (damaged JSON → no value)
   }
 }
-// { exercises, plans, history, measurements, customFields, userName, present, shapeErrors }.
-// A value of the wrong type is reported in shapeErrors (never silently replaced): callers stop.
+// Stage 4A.4 Part 2 (F-2): one stored value, classified explicitly —
+//   { state: "missing" }            key absent (or empty string)
+//   { state: "valid", value }       parsed JSON
+//   { state: "malformed", raw }     the key exists but is not valid JSON — NEVER read as "no data"
+function readNamespaceEntry(name, userId) {
+  const raw = localStorage.getItem(getStorageKey(name, userId));
+  if (raw == null || raw === "") return { state: "missing" };
+  try {
+    return { state: "valid", value: JSON.parse(raw) };
+  } catch {
+    return { state: "malformed", raw };
+  }
+}
+// { exercises, plans, history, measurements, customFields, userName, present, shapeErrors, malformed, damage }.
+// Fail-closed reading for migration: a malformed value (malformed) or a value of the wrong type
+// (shapeErrors) is reported, never replaced by [] / "" — callers stop. `damage` additionally lists
+// collections with entries V1 cannot carry (not an object / without its identity). Nothing is repaired.
 function readMigratableDataset(userId) {
   const shapeErrors = [];
+  const malformed = [];
   const present = {};
+  const read = (name) => {
+    const e = readNamespaceEntry(name, userId);
+    if (e.state === "malformed") malformed.push(name);
+    present[name] = e.state === "valid" && e.value != null;
+    return e.state === "valid" ? e.value : null;
+  };
   const arr = (name) => {
-    const v = readNamespaceJson(name, userId);
-    present[name] = v != null;
+    const v = read(name);
     if (v == null) return [];
     if (!Array.isArray(v)) {
       shapeErrors.push(name);
+      present[name] = false;
       return [];
     }
     return v;
   };
-  const un = readNamespaceJson("user_name", userId);
-  present.user_name = un != null;
-  if (un != null && typeof un !== "string") shapeErrors.push("user_name");
-  return {
+  const un = read("user_name");
+  if (un != null && typeof un !== "string") {
+    shapeErrors.push("user_name");
+    present.user_name = false;
+  }
+  const ds = {
     exercises: arr("exercises"),
     plans: arr("plans"),
     history: arr("history"),
@@ -1596,15 +1620,24 @@ function readMigratableDataset(userId) {
     userName: typeof un === "string" ? un : "",
     present,
     shapeErrors,
+    malformed,
   };
+  const bad = (list, ok) => list.some((x) => !ok(x));
+  const obj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+  const entryErrors = [];
+  if (bad(ds.history, (x) => obj(x) && x.id)) entryErrors.push("history");
+  if (bad(ds.plans, (x) => obj(x) && x.id)) entryErrors.push("plans");
+  if (bad(ds.measurements, (x) => obj(x) && x.id)) entryErrors.push("measurements");
+  if (bad(ds.exercises, (x) => obj(x) && x.id != null && x.id !== "")) entryErrors.push("exercises");
+  if (bad(ds.customFields, (x) => obj(x) && x.key)) entryErrors.push("custom_fields");
+  ds.damage = [...malformed.map((n) => ({ name: n, reason: "malformed" })), ...shapeErrors.map((n) => ({ name: n, reason: "wrong_type" })), ...entryErrors.map((n) => ({ name: n, reason: "bad_entries" }))];
+  return ds;
 }
+const MIGRATABLE_DATA_LABELS = { exercises: "ćwiczenia", plans: "plany", history: "historia treningów", measurements: "pomiary", custom_fields: "własne parametry pomiarów", user_name: "nazwa" };
+const damageText = (damage) => [...new Set(damage.map((d) => MIGRATABLE_DATA_LABELS[d.name] || d.name))].join(", ");
 // Records without the id V1 needs — the same rule as validateLocalDataForMigration.
 function migratableDatasetIdErrors(ds) {
-  const errors = [];
-  ds.plans.forEach((p, i) => (!p || typeof p !== "object" || !p.id) && errors.push(`plany[${i}]`));
-  ds.history.forEach((s, i) => (!s || typeof s !== "object" || !s.id) && errors.push(`treningi[${i}]`));
-  ds.measurements.forEach((m, i) => (!m || typeof m !== "object" || !m.id) && errors.push(`pomiary[${i}]`));
-  return errors;
+  return (ds.damage || []).filter((d) => d.reason === "bad_entries").map((d) => d.name);
 }
 // Writes [name, value] pairs into the namespace of `userId`, confirms every write by reading it back,
 // and on ANY failure puts back exactly what was there before (also keys that did not exist). → bool.
@@ -1651,7 +1684,11 @@ function migratableDataFingerprint(userId) {
 // the marker stays "interrupted", the user can go back to the source choice.
 function prepareAccountDatasetForUpload(userId, { resuming = false } = {}) {
   const ds = readMigratableDataset(userId);
-  if (ds.shapeErrors.length) return { ok: false, error: `Dane na urządzeniu mają nieprawidłowy format (${ds.shapeErrors.join(", ")}), więc nie można ich wysłać. Nic nie zostało zmienione.` };
+  // Stage 4A.4 Part 2 (F-2): a malformed value was read as "no data" before — it would have been uploaded
+  // as empty. Malformed or wrong-type values stop the upload; nothing is repaired or removed.
+  if (ds.malformed.length || ds.shapeErrors.length) {
+    return { ok: false, damaged: true, error: `Dane na urządzeniu są uszkodzone (${damageText(ds.damage.filter((d) => d.reason !== "bad_entries"))}), więc nie można ich wysłać. Nic nie zostało zmienione ani wysłane.` };
+  }
   const prep = prepareV1UploadDataset(ds);
   const integrityIssues = v1DatasetIntegrityIssues(prep.dataset);
   if (integrityIssues.length) return { ok: false, integrityIssues, error: v1IntegrityIssuesText(integrityIssues) };
@@ -1693,7 +1730,7 @@ const GUEST_MIGRATION_TEXTS = {
   notEmpty: "To konto ma już swoje dane, więc dane z trybu bez logowania nie zostały przeniesione. Nic nie zostało zmienione.",
   cloudChanged: "Na koncie w chmurze pojawiły się dane, więc nic nie zostało przeniesione ani wysłane. Dane z trybu bez logowania są nietknięte.",
   nothing: "W trybie bez logowania nie ma danych do przeniesienia.",
-  damaged: "Dane w trybie bez logowania mają nieprawidłowy format, więc nie można ich bezpiecznie przenieść. Nic nie zostało zmienione.",
+  damaged: "Przenoszenie zostało zatrzymane, bo część danych w trybie bez logowania jest uszkodzona. Nic nie zostało przeniesione ani wysłane — dane na tym urządzeniu pozostają bez zmian.",
   backupFailed: "Nie udało się utworzyć kopii zapasowej danych z trybu bez logowania, więc przenoszenie nie zostało rozpoczęte. Nic nie zostało zmienione.",
   copyFailed: "Nie udało się zapisać danych na koncie na tym urządzeniu. Nic nie zostało wysłane, dane z trybu bez logowania są nietknięte.",
   noBackup: "Nie znaleziono kopii zapasowej tego przenoszenia, więc nie można go bezpiecznie dokończyć. Wróć bez przenoszenia i spróbuj od nowa.",
@@ -1724,7 +1761,8 @@ function guestHasMigratableData() {
     customFields: ds.customFields.length,
     customExercises: ds.exercises.filter((e) => e && !defaults.has(String(e.id))).length,
   };
-  return { hasData: Object.values(details).some((n) => n > 0), details, draft: readNamespaceJson("active_workout_draft", null) != null };
+  // F-2: damaged collections are reported (the offer screen then explains why nothing can be moved)
+  return { hasData: Object.values(details).some((n) => n > 0), details, damage: ds.damage, draft: readNamespaceJson("active_workout_draft", null) != null };
 }
 // Retention: the GUEST_MIGRATION_BACKUP_KEEP newest guest-migration backups, plus `keepBackupId` and the
 // one the guest marker refers to. Other kinds / namespaces are never touched.
@@ -1896,7 +1934,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
       if (!resuming || phase !== "uploading") {
         // (Re)build the account copy from the guest: a first attempt, or a restart before the copy was confirmed.
         const guest = readMigratableDataset(null);
-        if (guest.shapeErrors.length || migratableDatasetIdErrors(guest).length) return { ok: false, blocked: "damaged", error: GUEST_MIGRATION_TEXTS.damaged };
+        if (guest.damage.length) return { ok: false, blocked: "damaged", damage: guest.damage, error: `${GUEST_MIGRATION_TEXTS.damaged} Uszkodzone: ${damageText(guest.damage)}.` };
         if (!guestHasMigratableData().hasData) return { ok: false, blocked: "nothing", error: GUEST_MIGRATION_TEXTS.nothing };
         const currentFingerprint = migratableDataFingerprint(null);
         if (resuming && currentFingerprint !== fingerprint) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.guestChanged };
@@ -8504,10 +8542,15 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
       <>
         <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">DANE Z TRYBU BEZ LOGOWANIA</p>
         <p className="text-neutral-300 text-sm mb-2">To konto jest jeszcze puste. Na tym urządzeniu są dane zapisane w trybie bez logowania — możesz przenieść je na to konto.</p>
-        <p className="text-neutral-500 text-xs mb-2" data-testid="init-guest-summary">W trybie bez logowania: {parts.join(", ")}</p>
+        {parts.length > 0 && <p className="text-neutral-500 text-xs mb-2" data-testid="init-guest-summary">W trybie bez logowania: {parts.join(", ")}</p>}
         <p className="text-neutral-500 text-xs mb-3">Przed przeniesieniem zostanie zapisana kopia zapasowa tych danych.</p>
         {init.guestDraft && <p className="text-neutral-400 text-xs mb-3" data-testid="init-guest-draft-note">Niedokończony trening nie zostanie przeniesiony — pozostanie w trybie bez logowania.</p>}
-        {init.migrationBlocked && (
+        {init.guestDamaged && (
+          <p className="text-red-400 text-sm mb-3" data-testid="init-guest-damaged">
+            Przenoszenie danych zostało zatrzymane, bo część danych w trybie bez logowania jest uszkodzona ({init.guestDamaged}). Nic nie zostało przeniesione ani wysłane, a dane na tym urządzeniu pozostają bez zmian (także uszkodzone — do późniejszej diagnozy).
+          </p>
+        )}
+        {init.migrationBlocked && !init.guestDamaged && (
           <p className="text-amber-400 text-sm mb-3" data-testid="init-guest-blocked">
             Na tym koncie są już zmiany (np. edytowane ćwiczenia wbudowane, niewysłane zmiany albo dane z przerwanego przenoszenia), więc danych z trybu bez logowania nie można teraz bezpiecznie przenieść — łączenie danych to osobny, kolejny etap. Konto może zacząć bez nich; dane z trybu bez logowania zostaną na tym urządzeniu bez zmian.
           </p>
@@ -16086,6 +16129,11 @@ function App() {
       // written until the user agrees). Not offered while the guest data is bound to another account's migration.
       const guest = guestHasMigratableData();
       const gm = getGuestMigrationMarker();
+      if (guest.damage.length && !(gm && gm.targetUserId !== userId)) {
+        // F-2: damaged guest data is never treated as "no data" — say so; nothing can be moved, nothing decided
+        setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: true, guestDamaged: damageText(guest.damage), error: notice });
+        return;
+      }
       if (guest.hasData && !(gm && gm.targetUserId !== userId) && !accountLocalBlocksGuestMigration(userId)) {
         // the same strict "genuinely empty" rule the migration itself applies (edited built-in exercises count)
         let strict = null;
