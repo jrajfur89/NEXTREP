@@ -1117,7 +1117,9 @@ function hasLocalAccountData(userId) {
 // Stage 4A.3 option ignoreDeviceId: rows written by THAT device (an interrupted upload of this
 // device's own data) don't count; rows of any other device — or without a device — do. With it,
 // a profile name equal to localUserName doesn't count either (the upload wrote it).
-async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "" } = {}) {
+// Stage 4A.4 option anyExercise: ANY exercise row counts (also a default-atlas exercise: an edit of a
+// built-in exercise synced from another device is account data that a guest migration would overwrite).
+async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "", anyExercise = false } = {}) {
   if (!supabase) throw new Error("Supabase nie jest skonfigurowane.");
   // Without ignoreDeviceId: one query. With it: rows of other devices + rows without a device.
   const variants = (build) => (ignoreDeviceId ? [build().neq("device_id", ignoreDeviceId), build().is("device_id", null)] : [build()]);
@@ -1138,7 +1140,7 @@ async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserN
   for (const q of variants(() => supabase.from("nextrep_exercises").select("legacy_id").eq("user_id", userId).is("deleted_at", null))) {
     const { data: exRows, error: exErr } = await q;
     if (exErr) throw new Error(exErr.message || "błąd odczytu nextrep_exercises");
-    if ((exRows || []).some((r) => r && r.legacy_id != null && !defaults.has(String(r.legacy_id)))) customExercises = true;
+    if ((exRows || []).some((r) => r && (anyExercise || (r.legacy_id != null && !defaults.has(String(r.legacy_id)))))) customExercises = true;
   }
   const { data: prof, error: profErr } = await supabase.from("nextrep_profiles").select("display_name").eq("user_id", userId).limit(1);
   if (profErr) throw new Error(profErr.message || "błąd odczytu nextrep_profiles");
@@ -1769,7 +1771,10 @@ function guestMigrationEntries(prepared, { includeUserName }) {
   const d = prepared.dataset;
   const p = prepared.present || {};
   const entries = [];
-  if (p.exercises) entries.push(["exercises", d.exercises]);
+  // the exercise list the guest app actually showed: a missing or empty list means the default atlas
+  // (reloadLocalData shows DEFAULT_EXERCISES then) — without it the uploaded history would lose its
+  // exercise links (exercise_id = null)
+  entries.push(["exercises", p.exercises && Array.isArray(d.exercises) && d.exercises.length ? d.exercises : DEFAULT_EXERCISES.map(normalizeExercise)]);
   if (p.plans) entries.push(["plans", d.plans]);
   if (p.history) entries.push(["history", d.history]);
   if (p.measurements) entries.push(["measurements", d.measurements]);
@@ -1785,6 +1790,32 @@ function clearGuestMigrationCopy(userId) {
       localStorage.removeItem(getStorageKey(name, userId));
     } catch {}
   }
+}
+
+// "Genuinely empty" for a guest migration is stricter than hasLocalAccountData (Stage 4A.3): the copy
+// replaces the account's local exercise list and the upload overwrites cloud exercise rows, so an EDITED
+// built-in exercise, unsent changes or open sync conflicts of the account also make it non-empty here.
+function accountLocalBlocksGuestMigration(userId) {
+  if (hasLocalAccountData(userId).hasData) return true;
+  const queue = readNamespaceJson("sync_queue", userId);
+  if (Array.isArray(queue) && queue.some(Boolean)) return true;
+  const conflicts = readNamespaceJson("sync_conflicts", userId);
+  if (Array.isArray(conflicts) && conflicts.some((c) => c && CLOUD_RESTORE_OPEN_CONFLICT_STATUSES.has(c.status))) return true;
+  const exercises = readNamespaceJson("exercises", userId);
+  if (exercises != null && !Array.isArray(exercises)) return true;
+  if (Array.isArray(exercises)) {
+    const defaults = new Map(DEFAULT_EXERCISES.map((e) => [String(e.id), JSON.stringify(normalizeExercise(e))]));
+    for (const e of exercises) {
+      if (!e || typeof e !== "object") return true;
+      const d = defaults.get(String(e.id));
+      if (d == null || JSON.stringify(normalizeExercise(e)) !== d) return true;
+    }
+  }
+  return false;
+}
+// The cloud side of the same rule (fresh attempt: any row at all; resume: rows of other devices).
+function guestMigrationCloudOptions(resuming, deviceId, userId) {
+  return resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId), anyExercise: true } : { anyExercise: true };
 }
 
 let _guestMigrationRunning = false; // one guest migration at a time in this tab (double tap, two starts)
@@ -1816,17 +1847,18 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
     if (resuming) {
       const consistent =
         markerNow.userId === userId && markerNow.namespace === ns && markerNow.attemptId && markerNow.backupId && markerNow.deviceId &&
+        (markerNow.phase === "copying" || markerNow.phase === "uploading") &&
         gm && gm.attemptId === markerNow.attemptId && gm.backupId === markerNow.backupId;
       if (!consistent) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.resumeMismatch };
       if (!findGuestMigrationBackup(markerNow.backupId)) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.noBackup };
     }
     // Fresh checks — the result shown on the offer screen is never trusted on its own.
-    if (!resuming && hasLocalAccountData(userId).hasData) return { ok: false, blocked: "not_empty", error: GUEST_MIGRATION_TEXTS.notEmpty };
+    if (!resuming && accountLocalBlocksGuestMigration(userId)) return { ok: false, blocked: "not_empty", error: GUEST_MIGRATION_TEXTS.notEmpty };
     const deviceId = resuming ? markerNow.deviceId : getOrCreateDeviceId();
     if (!deviceId) return { ok: false, error: GUEST_MIGRATION_TEXTS.copyFailed };
     let cloud;
     try {
-      cloud = await checkCloudAccountData(userId, resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId) } : {});
+      cloud = await checkCloudAccountData(userId, guestMigrationCloudOptions(resuming, deviceId, userId));
     } catch (e) {
       return { ok: false, error: authErrorText(e) };
     }
@@ -1887,7 +1919,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
       // Re-check the cloud right before the first cloud write: only this attempt's own device rows may be there.
       let recheck;
       try {
-        recheck = await checkCloudAccountData(userId, resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId) } : {});
+        recheck = await checkCloudAccountData(userId, guestMigrationCloudOptions(resuming, deviceId, userId));
       } catch (e) {
         return { ok: false, error: authErrorText(e) };
       }
@@ -2673,38 +2705,55 @@ function prepareV1UploadDataset(ds) {
   const plans0 = Array.isArray(src.plans) ? src.plans : [];
   const hist = normalizeWorkoutIdentity(history0, plans0, { migrateExistingSets: true, reidentifyRepeatedExerciseIds: true });
   let plansChanged = false;
+  // pass 1: plan item ids (missing / repeated after the first occurrence → new id)
   const seenItems = new Set();
-  const seenItemSets = new Set();
-  const plans = plans0.map((plan) => {
+  const plansWithItemIds = plans0.map((plan) => {
     if (!plan || typeof plan !== "object" || !Array.isArray(plan.exercises)) return plan;
     let changedPlan = false;
     const exercises = plan.exercises.map((item) => {
       if (!item || typeof item !== "object") return item;
-      let next = item;
       if (item.id == null || item.id === "" || seenItems.has(String(item.id))) {
-        next = { ...next, id: newUuid() };
+        changedPlan = true;
+        const fresh = { ...item, id: newUuid() };
+        seenItems.add(String(fresh.id));
+        return fresh;
       }
-      seenItems.add(String(next.id));
-      if (Array.isArray(next.setsDetail) && next.setsDetail.length) {
-        let setsChanged = false;
-        const setsDetail = next.setsDetail.map((sd, i) => {
-          if (!sd || typeof sd !== "object") return sd;
-          const lid = v1PlanItemSetLegacyId(String(next.id), sd, i);
-          if (seenItemSets.has(lid)) {
-            setsChanged = true;
-            const fresh = { ...sd, id: newUuid() };
-            seenItemSets.add(String(fresh.id));
-            return fresh;
-          }
-          seenItemSets.add(lid);
-          return sd;
-        });
-        if (setsChanged) next = { ...next, setsDetail };
-      } else {
-        getPlanItemSetsDetail(next).forEach((sd, i) => seenItemSets.add(v1PlanItemSetLegacyId(String(next.id), sd, i)));
-      }
-      if (next !== item) changedPlan = true;
-      return next;
+      seenItems.add(String(item.id));
+      return item;
+    });
+    return changedPlan ? { ...plan, exercises } : plan;
+  });
+  // pass 2: plan item set ids. The ids V1 synthesizes for items without setsDetail ("<item>-<i>") are
+  // fixed, so they are reserved first (independent of plan order); an explicit setsDetail id that repeats
+  // — or equals a reserved one — gets a new id.
+  const isExplicit = (item) => item && typeof item === "object" && Array.isArray(item.setsDetail) && item.setsDetail.length > 0;
+  const seenItemSets = new Set();
+  for (const plan of plansWithItemIds) {
+    for (const item of plan && Array.isArray(plan.exercises) ? plan.exercises : []) {
+      if (item && typeof item === "object" && !isExplicit(item)) getPlanItemSetsDetail(item).forEach((sd, i) => seenItemSets.add(v1PlanItemSetLegacyId(String(item.id), sd, i)));
+    }
+  }
+  const plans = plansWithItemIds.map((plan, pi) => {
+    if (!plan || typeof plan !== "object" || !Array.isArray(plan.exercises)) return plan;
+    let changedPlan = plan !== plans0[pi];
+    const exercises = plan.exercises.map((item) => {
+      if (!isExplicit(item)) return item;
+      let setsChanged = false;
+      const setsDetail = item.setsDetail.map((sd, i) => {
+        if (!sd || typeof sd !== "object") return sd;
+        const lid = v1PlanItemSetLegacyId(String(item.id), sd, i);
+        if (seenItemSets.has(lid)) {
+          setsChanged = true;
+          const fresh = { ...sd, id: newUuid() };
+          seenItemSets.add(String(fresh.id));
+          return fresh;
+        }
+        seenItemSets.add(lid);
+        return sd;
+      });
+      if (!setsChanged) return item;
+      changedPlan = true;
+      return { ...item, setsDetail };
     });
     if (!changedPlan) return plan;
     plansChanged = true;
@@ -3234,15 +3283,24 @@ async function runMigrationV1(onProgress) {
       }
     }
 
+    // Stage 4A.4: the session is re-checked before every phase — after a logout / account switch no
+    // further phase starts (RLS would reject the rows anyway; the app does not even send them).
+    const assertSameSession = async () => {
+      if ((await currentSessionUserId()) !== user.id) throw new Error("Zmiana konta w trakcie wysyłania danych — wysyłanie zostało przerwane.");
+    };
+    await assertSameSession();
     onProgress?.("exercises");
     const exerciseIdMap = await migrateExercisesV1(user.id, local.exercises, deviceId);
 
+    await assertSameSession();
     onProgress?.("plans");
     const { planIdMap } = await migratePlansV1(user.id, local.plans, exerciseIdMap, deviceId);
 
+    await assertSameSession();
     onProgress?.("history");
     await migrateWorkoutsV1(user.id, local.history, exerciseIdMap, planIdMap, deviceId);
 
+    await assertSameSession();
     onProgress?.("measurements");
     await migrateMeasurementsV1(user.id, local.measurements, deviceId);
     await migrateCustomFieldsV1(user.id, local.customFields, deviceId);
@@ -15995,9 +16053,21 @@ function App() {
       // written until the user agrees). Not offered while the guest data is bound to another account's migration.
       const guest = guestHasMigratableData();
       const gm = getGuestMigrationMarker();
-      if (guest.hasData && !(gm && gm.targetUserId !== userId)) {
-        setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, error: notice });
-        return;
+      if (guest.hasData && !(gm && gm.targetUserId !== userId) && !accountLocalBlocksGuestMigration(userId)) {
+        // the same strict "genuinely empty" rule the migration itself applies (edited built-in exercises count)
+        let strict = null;
+        try {
+          strict = await checkCloudAccountData(userId, guestMigrationCloudOptions(false, null, userId));
+        } catch (e) {
+          if (!same()) return;
+          setAccountInit({ ns, status: "error_check", local, error: (e && e.message) || String(e) });
+          return;
+        }
+        if (!same()) return;
+        if (!strict.hasData) {
+          setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, error: notice });
+          return;
+        }
       }
       setAccountInitMarker(userId, { status: "ready", source: "new", syncPaused: false });
       setAccountInit({ ns, status: "ready", local, cloud });

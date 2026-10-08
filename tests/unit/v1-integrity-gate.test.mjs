@@ -144,6 +144,17 @@ describe("upload preparation (prepareV1UploadDataset)", () => {
     assert.deepEqual(p2.dataset, p1.dataset);
   });
 
+  test("a synthesized plan item set id ('<item>-<i>') wins over an equal explicit id — whatever the plan order", () => {
+    const pX = { id: "pX", name: "X", exercises: [{ id: "X", exerciseId: "bench_press", setsDetail: [{ id: "Y-0", target: "8" }] }] };
+    const pY = { id: "pY", name: "Y", exercises: [{ id: "Y", exerciseId: "squat_barbell", targetSets: 1 }] };
+    for (const plans of [[pX, pY], [pY, pX]]) {
+      const p = A.prepareV1UploadDataset({ history: [], plans: clone(plans) });
+      assert.equal(p.changed, true);
+      assert.deepEqual(A.v1DatasetIntegrityIssues(p.dataset), [], `order ${plans.map((x) => x.id).join(",")}`);
+      assert.equal(A.prepareV1UploadDataset(p.dataset).changed, false, "idempotent");
+    }
+  });
+
   test("the normal start-up identity migration is unchanged: a repeated ex.id is never re-identified there", () => {
     const r = A.normalizeWorkoutIdentity(clone(DUP_HISTORY), [], { migrateExistingSets: true });
     assert.deepEqual(wexIdsOf(r.history), ["we-1", "we-1"]);
@@ -264,27 +275,30 @@ describe("F-1 — resume of an upload that a version WITHOUT preparation started
     A.setAccountInitMarker(UA, { status: "uploading_device", source: "device", syncPaused: true, userId: UA, namespace: `user_${UA}`, deviceId: A.getOrCreateDeviceId(), startedAt: new Date().toISOString() });
   }
 
-  test("resume is refused: zero cloud writes, local data unchanged, marker stays interrupted; no orphan/duplicate set", async () => {
+  test("resume is refused: zero cloud writes, local data unchanged, marker stays interrupted", async () => {
     await interruptedOldUpload();
     const rawLocal = localStorage.getItem(key(UA, "history"));
     const cloudBefore = clone(S.tables);
     S.calls = [];
     const r = await quiet(() => A.uploadAccountDataToEmptyCloud(UA, () => UA));
-    if (r.ok) {
-      // (only without the F-1 protection) the account would now be used normally: ready → PULL
-      await pullApply();
-    } else {
-      assert.equal(r.resumeUnsafe, true);
-      assert.match(r.error, /nie można bezpiecznie dokończyć/);
-      assert.equal(cloudWrites(S).length, 0, "nothing sent");
-      assert.deepEqual(S.tables, cloudBefore, "cloud unchanged");
-      assert.equal(localStorage.getItem(key(UA, "history")), rawLocal, "local data byte-for-byte unchanged");
-      assert.equal(A.getAccountInitMarker(UA).status, "uploading_device", "still recognisable as interrupted");
-    }
-    const local = readJson(key(UA, "history"));
-    const localSets = new Set(setIdsOf(local));
+    assert.equal(r.ok, false);
+    assert.equal(r.resumeUnsafe, true);
+    assert.match(r.error, /nie można bezpiecznie dokończyć/);
+    assert.equal(cloudWrites(S).length, 0, "nothing sent");
+    assert.deepEqual(S.tables, cloudBefore, "cloud unchanged");
+    assert.equal(localStorage.getItem(key(UA, "history")), rawLocal, "local data byte-for-byte unchanged");
+    assert.equal(A.getAccountInitMarker(UA).status, "uploading_device", "still recognisable as interrupted");
+    const localSets = new Set(setIdsOf(readJson(key(UA, "history"))));
     assert.ok(rows("nextrep_workout_sets").every((x) => localSets.has(String(x.legacy_id))), "no cloud set without a local counterpart (orphan)");
-    assert.equal(setIdsOf(local).length, 2, "exactly the 2 sets of the workout — no duplicate after PULL");
+  });
+
+  test("what the refusal prevents: preparing + uploading that state anyway orphans the old rows → duplicates after PULL", async () => {
+    await interruptedOldUpload();
+    const prep = A.prepareAccountDatasetForUpload(UA, { resuming: false }); // the unsafe path F-1 refuses
+    assert.equal(prep.changed, true, "preparation re-identifies the template-id sets");
+    assert.equal((await quiet(() => A.runMigrationV1())).success, true);
+    await pullApply();
+    assert.equal(setIdsOf(readJson(key(UA, "history"))).length, 4, "2 real sets became 4 (the old rows came back as extra sets)");
   });
 
   test("a resume whose data needs no preparation still completes (idempotent upsert)", async () => {

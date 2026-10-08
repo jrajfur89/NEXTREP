@@ -403,7 +403,106 @@ describe("failure, retry, restart, abandon", () => {
   });
 });
 
+describe("'genuinely empty' also covers edits of built-in exercises, unsent changes and open conflicts", () => {
+  const editedDefault = () => A.DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A.normalizeExercise(e), notes: "moja technika" } : A.normalizeExercise(e)));
+  test("account with an edited built-in exercise (local) → not_empty, its list untouched", async () => {
+    seedGuest();
+    localStorage.setItem(key(UA, "exercises"), JSON.stringify(editedDefault()));
+    const raw = localStorage.getItem(key(UA, "exercises"));
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.blocked, "not_empty");
+    assert.equal(cloudWrites(S).length, 0);
+    assert.equal(localStorage.getItem(key(UA, "exercises")), raw);
+  });
+  test("account whose local list is just the seeded default atlas → still empty (migration runs)", async () => {
+    seedGuest();
+    localStorage.setItem(key(UA, "exercises"), JSON.stringify(A.DEFAULT_EXERCISES.map(A.normalizeExercise)));
+    const r = await migrate();
+    assert.equal(r.ok, true, r.error);
+  });
+  test("account with unsent changes or open sync conflicts → not_empty", async () => {
+    seedGuest();
+    localStorage.setItem(key(UA, "sync_queue"), JSON.stringify([{ id: "q1", table: "exercises", recordId: "bench_press", operation: "upsert" }]));
+    assert.equal((await migrate()).blocked, "not_empty");
+    localStorage.removeItem(key(UA, "sync_queue"));
+    localStorage.setItem(key(UA, "sync_conflicts"), JSON.stringify([{ id: "c1", status: "pending" }]));
+    assert.equal((await migrate()).blocked, "not_empty");
+  });
+  test("cloud holds a built-in exercise row from another device (an edit synced there) → cloud_changed, row untouched", async () => {
+    seedGuest();
+    S.tables.nextrep_exercises = [{ id: "r1", user_id: UA, legacy_id: String(A.DEFAULT_EXERCISES[0].id), notes: "edycja z telefonu", device_id: "other", deleted_at: null }];
+    const before = clone(S.tables.nextrep_exercises);
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.blocked, "cloud_changed");
+    assert.equal(cloudWrites(S).length, 0);
+    assert.deepEqual(S.tables.nextrep_exercises, before);
+  });
+});
+
+describe("exercise links of the uploaded history", () => {
+  for (const [name, exercises] of [["no exercise list stored", undefined], ["an empty exercise list", []]]) {
+    test(`guest with ${name} → the account gets the default atlas the guest app showed; workout exercises keep exercise_id`, async () => {
+      seedGuest({ withExercises: false, extra: exercises ? { exercises } : {} });
+      const r = await migrate();
+      assert.equal(r.ok, true, r.error);
+      const accEx = readJson(key(UA, "exercises"));
+      assert.ok(accEx.some((e) => e.id === "bench_press"));
+      const bench = rows("nextrep_exercises").find((x) => x.legacy_id === "bench_press");
+      const wex = rows("nextrep_workout_exercises").find((x) => x.legacy_id === "ge-1");
+      assert.equal(wex.exercise_id, bench.id, "workout exercise linked to its exercise row");
+    });
+  }
+});
+
+describe("resume safety", () => {
+  test("phase 'uploading' with a copy that would still change ids (F-1 on the guest path) → refused, zero writes", async () => {
+    seedGuest();
+    const fp = A.migratableDataFingerprint(null);
+    const b = A.createGuestMigrationBackup({ targetUserId: UA, fingerprint: fp, attemptId: "att-9" });
+    localStorage.setItem(GM_KEY, JSON.stringify({ status: "migrating", targetUserId: UA, fingerprint: fp, backupId: b.backupId, attemptId: "att-9" }));
+    A.setAccountInitMarker(UA, { status: "migrating_guest", source: "guest", syncPaused: true, userId: UA, namespace: `user_${UA}`, deviceId: A.getOrCreateDeviceId(), backupId: b.backupId, fingerprint: fp, attemptId: "att-9", phase: "uploading" });
+    localStorage.setItem(key(UA, "history"), JSON.stringify(GUEST.history)); // an UNPREPARED copy (template set ids)
+    const raw = localStorage.getItem(key(UA, "history"));
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.ok, false);
+    assert.equal(r.resumeUnsafe, true);
+    assert.equal(cloudWrites(S).length, 0);
+    assert.equal(localStorage.getItem(key(UA, "history")), raw);
+    assert.equal(marker().status, "migrating_guest");
+  });
+  for (const phase of [undefined, "verifying", "weird"]) {
+    test(`a migrating_guest marker with phase ${phase} is never treated as 'copying' (no rebuilt copy, no write)`, async () => {
+      seedGuest();
+      const fp = A.migratableDataFingerprint(null);
+      const b = A.createGuestMigrationBackup({ targetUserId: UA, fingerprint: fp, attemptId: "att-8" });
+      localStorage.setItem(GM_KEY, JSON.stringify({ status: "migrating", targetUserId: UA, fingerprint: fp, backupId: b.backupId, attemptId: "att-8" }));
+      A.setAccountInitMarker(UA, { status: "migrating_guest", source: "guest", syncPaused: true, userId: UA, namespace: `user_${UA}`, deviceId: A.getOrCreateDeviceId(), backupId: b.backupId, fingerprint: fp, attemptId: "att-8", phase });
+      S.calls = [];
+      const r = await migrate();
+      assert.equal(r.resumeUnsafe, true);
+      assert.equal(cloudWrites(S).length, 0);
+      assert.equal(localStorage.getItem(key(UA, "history")), null);
+    });
+  }
+});
+
 describe("account switch, multi-start", () => {
+  test("session switches to B DURING the V1 upload → no further phase is sent", async () => {
+    seedGuest();
+    S.queryHook = (q) => {
+      if (q.table === "nextrep_exercises" && q.op === "insert") S.session = { user: { id: UB } }; // logout / B during the upload
+      return null;
+    };
+    const r = await migrate();
+    assert.equal(r.ok, false);
+    assert.notEqual(marker().status, "ready");
+    const after = S.calls.filter((c) => c.kind === "table" && ["insert", "update"].includes(c.op) && ["nextrep_plans", "nextrep_workouts", "nextrep_workout_exercises", "nextrep_workout_sets", "nextrep_measurements", "nextrep_custom_fields", "nextrep_profiles"].includes(c.table));
+    assert.equal(after.length, 0, "plans / workouts / measurements / profile never sent after the switch");
+  });
+
   test("A → B right before the first upload → stops (discarded): nothing uploaded, nothing in B, A stays resumable", async () => {
     seedGuest();
     let switched = false;

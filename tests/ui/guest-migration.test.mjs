@@ -131,6 +131,17 @@ describe("no offer when the account is not genuinely empty / data bound elsewher
     assert.ok(byTestId("init-cloud"));
     assert.equal(cloudWrites(S).length, 0);
   });
+  test("account whose only data is an edited built-in exercise → no offer (ready/new as before 4A.4), its list untouched", async () => {
+    const A0 = await loadApp();
+    const edited = A0.DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "moja technika" } : A0.normalizeExercise(e)));
+    const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(UA, "exercises")]: edited }) });
+    await settle();
+    assert.ok(appShown());
+    assert.ok(!byTestId("init-guest-migrate"));
+    assert.equal(read(key(UA, "account_init")).source, "new");
+    assert.equal(read(key(UA, "exercises"))[0].notes, "moja technika");
+    assert.equal(cloudWrites(S).filter((c) => c.table === "nextrep_workouts").length, 0);
+  });
   test("guest data bound to A's migration → B (empty) is not offered it: ready/new, nothing written", async () => {
     const { S } = await bootApp({ session: sessB, storage: guestStorage({ [GM_KEY]: { status: "migrating", targetUserId: UA, attemptId: "a", backupId: "b" } }) });
     await settle();
