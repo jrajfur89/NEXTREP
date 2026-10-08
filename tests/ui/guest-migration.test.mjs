@@ -131,13 +131,16 @@ describe("no offer when the account is not genuinely empty / data bound elsewher
     assert.ok(byTestId("init-cloud"));
     assert.equal(cloudWrites(S).length, 0);
   });
-  test("account whose only data is an edited built-in exercise → no offer (ready/new as before 4A.4), its list untouched", async () => {
+  test("account whose only data is an edited built-in exercise → explained, no migrate button, no automatic decision; 'Nie teraz' → ready/new", async () => {
     const A0 = await loadApp();
     const edited = A0.DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "moja technika" } : A0.normalizeExercise(e)));
     const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(UA, "exercises")]: edited }) });
     await settle();
-    assert.ok(appShown());
+    assert.ok(byTestId("init-guest-blocked"), "the user is told why the data cannot be moved");
     assert.ok(!byTestId("init-guest-migrate"));
+    assert.equal(read(key(UA, "account_init")), null, "nothing decided automatically");
+    await press("init-guest-later");
+    assert.ok(appShown());
     assert.equal(read(key(UA, "account_init")).source, "new");
     assert.equal(read(key(UA, "exercises"))[0].notes, "moja technika");
     assert.equal(cloudWrites(S).filter((c) => c.table === "nextrep_workouts").length, 0);
@@ -211,6 +214,23 @@ describe("abandon after a partial upload of built-in exercises only", () => {
     await press("init-guest-migrate");
     assert.ok(appShown(), "a new attempt completes");
     assert.equal(read(key(UA, "account_init")).source, "guest");
+  });
+});
+
+describe("abandon after a partial upload that included the guest's EDITED built-in exercise", () => {
+  test("'Wróć bez przenoszenia' → no automatic ready/new: the blocked offer explains it, the user decides", async () => {
+    const A0 = await loadApp();
+    const edited = A0.DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "gość zmienił" } : A0.normalizeExercise(e)));
+    const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(null, "exercises")]: edited }) });
+    await settle();
+    let n = 0;
+    S.queryHook = (q) => (q.table === "nextrep_exercises" && q.op === "insert" && ++n === 3 ? { message: "Failed to fetch" } : null);
+    await press("init-guest-migrate");
+    S.queryHook = null;
+    await press("init-guest-abandon");
+    assert.equal(read(key(UA, "account_init")), null, "no source decided for the user");
+    assert.ok(byTestId("init-guest-blocked"));
+    assert.ok(byTestId("init-guest-later"));
   });
 });
 

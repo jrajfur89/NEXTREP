@@ -1120,8 +1120,8 @@ function hasLocalAccountData(userId) {
 // Stage 4A.4 option editedBuiltIns: a built-in (default-atlas) exercise row whose content differs from
 // the atlas counts too — an edit synced from another device is account data a guest migration would
 // overwrite. Unedited built-in rows (e.g. left by an interrupted upload) still don't count.
-const exerciseRowMatchesDefault = (row, def) => {
-  const d = normalizeExercise(def);
+const exerciseRowMatchesDefault = (row, d) => {
+  // `d` = the normalised default exercise
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   return (
     same(row.name || "", d.name || "") && same(row.category || [], d.category) && same(row.equipment || [], d.equipment) &&
@@ -1147,7 +1147,7 @@ async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserN
   const customFields = await one("nextrep_custom_fields");
   const defaults = new Set(DEFAULT_EXERCISES.map((e) => String(e.id)));
   let customExercises = false;
-  const defaultsById = new Map(DEFAULT_EXERCISES.map((e) => [String(e.id), e]));
+  const defaultsById = new Map(DEFAULT_EXERCISES.map((e) => [String(e.id), normalizeExercise(e)]));
   const exCols = editedBuiltIns ? "legacy_id, name, category, equipment, is_time_based, is_sets_only, is_cardio, device_type, video_url, notes" : "legacy_id";
   for (const q of variants(() => supabase.from("nextrep_exercises").select(exCols).eq("user_id", userId).is("deleted_at", null))) {
     const { data: exRows, error: exErr } = await q;
@@ -2779,10 +2779,11 @@ function prepareV1UploadDataset(ds) {
 
 // --- Per-collection migration functions. Each returns a map of old id -> new Supabase uuid. ---
 
-async function migrateExercisesV1(userId, exercisesList, deviceId) {
+async function migrateExercisesV1(userId, exercisesList, deviceId, beforeEachRow = null) {
   const idMap = {};
   for (const ex of exercisesList) {
     if (!ex || ex.id == null) continue;
+    if (beforeEachRow) await beforeEachRow(); // Stage 4A.4: periodic session re-check (V1 upload)
     const legacyId = String(ex.id);
     const row = {
       name: ex.name || "",
@@ -2800,7 +2801,7 @@ async function migrateExercisesV1(userId, exercisesList, deviceId) {
   return idMap;
 }
 
-async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId) {
+async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId, beforeEachRow = null) {
   const planIdMap = {};
   const planItemIdMap = {};
   for (const plan of plansList) {
@@ -2812,6 +2813,7 @@ async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId) {
     const items = Array.isArray(plan.exercises) ? plan.exercises : [];
     for (const item of items) {
       if (!item || item.id == null) continue;
+      if (beforeEachRow) await beforeEachRow(); // Stage 4A.4: periodic session re-check (V1 upload)
       const itemLegacyId = String(item.id);
       const mappedExerciseId = item.exerciseId != null ? exerciseIdMap[String(item.exerciseId)] || null : null;
       const itemRow = {
@@ -3305,13 +3307,19 @@ async function runMigrationV1(onProgress) {
       if (now === user.id) return;
       throw new Error(now ? "Zmiana konta w trakcie wysyłania danych — wysyłanie zostało przerwane." : "Nie udało się potwierdzić sesji logowania — wysyłanie zostało przerwane. Spróbuj ponownie.");
     };
+    let rowsSinceCheck = 0;
+    const periodicSessionCheck = async () => {
+      if (++rowsSinceCheck < 10) return;
+      rowsSinceCheck = 0;
+      await assertSameSession();
+    };
     await assertSameSession();
     onProgress?.("exercises");
-    const exerciseIdMap = await migrateExercisesV1(user.id, local.exercises, deviceId);
+    const exerciseIdMap = await migrateExercisesV1(user.id, local.exercises, deviceId, periodicSessionCheck);
 
     await assertSameSession();
     onProgress?.("plans");
-    const { planIdMap } = await migratePlansV1(user.id, local.plans, exerciseIdMap, deviceId);
+    const { planIdMap } = await migratePlansV1(user.id, local.plans, exerciseIdMap, deviceId, periodicSessionCheck);
 
     await assertSameSession();
     onProgress?.("history");
@@ -8499,8 +8507,13 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
         <p className="text-neutral-500 text-xs mb-2" data-testid="init-guest-summary">W trybie bez logowania: {parts.join(", ")}</p>
         <p className="text-neutral-500 text-xs mb-3">Przed przeniesieniem zostanie zapisana kopia zapasowa tych danych.</p>
         {init.guestDraft && <p className="text-neutral-400 text-xs mb-3" data-testid="init-guest-draft-note">Niedokończony trening nie zostanie przeniesiony — pozostanie w trybie bez logowania.</p>}
-        {btn("Przenieś dane na konto", onGuestMigrate, true, "init-guest-migrate")}
-        {btn("Nie teraz", onGuestLater, false, "init-guest-later")}
+        {init.migrationBlocked && (
+          <p className="text-amber-400 text-sm mb-3" data-testid="init-guest-blocked">
+            Na tym koncie są już zmiany (np. edytowane ćwiczenia wbudowane, niewysłane zmiany albo dane z przerwanego przenoszenia), więc danych z trybu bez logowania nie można teraz bezpiecznie przenieść — łączenie danych to osobny, kolejny etap. Konto może zacząć bez nich; dane z trybu bez logowania zostaną na tym urządzeniu bez zmian.
+          </p>
+        )}
+        {!init.migrationBlocked && btn("Przenieś dane na konto", onGuestMigrate, true, "init-guest-migrate")}
+        {btn("Nie teraz", onGuestLater, !!init.migrationBlocked, "init-guest-later")}
         <p className="text-neutral-600 text-xs mt-2">„Nie teraz” — konto zacznie od pustych danych, a dane z trybu bez logowania zostaną na tym urządzeniu bez zmian.</p>
         {errorLine}
       </>
@@ -16084,10 +16097,14 @@ function App() {
           return;
         }
         if (!same()) return;
-        if (!strict.hasData) {
-          setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, error: notice });
-          return;
-        }
+        // strict rule says "not empty" (an edited built-in exercise of this account, unsent changes …): no
+        // automatic decision — the screen explains it and the user chooses "Nie teraz" explicitly.
+        setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: !!strict.hasData, error: notice });
+        return;
+      }
+      if (guest.hasData && !(gm && gm.targetUserId !== userId)) {
+        setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: true, error: notice });
+        return;
       }
       setAccountInitMarker(userId, { status: "ready", source: "new", syncPaused: false });
       setAccountInit({ ns, status: "ready", local, cloud });

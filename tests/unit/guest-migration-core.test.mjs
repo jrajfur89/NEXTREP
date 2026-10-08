@@ -512,6 +512,22 @@ describe("account switch, multi-start", () => {
     const after = S.calls.filter((c) => c.kind === "table" && ["insert", "update"].includes(c.op) && ["nextrep_plans", "nextrep_workouts", "nextrep_workout_exercises", "nextrep_workout_sets", "nextrep_measurements", "nextrep_custom_fields", "nextrep_profiles"].includes(c.table));
     assert.equal(after.length, 0, "plans / workouts / measurements / profile never sent after the switch");
   });
+  test("session switches DURING the exercises phase → at most a few more exercise rows, nothing after", async () => {
+    seedGuest();
+    let switchedAt = null;
+    S.queryHook = (q) => {
+      if (switchedAt == null && q.table === "nextrep_exercises" && q.op === "insert") {
+        S.session = { user: { id: UB } };
+        switchedAt = S.calls.length;
+      }
+      return null;
+    };
+    const r = await migrate();
+    assert.equal(r.ok, false);
+    const later = S.calls.slice(switchedAt).filter((c) => c.kind === "table" && ["insert", "update"].includes(c.op));
+    assert.ok(later.every((c) => c.table === "nextrep_exercises"), "no other table written after the switch");
+    assert.ok(later.length <= 10, `periodic check stops the phase (${later.length} more exercise writes)`);
+  });
   test("session switches DURING the workouts phase → the next workout and every later phase are not sent", async () => {
     seedGuest();
     let switchedAt = null;
