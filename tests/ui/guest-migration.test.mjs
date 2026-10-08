@@ -145,9 +145,14 @@ describe("no offer when the account is not genuinely empty / data bound elsewher
     assert.equal(read(key(UA, "exercises"))[0].notes, "moja technika");
     assert.equal(cloudWrites(S).filter((c) => c.table === "nextrep_workouts").length, 0);
   });
-  test("guest data bound to A's migration → B (empty) is not offered it: ready/new, nothing written", async () => {
+  // Stage 4A.4 Part 2 (F-4): B is told why (no silent ready/new); "Nie teraz" is B's explicit choice.
+  test("guest data bound to A's migration → B (empty) is not offered it: explained, nothing written; 'Nie teraz' → ready/new", async () => {
     const { S } = await bootApp({ session: sessB, storage: guestStorage({ [GM_KEY]: { status: "migrating", targetUserId: UA, attemptId: "a", backupId: "b" } }) });
     await settle();
+    assert.ok(byTestId("init-guest-bound"));
+    assert.ok(!byTestId("init-guest-migrate"));
+    assert.equal(read(key(UB, "account_init")), null, "nothing decided automatically");
+    await press("init-guest-later");
     assert.ok(appShown());
     assert.equal(read(key(UB, "account_init")).source, "new");
     assert.equal((read(key(UB, "history")) || []).length, 0);
@@ -218,7 +223,8 @@ describe("abandon after a partial upload of built-in exercises only", () => {
 });
 
 describe("abandon after a partial upload that included the guest's EDITED built-in exercise", () => {
-  test("'Wróć bez przenoszenia' → no automatic ready/new: the blocked offer explains it, the user decides", async () => {
+  // Stage 4A.4 Part 2 (F-5): the guest's edited built-in row is data of this attempt in the cloud → partial.
+  test("'Wróć bez przenoszenia' → no automatic ready/new: the partial-transfer screen explains it, the user decides", async () => {
     const A0 = await loadApp();
     const edited = A0.DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "gość zmienił" } : A0.normalizeExercise(e)));
     const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(null, "exercises")]: edited }) });
@@ -228,9 +234,9 @@ describe("abandon after a partial upload that included the guest's EDITED built-
     await press("init-guest-migrate");
     S.queryHook = null;
     await press("init-guest-abandon");
-    assert.equal(read(key(UA, "account_init")), null, "no source decided for the user");
-    assert.ok(byTestId("init-guest-blocked"));
-    assert.ok(byTestId("init-guest-later"));
+    assert.equal(read(key(UA, "account_init")).status, "migrating_guest", "no source decided for the user");
+    assert.ok(byTestId("init-guest-partial"));
+    assert.ok(byTestId("init-guest-retry") && byTestId("init-guest-start-without"));
   });
 });
 

@@ -371,7 +371,9 @@ describe("failure, retry, restart, abandon", () => {
     assert.equal(marker().status, "migrating_guest");
   });
 
-  test("abandon after a failed upload → account copy removed, markers cleared, guest + backup kept, account PRO kept", async () => {
+  // Stage 4A.4 Part 2 (F-5): after rows reached the cloud, "abandon" no longer resets silently — the user
+  // finishes, or consciously starts without the data (rows stay, sync paused). Full reset only without rows.
+  test("abandon after a failed upload WITH rows in the cloud → nothing reset (partial); conscious 'start without' → copy removed, guest + backup + account PRO kept", async () => {
     seedGuest();
     localStorage.setItem(key(UA, "pro_status"), JSON.stringify({ manualPro: false, adUnlockExpiresAt: 123 }));
     const accountPro = localStorage.getItem(key(UA, "pro_status"));
@@ -379,11 +381,31 @@ describe("failure, retry, restart, abandon", () => {
     failSetsOnce();
     await migrate();
     const r = await quiet(() => A.abandonGuestMigration(UA, ref));
-    assert.equal(r.ok, true);
+    assert.equal(r.ok, false);
+    assert.equal(r.partial, true);
+    assert.equal(marker().status, "migrating_guest", "nothing reset");
+    const w = await quiet(() => A.startAccountWithoutGuestPartial(UA, ref));
+    assert.equal(w.ok, true);
+    for (const n of ["history", "plans", "measurements", "custom_fields", "user_name", "exercises"]) assert.equal(localStorage.getItem(key(UA, n)), null, `${n} removed`);
+    assert.equal(localStorage.getItem(key(UA, "pro_status")), accountPro, "the account's own local PRO untouched");
+    assert.deepEqual(guestDump(), guestBefore);
+    assert.equal(gmBackups().length, 1, "backup kept");
+  });
+
+  test("abandon after a failure BEFORE any data row reached the cloud → full reset: copy removed, markers cleared, account PRO kept", async () => {
+    seedGuest();
+    localStorage.setItem(key(UA, "pro_status"), JSON.stringify({ manualPro: false, adUnlockExpiresAt: 123 }));
+    const accountPro = localStorage.getItem(key(UA, "pro_status"));
+    const guestBefore = guestDump();
+    S.queryHook = (q) => (q.table === "nextrep_exercises" && q.op === "insert" ? { message: "Failed to fetch" } : null);
+    await migrate();
+    S.queryHook = null;
+    const r = await quiet(() => A.abandonGuestMigration(UA, ref));
+    assert.equal(r.ok, true, r.error);
     assert.equal(marker(), null);
     assert.equal(localStorage.getItem(GM_KEY), null);
     for (const n of ["history", "plans", "measurements", "custom_fields", "user_name", "exercises"]) assert.equal(localStorage.getItem(key(UA, n)), null, `${n} removed`);
-    assert.equal(localStorage.getItem(key(UA, "pro_status")), accountPro, "the account's own local PRO untouched");
+    assert.equal(localStorage.getItem(key(UA, "pro_status")), accountPro);
     assert.deepEqual(guestDump(), guestBefore);
     assert.equal(gmBackups().length, 1, "backup kept");
   });

@@ -1129,10 +1129,13 @@ const exerciseRowMatchesDefault = (row, d) => {
     (row.device_type || "") === (d.deviceType || "") && (row.video_url || "") === (d.videoUrl || "") && (row.notes || "") === (d.notes || "")
   );
 };
-async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "", editedBuiltIns = false } = {}) {
+// Stage 4A.4 Part 2 option onlyDeviceId (F-5): ONLY rows written by that device count — "did this device's
+// interrupted upload leave data in the cloud?". The profile (no device column) is not counted then.
+async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "", editedBuiltIns = false, onlyDeviceId = null } = {}) {
   if (!supabase) throw new Error("Supabase nie jest skonfigurowane.");
   // Without ignoreDeviceId: one query. With it: rows of other devices + rows without a device.
-  const variants = (build) => (ignoreDeviceId ? [build().neq("device_id", ignoreDeviceId), build().is("device_id", null)] : [build()]);
+  const variants = (build) =>
+    onlyDeviceId ? [build().eq("device_id", onlyDeviceId)] : ignoreDeviceId ? [build().neq("device_id", ignoreDeviceId), build().is("device_id", null)] : [build()];
   const one = async (table) => {
     for (const q of variants(() => supabase.from(table).select("id").eq("user_id", userId).is("deleted_at", null))) {
       const { data, error } = await q.limit(1);
@@ -1156,10 +1159,13 @@ async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserN
       r && r.legacy_id != null && (!defaults.has(String(r.legacy_id)) || (editedBuiltIns && !exerciseRowMatchesDefault(r, defaultsById.get(String(r.legacy_id)))));
     if ((exRows || []).some(counts)) customExercises = true;
   }
-  const { data: prof, error: profErr } = await supabase.from("nextrep_profiles").select("display_name").eq("user_id", userId).limit(1);
-  if (profErr) throw new Error(profErr.message || "błąd odczytu nextrep_profiles");
-  const cloudName = Array.isArray(prof) && prof[0] && typeof prof[0].display_name === "string" ? prof[0].display_name.trim() : "";
-  const displayName = cloudName !== "" && !(ignoreDeviceId && cloudName === String(localUserName || "").trim());
+  let displayName = false;
+  if (!onlyDeviceId) {
+    const { data: prof, error: profErr } = await supabase.from("nextrep_profiles").select("display_name").eq("user_id", userId).limit(1);
+    if (profErr) throw new Error(profErr.message || "błąd odczytu nextrep_profiles");
+    const cloudName = Array.isArray(prof) && prof[0] && typeof prof[0].display_name === "string" ? prof[0].display_name.trim() : "";
+    displayName = cloudName !== "" && !(ignoreDeviceId && cloudName === String(localUserName || "").trim());
+  }
   const details = { workouts, plans, measurements, customFields, customExercises, displayName };
   return { hasData: Object.values(details).some(Boolean), details };
 }
@@ -1194,7 +1200,7 @@ function purgeDeletedAccountData(userId) {
   clearAccountNamespace(userId);
   clearAccountInitMarker(userId);
   clearLastCloudRestorePointer(userId);
-  for (const name of ["device_id", "migration_v1_status", "migration_workout_identity"]) {
+  for (const name of ["device_id", "migration_v1_status", "migration_workout_identity", "guest_partial_upload"]) {
     try {
       localStorage.removeItem(getStorageKey(name, userId));
     } catch {}
@@ -1736,6 +1742,8 @@ const GUEST_MIGRATION_TEXTS = {
   noBackup: "Nie znaleziono kopii zapasowej tego przenoszenia, więc nie można go bezpiecznie dokończyć. Wróć bez przenoszenia i spróbuj od nowa.",
   guestChanged: "Dane w trybie bez logowania zmieniły się od rozpoczęcia przenoszenia, więc nie można go dokończyć. Wróć bez przenoszenia i spróbuj od nowa.",
   resumeMismatch: "Nie można bezpiecznie dokończyć przerwanego przenoszenia. Wróć bez przenoszenia i spróbuj od nowa.",
+  partial: "Część danych z tego przenoszenia jest już w chmurze, więc nie można go po prostu cofnąć. Dokończ przenoszenie albo świadomie zacznij konto bez tych danych — niekompletna kopia w chmurze nie zostanie użyta jako zwykłe dane konta.",
+  partialUnknown: "Nie udało się sprawdzić, czy część danych trafiła już do chmury, więc przenoszenia nie można teraz cofnąć. Spróbuj ponownie po połączeniu z internetem albo dokończ przenoszenie.",
 };
 function getGuestMigrationMarker() {
   const m = readNamespaceJson("guest_migration", null);
@@ -1748,6 +1756,38 @@ function clearGuestMigrationMarker() {
   try {
     localStorage.removeItem(getStorageKey("guest_migration", null));
   } catch {}
+}
+// Stage 4A.4 Part 2 (F-4): does the guest marker bind the guest data to a transfer of ANOTHER account?
+// The marker protects against copying the same guest data into several accounts, so it is never released
+// by age. null = not bound for `userId` (no marker, released, or this account's own); otherwise
+// { status, targetUserId, unverifiable } — a marker that cannot be read / has no target blocks everyone.
+//   status: "migrating" (unfinished) | "abandoned_partial" | "completed" (moved to that account) | …
+function guestMarkerBinding(userId) {
+  const e = readNamespaceEntry("guest_migration", null);
+  if (e.state === "missing") return null;
+  const m = e.state === "valid" ? e.value : null;
+  if (m && typeof m === "object" && !Array.isArray(m) && m.status === "released") return null;
+  if (!m || typeof m !== "object" || Array.isArray(m) || !m.targetUserId) return { status: "unknown", targetUserId: null, unverifiable: true };
+  if (m.targetUserId === userId) return null;
+  return { status: String(m.status || "unknown"), targetUserId: m.targetUserId, unverifiable: false };
+}
+// F-4, the ONLY way to unbind: an explicit decision of the user signed in now (another account than the
+// marker's). Covers an unfinished / abandoned / completed transfer of the other account, a deleted other
+// account, a damaged marker — none of them can be verified from here. The guest data and backups are not
+// touched; the marker keeps (without user data) what it was released from.
+function releaseGuestMigrationBinding(userId) {
+  const binding = guestMarkerBinding(userId);
+  if (!binding || !userId) return { ok: false };
+  if (_guestMigrationRunning) return { ok: false, busy: true, error: GUEST_MIGRATION_TEXTS.busy };
+  const e = readNamespaceEntry("guest_migration", null);
+  const prev = e.state === "valid" && e.value && typeof e.value === "object" ? e.value : null;
+  setGuestMigrationMarker({
+    status: "released",
+    releasedAt: new Date().toISOString(),
+    releasedFor: userId,
+    releasedFrom: prev ? { status: prev.status || null, targetUserId: prev.targetUserId || null, attemptId: prev.attemptId || null, backupId: prev.backupId || null } : { unverifiable: true },
+  });
+  return { ok: true };
 }
 // Guest data worth offering: history, plans, measurements, custom fields, custom exercises (not the
 // default atlas). A name, an unfinished workout (draft), PRO or technical keys alone never count.
@@ -1778,6 +1818,7 @@ function pruneGuestMigrationBackups(list, keepBackupId = null) {
   if (keepBackupId) keep.add(keepBackupId);
   const gm = getGuestMigrationMarker();
   if (gm && gm.backupId) keep.add(gm.backupId);
+  if (gm && gm.releasedFrom && gm.releasedFrom.backupId) keep.add(gm.releasedFrom.backupId); // F-4: still documents the released transfer
   return list.filter((b) => !isGm(b) || keep.has(b.backupId));
 }
 // The ORIGINAL guest data (exactly as stored — not the prepared copy), read explicitly from the guest
@@ -1849,6 +1890,7 @@ function clearGuestMigrationCopy(userId) {
 // built-in exercise, unsent changes or open sync conflicts of the account also make it non-empty here.
 function accountLocalBlocksGuestMigration(userId) {
   if (hasLocalAccountData(userId).hasData) return true;
+  if (getGuestPartialNote(userId)) return true; // F-5: an incomplete earlier transfer is in this account's cloud
   const queue = readNamespaceJson("sync_queue", userId);
   if (Array.isArray(queue) && queue.some(Boolean)) return true;
   const conflicts = readNamespaceJson("sync_conflicts", userId);
@@ -1895,7 +1937,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
     if (markerNow && isKnownAccountInitStatus(markerNow.status) && markerNow.status !== "migrating_guest") return { ok: false, blocked: "not_empty", error: GUEST_MIGRATION_TEXTS.notEmpty };
     const resuming = !!(markerNow && markerNow.status === "migrating_guest");
     const gm = getGuestMigrationMarker();
-    if (gm && gm.targetUserId !== userId) return { ok: false, blocked: "guest_other_account", error: GUEST_MIGRATION_TEXTS.otherAccount };
+    if (guestMarkerBinding(userId)) return { ok: false, blocked: "guest_other_account", error: GUEST_MIGRATION_TEXTS.otherAccount };
     if (resuming) {
       const consistent =
         markerNow.userId === userId && markerNow.namespace === ns && markerNow.attemptId && markerNow.backupId && markerNow.deviceId &&
@@ -1999,20 +2041,83 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
   }
 }
 
-// "Wróć bez przenoszenia": ends an unfinished guest migration of THIS account. Only the copy written into
-// the account namespace is removed (the account was empty before); the guest data, the backup and the
-// cloud are not touched. Rows already sent stay in the cloud (handled in a later part of 4A.4).
+// "Wróć bez przenoszenia": ends an unfinished guest migration of THIS account — but only while that can be
+// undone completely. Only the copy written into the account namespace is removed (the account was empty
+// before); the guest data, the backup and the cloud are never touched.
+// Stage 4A.4 Part 2 (F-5): once the attempt reached the upload phase, rows of THIS attempt's device may be
+// in the cloud. They are never deleted (no heuristic cloud deletes) — and never left behind as if they
+// were the account's normal, complete data. So:
+//   • nothing of this device's attempt in the cloud (checked: data rows + edited built-in exercises,
+//     only rows with the attempt's device id)  → full reset, the offer can come again;
+//   • rows found, or the check is impossible (offline / error) → NOTHING changes; { partial: true | "unknown" }
+//     — the user finishes the transfer, or consciously starts without it (startAccountWithoutGuestPartial).
 async function abandonGuestMigration(userId, currentRefUserId) {
   if (_guestMigrationRunning) return { ok: false, busy: true, error: GUEST_MIGRATION_TEXTS.busy };
+  _guestMigrationRunning = true; // single flight: no migration / retry may start while this runs
+  try {
+    return await abandonGuestMigrationUnlocked(userId, currentRefUserId);
+  } finally {
+    _guestMigrationRunning = false;
+  }
+}
+async function abandonGuestMigrationUnlocked(userId, currentRefUserId) {
   if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
   const m = getAccountInitMarker(userId);
   if (!m || m.status !== "migrating_guest") return { ok: false, discarded: true };
+  if (m.phase !== "copying") {
+    let own;
+    try {
+      own = m.deviceId ? await checkCloudAccountData(userId, { onlyDeviceId: m.deviceId, editedBuiltIns: true }) : null;
+    } catch (e) {
+      own = null;
+    }
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    if (!own) return { ok: false, partial: "unknown", error: GUEST_MIGRATION_TEXTS.partialUnknown };
+    if (own.hasData) return { ok: false, partial: true, error: GUEST_MIGRATION_TEXTS.partial };
+    if ((getAccountInitMarker(userId) || {}).attemptId !== m.attemptId) return { ok: false, discarded: true }; // changed meanwhile
+  }
   _accountInitBusy = true;
   try {
     clearGuestMigrationCopy(userId);
     clearAccountInitMarker(userId);
     const gm = getGuestMigrationMarker();
     if (gm && gm.targetUserId === userId && (!m.attemptId || gm.attemptId === m.attemptId)) clearGuestMigrationMarker();
+    return { ok: true };
+  } finally {
+    _accountInitBusy = false;
+  }
+}
+
+// F-5, the conscious way out after a partial upload: the account starts WITHOUT the guest data. Its local
+// copy is removed; sync stays PAUSED (ready/empty, syncPaused) so the incomplete rows are never pulled in;
+// a note `guest_partial_upload` (no user data) remembers on this device that the cloud holds an incomplete
+// transfer, so a later source choice never presents it as normal data. The guest data stays bound to this
+// account's attempt (guest marker "abandoned_partial") — another account needs an explicit release (F-4).
+const GUEST_PARTIAL_NOTE = "guest_partial_upload";
+function getGuestPartialNote(userId) {
+  const n = readNamespaceJson(GUEST_PARTIAL_NOTE, userId);
+  return n && typeof n === "object" && !Array.isArray(n) ? n : null;
+}
+async function startAccountWithoutGuestPartial(userId, currentRefUserId) {
+  if (_guestMigrationRunning) return { ok: false, busy: true, error: GUEST_MIGRATION_TEXTS.busy };
+  _guestMigrationRunning = true;
+  try {
+    return await startAccountWithoutGuestPartialUnlocked(userId, currentRefUserId);
+  } finally {
+    _guestMigrationRunning = false;
+  }
+}
+async function startAccountWithoutGuestPartialUnlocked(userId, currentRefUserId) {
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const m = getAccountInitMarker(userId);
+  if (!m || m.status !== "migrating_guest" || m.phase === "copying") return { ok: false, discarded: true };
+  _accountInitBusy = true;
+  try {
+    localStorage.setItem(getStorageKey(GUEST_PARTIAL_NOTE, userId), JSON.stringify({ deviceId: m.deviceId || null, attemptId: m.attemptId || null, backupId: m.backupId || null, at: new Date().toISOString() }));
+    clearGuestMigrationCopy(userId);
+    setAccountInitMarker(userId, { status: "ready", source: "empty", syncPaused: true });
+    const gm = getGuestMigrationMarker();
+    if (gm && gm.targetUserId === userId && gm.attemptId === m.attemptId) setGuestMigrationMarker({ ...gm, status: "abandoned_partial", abandonedAt: new Date().toISOString() });
     return { ok: true };
   } finally {
     _accountInitBusy = false;
@@ -8414,7 +8519,7 @@ function ConflictCenterScreen({ onNavigate, exercises, isOnline }) {
 
 
 // Stage 4A.2 — full-screen account initialisation (shows NO app data while undecided).
-function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceSnapshotStatus, onAbandonCloud, onRetryUpload, onAbandonUpload, onGuestMigrate, onGuestLater, onGuestAbandon }) {
+function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceSnapshotStatus, onAbandonCloud, onRetryUpload, onAbandonUpload, onGuestMigrate, onGuestLater, onGuestAbandon, onGuestStartWithout, onGuestRelease, onGuestReleaseConfirm }) {
   // Stage 4A.3: "go back to the device data" is offered only when that restore can really happen.
   const deviceRestorePossible = deviceSnapshotStatus === "ok";
   const snapshotNote = deviceRestorePossible
@@ -8562,6 +8667,57 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
       </>
     );
   }
+  // Stage 4A.4 Part 2 (F-4): the guest data is bound to a transfer of ANOTHER account (or the marker cannot be
+  // verified). Nothing is moved automatically; unbinding is an explicit, confirmed decision.
+  if (init.status === "guest_bound_other") {
+    const b = init.binding || {};
+    const why = b.unverifiable
+      ? "Nie da się ustalić, do którego konta były ostatnio przenoszone dane z trybu bez logowania."
+      : b.status === "completed"
+      ? "Dane z trybu bez logowania zostały już przeniesione na inne konto."
+      : b.status === "abandoned_partial"
+      ? "Dane z trybu bez logowania były przenoszone na inne konto — przenoszenie przerwano, część danych mogła tam trafić."
+      : "Dane z trybu bez logowania są w trakcie przenoszenia na inne konto (przenoszenie nie zostało dokończone).";
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2" data-testid="init-guest-bound">DANE PRZYPISANE DO INNEGO KONTA</p>
+        <p className="text-neutral-300 text-sm mb-2">{why}</p>
+        <p className="text-neutral-400 text-sm mb-4">Dlatego nie zostaną automatycznie przeniesione na to konto. Dane w trybie bez logowania pozostają bez zmian.</p>
+        {btn("Nie teraz", onGuestLater, true, "init-guest-later")}
+        {!init.confirmRelease && btn("Odłącz dane od tamtego konta", onGuestRelease, false, "init-guest-release")}
+        {init.confirmRelease && (
+          <>
+            <p className="text-amber-400 text-sm mb-2" data-testid="init-guest-release-warning">
+              Po odłączeniu te same dane będzie można przenieść na to konto. Jeśli tamto konto już je ma (całe lub część), będą na obu kontach. Tamto przenoszenie nie będzie mogło zostać dokończone.
+            </p>
+            {btn("Tak, odłącz dane", onGuestReleaseConfirm, false, "init-guest-release-confirm")}
+          </>
+        )}
+        {errorLine}
+      </>
+    );
+  }
+  // Stage 4A.4 Part 2 (F-5): the transfer reached the cloud partly — it is never shown as normal account data.
+  if (init.status === "guest_partial") {
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2" data-testid="init-guest-partial">CZĘŚĆ DANYCH JEST JUŻ W CHMURZE</p>
+        <p className="text-neutral-300 text-sm mb-2">
+          {init.partialUnknown
+            ? "Nie udało się sprawdzić, czy część przenoszonych danych trafiła już do chmury."
+            : "Część danych z trybu bez logowania została już wysłana na to konto, ale przenoszenie nie zostało dokończone."}
+        </p>
+        <p className="text-neutral-400 text-sm mb-4">
+          Ta niekompletna kopia nie zostanie użyta jako zwykłe dane konta. Dane w trybie bez logowania nie zostały zmienione, a ich kopia zapasowa jest zachowana.
+        </p>
+        {btn("Dokończ przenoszenie", onGuestMigrate, true, "init-guest-retry")}
+        {init.partialUnknown && btn("Sprawdź ponownie", onGuestAbandon, false, "init-guest-abandon")}
+        {btn("Zacznij konto bez tych danych", onGuestStartWithout, false, "init-guest-start-without")}
+        <p className="text-neutral-600 text-xs mt-2">„Zacznij konto bez tych danych” — konto zacznie od pustych danych, a synchronizacja pozostanie wstrzymana, żeby niekompletna kopia z chmury nie trafiła na urządzenie.</p>
+        {errorLine}
+      </>
+    );
+  }
   if (init.status === "guest_migration_error" || init.status === "guest_migration_interrupted") {
     const interrupted = init.status === "guest_migration_interrupted";
     return shell(
@@ -8614,7 +8770,12 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
         </p>
       )}
       {local.hasData && btn("Wczytaj dane z urządzenia", onChooseLocal, !cloud.hasData, "init-local")}
-      {cloud.hasData && btn("Wczytaj dane z chmury", onChooseCloud, true, "init-cloud")}
+      {cloud.hasData && init.partialGuestUpload && (
+        <p className="text-amber-400 text-sm mb-3" data-testid="init-partial-warning">
+          Uwaga: w chmurze tego konta jest niedokończone przeniesienie danych z trybu bez logowania. Dane z chmury mogą być niekompletne.
+        </p>
+      )}
+      {cloud.hasData && btn(init.partialGuestUpload ? "Wczytaj niekompletne dane z chmury" : "Wczytaj dane z chmury", onChooseCloud, !init.partialGuestUpload, "init-cloud")}
       {btn("Zacznij od pustych danych", onChooseEmpty, false, "init-empty")}
       {both && (
         <p className="text-neutral-500 text-xs leading-relaxed mt-2">
@@ -16128,13 +16289,19 @@ function App() {
       // Stage 4A.4: a genuinely empty account + guest data on this device → offer to move it (nothing is
       // written until the user agrees). Not offered while the guest data is bound to another account's migration.
       const guest = guestHasMigratableData();
-      const gm = getGuestMigrationMarker();
-      if (guest.damage.length && !(gm && gm.targetUserId !== userId)) {
+      // F-4: guest data bound to another account's transfer (or a marker that cannot be verified) is never
+      // offered silently and never ends in an automatic decision — the user sees why and decides.
+      const binding = guestMarkerBinding(userId);
+      if (binding && (guest.hasData || guest.damage.length)) {
+        setAccountInit({ ns, status: "guest_bound_other", local, cloud, binding, guest: guest.details, error: notice });
+        return;
+      }
+      if (guest.damage.length) {
         // F-2: damaged guest data is never treated as "no data" — say so; nothing can be moved, nothing decided
         setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: true, guestDamaged: damageText(guest.damage), error: notice });
         return;
       }
-      if (guest.hasData && !(gm && gm.targetUserId !== userId) && !accountLocalBlocksGuestMigration(userId)) {
+      if (guest.hasData && !accountLocalBlocksGuestMigration(userId)) {
         // the same strict "genuinely empty" rule the migration itself applies (edited built-in exercises count)
         let strict = null;
         try {
@@ -16150,7 +16317,7 @@ function App() {
         setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: !!strict.hasData, error: notice });
         return;
       }
-      if (guest.hasData && !(gm && gm.targetUserId !== userId)) {
+      if (guest.hasData) {
         setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: true, error: notice });
         return;
       }
@@ -16162,7 +16329,7 @@ function App() {
     const deviceSnapshotInfo = snap
       ? { createdAt: snap.createdAt, details: { history: (snap.data.history || []).length, plans: (snap.data.plans || []).length, measurements: (snap.data.measurements || []).length } }
       : null;
-    setAccountInit({ ns, status: "choice", local, cloud, deviceSnapshot: deviceSnapshotInfo, error: notice });
+    setAccountInit({ ns, status: "choice", local, cloud, deviceSnapshot: deviceSnapshotInfo, partialGuestUpload: !!getGuestPartialNote(userId), error: notice });
   }, []);
   const loadedOnceRef = useRef(false);
   // Session not confirmed yet (SDK still trying to refresh an expired token, typically offline):
@@ -16791,6 +16958,11 @@ function App() {
       r = { ok: false, error: failText(e) };
     }
     if (!isCurrentOp(op)) return;
+    if (!r.ok && r.partial) {
+      // F-5: part of this transfer is already in the cloud — it cannot be undone silently
+      setAccountInit({ ns: initNs, status: "guest_partial", partialUnknown: r.partial === "unknown", error: r.error });
+      return;
+    }
     if (!r.ok) {
       setAccountInit({ ...prev, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
       return;
@@ -16800,6 +16972,35 @@ function App() {
     setSyncQueueState(loadSyncQueue());
     setAccountInit({ ns: initNs, status: "checking" });
     runAccountInitCheck(initUserId, initNs);
+  };
+  // F-4: explicit, confirmed unbinding of guest data held by another account's transfer; then decide again.
+  const releaseGuestBinding = async () => {
+    if (!sameInit()) return;
+    const r = releaseGuestMigrationBinding(initUserId);
+    if (!r.ok) {
+      setAccountInit({ ...accountInit, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
+      return;
+    }
+    setAccountInit({ ns: initNs, status: "checking" });
+    runAccountInitCheck(initUserId, initNs);
+  };
+  // F-5: the conscious "start without the guest data" after a partial upload (sync stays paused).
+  const startWithoutGuestPartial = async () => {
+    if (!sameInit()) return;
+    const op = beginInitOp();
+    const prev = accountInit;
+    let r;
+    try {
+      r = await startAccountWithoutGuestPartial(initUserId, refFor(op));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return;
+    if (!r.ok) {
+      setAccountInit({ ...prev, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
+      return;
+    }
+    await finishInit();
   };
   const workOffline = async () => {
     // usable now, but NOT initialised: no marker → sync stays off and the next start checks again
@@ -16822,6 +17023,9 @@ function App() {
         onGuestMigrate={runGuestMigration}
         onGuestLater={guestMigrationLater}
         onGuestAbandon={abandonGuest}
+        onGuestStartWithout={startWithoutGuestPartial}
+        onGuestRelease={() => setAccountInit({ ...accountInit, confirmRelease: true, error: null })}
+        onGuestReleaseConfirm={releaseGuestBinding}
         onRetry={() => runAccountInitCheck(initUserId, initNs)}
         onWorkOffline={workOffline}
         onBack={() => setAccountInit({ ...accountInit, status: "choice", error: null })}

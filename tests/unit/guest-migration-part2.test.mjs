@@ -127,3 +127,167 @@ describe("F-2 — damaged guest data stops the migration (fail closed)", () => {
     assert.equal(localStorage.getItem(key(UA, "history")), '[{"id":"w1"', "damaged value kept for diagnosis");
   });
 });
+
+// ---- F-5 ------------------------------------------------------------------------------------------
+const failOnce = (table) => {
+  let failed = false;
+  S.queryHook = (q) => {
+    if (!failed && q.table === table && (q.op === "insert" || q.op === "update")) {
+      failed = true;
+      return { message: "Failed to fetch" };
+    }
+    return null;
+  };
+};
+const counts = () => ["nextrep_exercises", "nextrep_plans", "nextrep_plan_items", "nextrep_plan_item_sets", "nextrep_workouts", "nextrep_workout_exercises", "nextrep_workout_sets", "nextrep_measurements", "nextrep_custom_fields"].map((t) => rows(t).length);
+function restart(userId = UA) {
+  A.__testState.resetActiveDataNamespace();
+  A.__testState.resetAccountInitBusy();
+  S.session = { user: { id: userId } };
+  refUser = userId;
+  S.queryHook = null;
+  A.activateDataNamespace(userId);
+}
+
+describe("F-5 — a partial upload is never left behind as normal account data", () => {
+  test("partial → abandon → nothing reset; restart → still the unfinished attempt (not ready, sync off), guest intact", async () => {
+    seedGuest();
+    const guestBefore = guestDump();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    assert.ok(rows("nextrep_workouts").length > 0, "rows of this attempt are in the cloud");
+    const cloudBefore = clone(S.tables);
+    const r = await quiet(() => A.abandonGuestMigration(UA, ref));
+    assert.equal(r.partial, true);
+    assert.deepEqual(S.tables, cloudBefore, "no cloud delete / write");
+    restart();
+    assert.equal(marker().status, "migrating_guest");
+    assert.equal(A.isAccountSyncAllowed(UA), false);
+    assert.deepEqual(guestDump(), guestBefore);
+  });
+
+  test("partial → abandon while offline (own-rows check impossible) → partial 'unknown', nothing changed", async () => {
+    seedGuest();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    S.queryHook = (q) => (q.op === "select" ? { message: "Failed to fetch" } : null); // cloud unreachable, session known
+    const r = await quiet(() => A.abandonGuestMigration(UA, ref));
+    S.queryHook = null;
+    assert.equal(r.partial, "unknown");
+    assert.equal(marker().status, "migrating_guest");
+    assert.ok(localStorage.getItem(key(UA, "history")), "copy kept");
+  });
+
+  test("partial → 'start without' → ready/empty with sync PAUSED + note; the incomplete rows are never pulled; the account can't be offered the guest data again", async () => {
+    seedGuest();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    await quiet(() => A.abandonGuestMigration(UA, ref));
+    const r = await quiet(() => A.startAccountWithoutGuestPartial(UA, ref));
+    assert.equal(r.ok, true);
+    assert.deepEqual({ ...marker(), at: undefined }, { status: "ready", source: "empty", syncPaused: true, at: undefined });
+    assert.equal(A.isAccountSyncAllowed(UA), false, "sync paused: nothing of the partial cloud comes in");
+    const note = A.getGuestPartialNote(UA);
+    assert.ok(note && note.deviceId && note.attemptId);
+    assert.deepEqual(Object.keys(note).sort(), ["at", "attemptId", "backupId", "deviceId"], "no user data in the note");
+    const sync = await quiet(() => A.runSync());
+    assert.equal(localStorage.getItem(key(UA, "history")), null, `nothing pulled (${JSON.stringify(sync && sync.skipped)})`);
+    assert.equal(A.accountLocalBlocksGuestMigration(UA), true, "no new guest migration into this account");
+    assert.equal(readJson(GM_KEY).status, "abandoned_partial", "guest data stays bound to this account's attempt");
+  });
+
+  test("partial → retry → success; repeated failing retries keep the cloud row counts stable", async () => {
+    seedGuest();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    for (const t of ["nextrep_measurements", "nextrep_custom_fields", "nextrep_workout_exercises"]) {
+      failOnce(t);
+      const r = await migrate();
+      assert.equal(r.ok, false);
+    }
+    S.queryHook = null;
+    const ok = await migrate();
+    assert.equal(ok.ok, true, ok.error);
+    const once = counts();
+    for (let i = 0; i < 3; i++) await quiet(() => A.runMigrationV1());
+    assert.deepEqual(counts(), once, "stable counts");
+    assert.deepEqual(rows("nextrep_workouts").map((x) => x.legacy_id).sort(), ["g1", "g2"]);
+    assert.equal(rows("nextrep_workout_sets").length, 4);
+  });
+
+  test("partial → abandon → account B logs in on this device: nothing written for B or A, guest data bound to A's attempt", async () => {
+    seedGuest();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    await quiet(() => A.abandonGuestMigration(UA, ref));
+    const cloudBefore = clone(S.tables);
+    restart(UB);
+    S.calls = [];
+    const r = await migrate(UB);
+    assert.equal(r.blocked, "guest_other_account");
+    assert.equal(cloudWrites(S).length, 0);
+    assert.deepEqual(S.tables, cloudBefore);
+    assert.equal(A.getAccountInitMarker(UB), null);
+    assert.equal(A.getAccountInitMarker(UA).status, "migrating_guest", "A's attempt untouched");
+  });
+});
+
+// ---- F-4 ------------------------------------------------------------------------------------------
+describe("F-4 — guest marker bound to another account: never released by age, only by an explicit decision", () => {
+  const setGm = (v) => localStorage.setItem(GM_KEY, typeof v === "string" ? v : JSON.stringify(v));
+  for (const status of ["migrating", "abandoned_partial", "completed"]) {
+    test(`A's '${status}' marker binds the guest data for B (even years old); A itself is not blocked by it`, () => {
+      setGm({ status, targetUserId: UA, attemptId: "a1", backupId: "b1", startedAt: "2020-01-01T00:00:00.000Z" });
+      assert.deepEqual(A.guestMarkerBinding(UB), { status, targetUserId: UA, unverifiable: false });
+      assert.equal(A.guestMarkerBinding(UA), null);
+    });
+  }
+  test("a damaged marker or one without a target cannot be verified → binds EVERY account", () => {
+    setGm("{broken");
+    assert.equal(A.guestMarkerBinding(UA).unverifiable, true);
+    assert.equal(A.guestMarkerBinding(UB).unverifiable, true);
+    setGm({ status: "migrating" });
+    assert.equal(A.guestMarkerBinding(UB).unverifiable, true);
+  });
+  test("B → migration refused (zero writes) until B explicitly releases; then B migrates; A's old attempt can't resume or write", async () => {
+    seedGuest();
+    failOnce("nextrep_workout_sets");
+    await migrate(); // A: unfinished, partial rows in A's cloud
+    const aRows = clone(S.tables);
+    restart(UB);
+    S.calls = [];
+    assert.equal((await migrate(UB)).blocked, "guest_other_account");
+    assert.equal(cloudWrites(S).length, 0);
+    const rel = A.releaseGuestMigrationBinding(UB);
+    assert.equal(rel.ok, true);
+    const gm = readJson(GM_KEY);
+    assert.equal(gm.status, "released");
+    assert.equal(gm.releasedFrom.targetUserId, UA);
+    assert.ok(!("history" in gm) && !("data" in gm), "no user data in the marker");
+    const r = await migrate(UB);
+    assert.equal(r.ok, true, r.error);
+    assert.equal(readJson(GM_KEY).targetUserId, UB);
+    assert.ok(rows("nextrep_workouts").some((x) => x.user_id === UB));
+    // A comes back: its attempt is no longer the guest's — no resume, no write
+    const before = clone(S.tables);
+    restart(UA);
+    S.calls = [];
+    const ra = await migrate(UA);
+    assert.equal(ra.ok, false);
+    assert.equal(cloudWrites(S).length, 0);
+    assert.deepEqual(S.tables, before);
+    assert.ok(aRows.nextrep_workouts.every((x) => x.user_id === UA), "A's rows were only ever A's");
+  });
+  test("A deleted on another device (cannot be verified here) → B stays bound until it releases explicitly", async () => {
+    seedGuest();
+    setGm({ status: "completed", targetUserId: "deleted-elsewhere-user", attemptId: "z", backupId: "y" });
+    restart(UB);
+    assert.equal((await migrate(UB)).blocked, "guest_other_account");
+    assert.ok(A.guestMarkerBinding(UB));
+  });
+  test("release is refused when nothing binds this account and while a migration runs", async () => {
+    assert.equal(A.releaseGuestMigrationBinding(UA).ok, false, "no marker");
+    setGm({ status: "migrating", targetUserId: UA, attemptId: "a" });
+    assert.equal(A.releaseGuestMigrationBinding(UA).ok, false, "own marker is not 'another account'");
+  });
+});
