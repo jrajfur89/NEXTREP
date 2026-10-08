@@ -106,10 +106,16 @@ describe("A–J — final coverage of the 4A.3 scenarios", () => {
     assert.deepEqual(read(key(null, "history")), guestHistory);
   });
 
-  test("H: guest has data, brand-new empty account → no automatic import (boundary of 4A.4)", async () => {
+  // Stage 4A.4: no AUTOMATIC import — the empty account now offers the guest data; "Nie teraz" keeps
+  // the 4A.3 outcome (ready/new, guest untouched, nothing uploaded).
+  test("H: guest has data, brand-new empty account → offer, nothing automatic; 'Nie teraz' → ready/new (boundary of 4A.4)", async () => {
     const guestHistory = [historySession("g1", "G")];
     const { S } = await bootApp({ session: sessA, storage: { [key(null, "history")]: guestHistory } });
     await settle();
+    assert.ok(byTestId("init-guest-migrate"), "the guest data is offered");
+    assert.equal(read(key(UA, "account_init")), null, "no marker before the user decides");
+    assert.equal(cloudWrites(S).length, 0, "nothing sent while the offer is shown");
+    await press("init-guest-later");
     assert.ok(appShown());
     assert.equal(read(key(UA, "account_init")).source, "new");
     assert.ok(!(read(key(UA, "history")) || []).length, "account workspace empty");

@@ -1071,7 +1071,7 @@ function clearAccountInitMarker(userId) {
 // Sync (runSync + bootstrap) may only touch an account that has chosen its data source and
 // whose sync isn't paused by that choice.
 // Stage 4A.3: the statuses the app knows how to continue from; anything else is treated like no marker.
-const ACCOUNT_INIT_STATUSES = new Set(["ready", "pending_cloud_confirm", "loading_cloud", "uploading_device"]);
+const ACCOUNT_INIT_STATUSES = new Set(["ready", "pending_cloud_confirm", "loading_cloud", "uploading_device", "migrating_guest"]); // Stage 4A.4: + migrating_guest
 function isKnownAccountInitStatus(status) {
   return ACCOUNT_INIT_STATUSES.has(status);
 }
@@ -1184,6 +1184,10 @@ function purgeDeletedAccountData(userId) {
     } catch {}
   }
   saveBackupList(loadBackupList().filter((b) => backupOwnerNamespace(b) !== ns));
+  // Stage 4A.4: a guest migration bound to the deleted account no longer blocks the guest data
+  // (the guest data itself and its BEFORE_GUEST_MIGRATION backup belong to the guest and stay).
+  const gm = getGuestMigrationMarker();
+  if (gm && gm.targetUserId === userId) clearGuestMigrationMarker();
   return true;
 }
 const stillSameAccount = async (userId, expectedRefUserId) =>
@@ -1508,6 +1512,11 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
   }
   _accountInitBusy = true;
   try {
+    // Stage 4A.4 Part 1 (I-2 / F-1): the account data is uploaded as a prepared copy with unique
+    // identities (backup first, then written back to this account's namespace). Resuming an upload that
+    // an older version started is refused when preparation would change identities — see the helper.
+    const prep = prepareAccountDatasetForUpload(userId, { resuming });
+    if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
     if (!resuming) setAccountInitMarker(userId, { status: "uploading_device", source: "device", syncPaused: true, userId, namespace: ns, deviceId, startedAt: new Date().toISOString() });
     const result = await runMigrationV1();
     if (!result || !result.success) return { ok: false, error: (result && result.error) ? authErrorText(result.error) : "Nie udało się wysłać danych do chmury." };
@@ -1526,6 +1535,403 @@ function readAccountUserName(userId) {
     return typeof v === "string" ? v : "";
   } catch {
     return "";
+  }
+}
+
+// =====================================================================================
+// Stage 4A.4 Part 1 — EXPLICIT-NAMESPACE HELPERS
+// Read / write the data of ONE given namespace (userId; null = guest) without activating it, without
+// touching the sync queue/meta, the draft, local PRO or any technical key. Used by the upload
+// preparation and by the guest → account migration below.
+// =====================================================================================
+const MIGRATABLE_DATA_NAMES = ["exercises", "plans", "history", "measurements", "custom_fields", "user_name"];
+function readNamespaceJson(name, userId) {
+  try {
+    const raw = localStorage.getItem(getStorageKey(name, userId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null; // same reading as everywhere else in the app (damaged JSON → no value)
+  }
+}
+// { exercises, plans, history, measurements, customFields, userName, present, shapeErrors }.
+// A value of the wrong type is reported in shapeErrors (never silently replaced): callers stop.
+function readMigratableDataset(userId) {
+  const shapeErrors = [];
+  const present = {};
+  const arr = (name) => {
+    const v = readNamespaceJson(name, userId);
+    present[name] = v != null;
+    if (v == null) return [];
+    if (!Array.isArray(v)) {
+      shapeErrors.push(name);
+      return [];
+    }
+    return v;
+  };
+  const un = readNamespaceJson("user_name", userId);
+  present.user_name = un != null;
+  if (un != null && typeof un !== "string") shapeErrors.push("user_name");
+  return {
+    exercises: arr("exercises"),
+    plans: arr("plans"),
+    history: arr("history"),
+    measurements: arr("measurements"),
+    customFields: arr("custom_fields"),
+    userName: typeof un === "string" ? un : "",
+    present,
+    shapeErrors,
+  };
+}
+// Records without the id V1 needs — the same rule as validateLocalDataForMigration.
+function migratableDatasetIdErrors(ds) {
+  const errors = [];
+  ds.plans.forEach((p, i) => (!p || typeof p !== "object" || !p.id) && errors.push(`plany[${i}]`));
+  ds.history.forEach((s, i) => (!s || typeof s !== "object" || !s.id) && errors.push(`treningi[${i}]`));
+  ds.measurements.forEach((m, i) => (!m || typeof m !== "object" || !m.id) && errors.push(`pomiary[${i}]`));
+  return errors;
+}
+// Writes [name, value] pairs into the namespace of `userId`, confirms every write by reading it back,
+// and on ANY failure puts back exactly what was there before (also keys that did not exist). → bool.
+function writeNamespaceEntries(userId, entries) {
+  const before = entries.map(([name]) => [getStorageKey(name, userId), localStorage.getItem(getStorageKey(name, userId))]);
+  try {
+    for (const [name, value] of entries) {
+      const k = getStorageKey(name, userId);
+      const raw = JSON.stringify(value);
+      localStorage.setItem(k, raw);
+      if (localStorage.getItem(k) !== raw) throw new Error(`zapis ${name} nie został potwierdzony`);
+    }
+    return true;
+  } catch (e) {
+    console.error("writeNamespaceEntries failed", e);
+    for (const [k, v] of before) {
+      try {
+        if (v == null) localStorage.removeItem(k);
+        else localStorage.setItem(k, v);
+      } catch {}
+    }
+    return false;
+  }
+}
+// FNV-1a over the raw stored values of the migratable data of one namespace (draft / PRO excluded).
+function migratableDataFingerprint(userId) {
+  let h = 2166136261;
+  for (const name of MIGRATABLE_DATA_NAMES) {
+    const v = `${name}=${localStorage.getItem(getStorageKey(name, userId)) ?? "∅"};`;
+    for (let i = 0; i < v.length; i++) {
+      h ^= v.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+  }
+  return h.toString(16);
+}
+
+// Stage 4A.3 device upload (and the resume of a guest migration): the account's own data is prepared
+// (prepareV1UploadDataset) and the prepared copy written back to its namespace BEFORE the upload —
+// with a backup of the original first — so the local data and the cloud rows carry the same ids.
+// F-1: an upload that is being RESUMED may already have rows in the cloud written with the old ids
+// (e.g. started by a version without this preparation). Changing ids now would leave those rows as
+// orphans that the next PULL brings back as duplicates → refused: nothing written locally or remotely,
+// the marker stays "interrupted", the user can go back to the source choice.
+function prepareAccountDatasetForUpload(userId, { resuming = false } = {}) {
+  const ds = readMigratableDataset(userId);
+  if (ds.shapeErrors.length) return { ok: false, error: `Dane na urządzeniu mają nieprawidłowy format (${ds.shapeErrors.join(", ")}), więc nie można ich wysłać. Nic nie zostało zmienione.` };
+  const prep = prepareV1UploadDataset(ds);
+  const integrityIssues = v1DatasetIntegrityIssues(prep.dataset);
+  if (integrityIssues.length) return { ok: false, integrityIssues, error: v1IntegrityIssuesText(integrityIssues) };
+  if (!prep.changed) return { ok: true, changed: false };
+  if (resuming) {
+    return {
+      ok: false,
+      resumeUnsafe: true,
+      error: "Przerwanego wysyłania nie można bezpiecznie dokończyć, bo dane wymagają uporządkowania identyfikatorów. Nic nie zostało zmienione — wróć do wyboru źródła danych.",
+    };
+  }
+  if (!isActiveNamespaceFor(userId)) return { ok: false, error: "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę." };
+  const snap = createBackupSnapshot("before-migration", { force: true });
+  if (!snap) return { ok: false, error: "Nie udało się utworzyć kopii zapasowej przed wysłaniem danych. Nic nie zostało zmienione." };
+  const entries = [];
+  if (prep.historyChanged) entries.push(["history", prep.dataset.history]);
+  if (prep.plansChanged) entries.push(["plans", prep.dataset.plans]);
+  if (!writeNamespaceEntries(userId, entries)) return { ok: false, error: "Nie udało się przygotować danych do wysłania. Nic nie zostało zmienione." };
+  return { ok: true, changed: true, backupId: snap.backupId };
+}
+
+// =====================================================================================
+// Stage 4A.4 Part 1 — GUEST → ACCOUNT MIGRATION (guest data → a GENUINELY EMPTY account only)
+// Model: COPY → UPLOAD → VERIFY. The guest workspace is the source and stays byte-for-byte untouched
+// (only the technical marker `guest_migration` is written there); nothing is merged (Stage 4A.5).
+//   guest marker   nextrep_guest_guest_migration_v1 = { status: "migrating", targetUserId, fingerprint,
+//                  backupId, attemptId, startedAt, accountReadyAt? }  — no user data
+//   account marker account_init = { status: "migrating_guest", source: "guest", syncPaused: true, userId,
+//                  namespace, deviceId, backupId, fingerprint, attemptId, phase: "copying"|"uploading",
+//                  startedAt } — not "ready": sync stays off until the upload is verified
+// The account becomes ready/guest only after V1 + the full parent/child verification succeeded.
+// Not migrated: the active workout draft (stays guest), local PRO (never moves), sync/technical keys.
+// =====================================================================================
+const BEFORE_GUEST_MIGRATION_KIND = "BEFORE_GUEST_MIGRATION";
+const GUEST_MIGRATION_BACKUP_KEEP = 2;
+const GUEST_MIGRATION_TEXTS = {
+  busy: "Przenoszenie danych już trwa — poczekaj na jego zakończenie.",
+  otherAccount: "Dane z trybu bez logowania są właśnie przenoszone na inne konto, więc nie można ich teraz przenieść na to konto. Nic nie zostało zmienione.",
+  notEmpty: "To konto ma już swoje dane, więc dane z trybu bez logowania nie zostały przeniesione. Nic nie zostało zmienione.",
+  cloudChanged: "Na koncie w chmurze pojawiły się dane, więc nic nie zostało przeniesione ani wysłane. Dane z trybu bez logowania są nietknięte.",
+  nothing: "W trybie bez logowania nie ma danych do przeniesienia.",
+  damaged: "Dane w trybie bez logowania mają nieprawidłowy format, więc nie można ich bezpiecznie przenieść. Nic nie zostało zmienione.",
+  backupFailed: "Nie udało się utworzyć kopii zapasowej danych z trybu bez logowania, więc przenoszenie nie zostało rozpoczęte. Nic nie zostało zmienione.",
+  copyFailed: "Nie udało się zapisać danych na koncie na tym urządzeniu. Nic nie zostało wysłane, dane z trybu bez logowania są nietknięte.",
+  noBackup: "Nie znaleziono kopii zapasowej tego przenoszenia, więc nie można go bezpiecznie dokończyć. Wróć bez przenoszenia i spróbuj od nowa.",
+  guestChanged: "Dane w trybie bez logowania zmieniły się od rozpoczęcia przenoszenia, więc nie można go dokończyć. Wróć bez przenoszenia i spróbuj od nowa.",
+  resumeMismatch: "Nie można bezpiecznie dokończyć przerwanego przenoszenia. Wróć bez przenoszenia i spróbuj od nowa.",
+};
+function getGuestMigrationMarker() {
+  const m = readNamespaceJson("guest_migration", null);
+  return m && typeof m === "object" && !Array.isArray(m) ? m : null;
+}
+function setGuestMigrationMarker(marker) {
+  localStorage.setItem(getStorageKey("guest_migration", null), JSON.stringify(marker));
+}
+function clearGuestMigrationMarker() {
+  try {
+    localStorage.removeItem(getStorageKey("guest_migration", null));
+  } catch {}
+}
+// Guest data worth offering: history, plans, measurements, custom fields, custom exercises (not the
+// default atlas). A name, an unfinished workout (draft), PRO or technical keys alone never count.
+function guestHasMigratableData() {
+  const ds = readMigratableDataset(null);
+  const defaults = new Set(DEFAULT_EXERCISES.map((e) => String(e.id)));
+  const details = {
+    history: ds.history.length,
+    plans: ds.plans.length,
+    measurements: ds.measurements.length,
+    customFields: ds.customFields.length,
+    customExercises: ds.exercises.filter((e) => e && !defaults.has(String(e.id))).length,
+  };
+  return { hasData: Object.values(details).some((n) => n > 0), details, draft: readNamespaceJson("active_workout_draft", null) != null };
+}
+// Retention: the GUEST_MIGRATION_BACKUP_KEEP newest guest-migration backups, plus `keepBackupId` and the
+// one the guest marker refers to. Other kinds / namespaces are never touched.
+function pruneGuestMigrationBackups(list, keepBackupId = null) {
+  const isGm = (b) => b && b.kind === BEFORE_GUEST_MIGRATION_KIND;
+  const keep = new Set(
+    list
+      .filter(isGm)
+      .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))
+      .slice(0, GUEST_MIGRATION_BACKUP_KEEP)
+      .map((b) => b.backupId)
+  );
+  if (keepBackupId) keep.add(keepBackupId);
+  const gm = getGuestMigrationMarker();
+  if (gm && gm.backupId) keep.add(gm.backupId);
+  return list.filter((b) => !isGm(b) || keep.has(b.backupId));
+}
+// The ORIGINAL guest data (exactly as stored — not the prepared copy), read explicitly from the guest
+// namespace whatever namespace is active. No PRO, no draft. null = not saved (caller stops).
+function createGuestMigrationBackup({ targetUserId, fingerprint, attemptId }) {
+  try {
+    const ds = readMigratableDataset(null);
+    const data = {
+      exercises: ds.present.exercises ? ds.exercises : null,
+      plans: ds.present.plans ? ds.plans : null,
+      history: ds.present.history ? ds.history : null,
+      measurements: ds.present.measurements ? ds.measurements : null,
+      customFields: ds.present.custom_fields ? ds.customFields : null,
+      userName: ds.present.user_name ? ds.userName : null,
+    };
+    const snapshot = {
+      backupId: uid(),
+      createdAt: new Date().toISOString(),
+      appVersion: BACKUP_APP_VERSION,
+      formatVersion: 1,
+      reason: "before-guest-migration",
+      namespace: getLocalDataNamespace(null),
+      kind: BEFORE_GUEST_MIGRATION_KIND,
+      targetUserId,
+      fingerprint,
+      attemptId,
+      data,
+    };
+    const list = pruneGuestMigrationBackups([...loadBackupList(), snapshot], snapshot.backupId);
+    if (!saveBackupList(list)) return null;
+    return loadBackupList().some((b) => b && b.backupId === snapshot.backupId) ? snapshot : null;
+  } catch (e) {
+    console.error("createGuestMigrationBackup failed", e);
+    return null;
+  }
+}
+function findGuestMigrationBackup(backupId) {
+  return loadBackupList().find((b) => b && b.backupId === backupId && b.kind === BEFORE_GUEST_MIGRATION_KIND && b.namespace === getLocalDataNamespace(null)) || null;
+}
+// What is written into the account namespace: the prepared copy of the migratable collections that
+// exist in the guest. The guest name only when the account has none (never overwritten).
+function guestMigrationEntries(prepared, { includeUserName }) {
+  const d = prepared.dataset;
+  const p = prepared.present || {};
+  const entries = [];
+  if (p.exercises) entries.push(["exercises", d.exercises]);
+  if (p.plans) entries.push(["plans", d.plans]);
+  if (p.history) entries.push(["history", d.history]);
+  if (p.measurements) entries.push(["measurements", d.measurements]);
+  if (p.custom_fields) entries.push(["custom_fields", d.customFields]);
+  if (includeUserName && typeof d.userName === "string" && d.userName.trim() !== "") entries.push(["user_name", d.userName]);
+  return entries;
+}
+// Removes from the account namespace only what a guest migration can have written there (the migratable
+// collections) plus the sync technical keys — the account's local PRO and device id stay.
+function clearGuestMigrationCopy(userId) {
+  for (const name of [...MIGRATABLE_DATA_NAMES, ...ACCOUNT_SYNC_TECH_NAMES]) {
+    try {
+      localStorage.removeItem(getStorageKey(name, userId));
+    } catch {}
+  }
+}
+
+let _guestMigrationRunning = false; // one guest migration at a time in this tab (double tap, two starts)
+function isGuestMigrationRunning() {
+  return _guestMigrationRunning;
+}
+
+// Guest → genuinely empty account. Returns { ok: true } or { ok: false, <reason>, error }.
+// Reasons without any write: discarded (account / session changed), busy, alreadyReady, blocked
+// ("guest_other_account" | "not_empty" | "cloud_changed" | "nothing" | "damaged" | "integrity" |
+// "backup_failed"), error (network). Once the markers exist, a failure leaves "migrating_guest" in
+// place (retry or abandon); the account is never "ready" before the verified upload.
+async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
+  if (_guestMigrationRunning) return { ok: false, busy: true, error: GUEST_MIGRATION_TEXTS.busy };
+  _guestMigrationRunning = true;
+  try {
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    if (!(await waitForSyncIdle())) return { ok: false, error: SYNC_STILL_RUNNING_TEXT };
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    const ns = getLocalDataNamespace(userId);
+    const markerNow = getAccountInitMarker(userId);
+    if (markerNow && markerNow.status === "ready") return { ok: false, alreadyReady: true };
+    // another source-selection state of this account (cloud load, device upload …) is never taken over;
+    // an unknown / damaged marker counts as no marker (as everywhere in 4A.3) and is replaced below
+    if (markerNow && isKnownAccountInitStatus(markerNow.status) && markerNow.status !== "migrating_guest") return { ok: false, blocked: "not_empty", error: GUEST_MIGRATION_TEXTS.notEmpty };
+    const resuming = !!(markerNow && markerNow.status === "migrating_guest");
+    const gm = getGuestMigrationMarker();
+    if (gm && gm.targetUserId !== userId) return { ok: false, blocked: "guest_other_account", error: GUEST_MIGRATION_TEXTS.otherAccount };
+    if (resuming) {
+      const consistent =
+        markerNow.userId === userId && markerNow.namespace === ns && markerNow.attemptId && markerNow.backupId && markerNow.deviceId &&
+        gm && gm.attemptId === markerNow.attemptId && gm.backupId === markerNow.backupId;
+      if (!consistent) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.resumeMismatch };
+      if (!findGuestMigrationBackup(markerNow.backupId)) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.noBackup };
+    }
+    // Fresh checks — the result shown on the offer screen is never trusted on its own.
+    if (!resuming && hasLocalAccountData(userId).hasData) return { ok: false, blocked: "not_empty", error: GUEST_MIGRATION_TEXTS.notEmpty };
+    const deviceId = resuming ? markerNow.deviceId : getOrCreateDeviceId();
+    if (!deviceId) return { ok: false, error: GUEST_MIGRATION_TEXTS.copyFailed };
+    let cloud;
+    try {
+      cloud = await checkCloudAccountData(userId, resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId) } : {});
+    } catch (e) {
+      return { ok: false, error: authErrorText(e) };
+    }
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    if (cloud.hasData && !resuming) return { ok: false, blocked: "cloud_changed", cloud, error: GUEST_MIGRATION_TEXTS.cloudChanged };
+
+    _accountInitBusy = true;
+    try {
+      if (cloud.hasData) {
+        // resuming, and data of ANOTHER device appeared meanwhile: never overwrite / merge — drop our local
+        // copy (the account had nothing before it), end the attempt, decide the source again.
+        clearGuestMigrationCopy(userId);
+        clearAccountInitMarker(userId);
+        clearGuestMigrationMarker();
+        return { ok: false, blocked: "cloud_changed", cloud, error: GUEST_MIGRATION_TEXTS.cloudChanged };
+      }
+      const phase = resuming ? markerNow.phase : null;
+      let attemptId = resuming ? markerNow.attemptId : newUuid();
+      let backupId = resuming ? markerNow.backupId : null;
+      let fingerprint = resuming ? markerNow.fingerprint : null;
+      if (!resuming || phase !== "uploading") {
+        // (Re)build the account copy from the guest: a first attempt, or a restart before the copy was confirmed.
+        const guest = readMigratableDataset(null);
+        if (guest.shapeErrors.length || migratableDatasetIdErrors(guest).length) return { ok: false, blocked: "damaged", error: GUEST_MIGRATION_TEXTS.damaged };
+        if (!guestHasMigratableData().hasData) return { ok: false, blocked: "nothing", error: GUEST_MIGRATION_TEXTS.nothing };
+        const currentFingerprint = migratableDataFingerprint(null);
+        if (resuming && currentFingerprint !== fingerprint) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.guestChanged };
+        fingerprint = currentFingerprint;
+        const prepared = { ...prepareV1UploadDataset(guest), present: guest.present };
+        const integrityIssues = v1DatasetIntegrityIssues(prepared.dataset);
+        if (integrityIssues.length) return { ok: false, blocked: "integrity", integrityIssues, error: v1IntegrityIssuesText(integrityIssues) };
+        if (!resuming) {
+          const backup = createGuestMigrationBackup({ targetUserId: userId, fingerprint, attemptId });
+          if (!backup) return { ok: false, blocked: "backup_failed", error: GUEST_MIGRATION_TEXTS.backupFailed };
+          backupId = backup.backupId;
+          const startedAt = new Date().toISOString();
+          setGuestMigrationMarker({ status: "migrating", targetUserId: userId, fingerprint, backupId, attemptId, startedAt });
+          setAccountInitMarker(userId, { status: "migrating_guest", source: "guest", syncPaused: true, userId, namespace: ns, deviceId, backupId, fingerprint, attemptId, phase: "copying", startedAt });
+        } else {
+          clearGuestMigrationCopy(userId); // an unconfirmed copy from the interrupted attempt
+        }
+        if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+        const includeUserName = readAccountUserName(userId).trim() === "" && !(cloud.details && cloud.details.displayName);
+        if (!writeNamespaceEntries(userId, guestMigrationEntries(prepared, { includeUserName }))) {
+          clearGuestMigrationCopy(userId);
+          clearAccountInitMarker(userId);
+          clearGuestMigrationMarker();
+          return { ok: false, blocked: "copy_failed", error: GUEST_MIGRATION_TEXTS.copyFailed };
+        }
+        const m = getAccountInitMarker(userId);
+        setAccountInitMarker(userId, { ...m, phase: "uploading" });
+      } else {
+        // The confirmed copy is uploaded as it is. It was prepared before the first upload; if it would
+        // still change, rows already sent could be orphaned (F-1) → refuse.
+        const prep = prepareAccountDatasetForUpload(userId, { resuming: true });
+        if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
+      }
+      // Re-check the cloud right before the first cloud write: only this attempt's own device rows may be there.
+      let recheck;
+      try {
+        recheck = await checkCloudAccountData(userId, resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId) } : {});
+      } catch (e) {
+        return { ok: false, error: authErrorText(e) };
+      }
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+      if (recheck.hasData) {
+        clearGuestMigrationCopy(userId);
+        clearAccountInitMarker(userId);
+        clearGuestMigrationMarker();
+        return { ok: false, blocked: "cloud_changed", cloud: recheck, error: GUEST_MIGRATION_TEXTS.cloudChanged };
+      }
+      const result = await runMigrationV1();
+      if (!result || !result.success) return { ok: false, error: result && result.error ? authErrorText(result.error) : "Nie udało się wysłać danych do chmury." };
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+      setAccountInitMarker(userId, { status: "ready", source: "guest", syncPaused: false });
+      const gmNow = getGuestMigrationMarker();
+      if (gmNow && gmNow.attemptId === attemptId) setGuestMigrationMarker({ ...gmNow, accountReadyAt: new Date().toISOString() });
+      return { ok: true };
+    } finally {
+      _accountInitBusy = false;
+    }
+  } catch (e) {
+    return { ok: false, error: authErrorText(e) };
+  } finally {
+    _guestMigrationRunning = false;
+  }
+}
+
+// "Wróć bez przenoszenia": ends an unfinished guest migration of THIS account. Only the copy written into
+// the account namespace is removed (the account was empty before); the guest data, the backup and the
+// cloud are not touched. Rows already sent stay in the cloud (handled in a later part of 4A.4).
+async function abandonGuestMigration(userId, currentRefUserId) {
+  if (_guestMigrationRunning) return { ok: false, busy: true, error: GUEST_MIGRATION_TEXTS.busy };
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const m = getAccountInitMarker(userId);
+  if (!m || m.status !== "migrating_guest") return { ok: false, discarded: true };
+  _accountInitBusy = true;
+  try {
+    clearGuestMigrationCopy(userId);
+    clearAccountInitMarker(userId);
+    const gm = getGuestMigrationMarker();
+    if (gm && gm.targetUserId === userId && (!m.attemptId || gm.attemptId === m.attemptId)) clearGuestMigrationMarker();
+    return { ok: true };
+  } finally {
+    _accountInitBusy = false;
   }
 }
 
@@ -1872,7 +2278,11 @@ function isHistoryCloudLinked() {
 }
 
 // Pure + deterministic: returns { history, changed, stats }. Never mutates its input.
-function normalizeWorkoutIdentity(history, plans, { migrateExistingSets = true } = {}) {
+// Stage 4A.4 (I-2): `reidentifyRepeatedExerciseIds` (default OFF — the start-up migration never uses
+// it) gives every repeat of a workout-exercise id after its FIRST occurrence (history order) a new id.
+// Only the upload preparation (prepareV1UploadDataset) turns it on: a repeated ex.id cannot be a cloud
+// identity, and without it V1 would fall back to "<workoutId>-posN" rows (I-1).
+function normalizeWorkoutIdentity(history, plans, { migrateExistingSets = true, reidentifyRepeatedExerciseIds = false } = {}) {
   const stats = { exercisesChanged: 0, setsChanged: 0, detailIdsCreated: 0, newUuids: 0, duplicateExerciseIds: 0 };
   if (!Array.isArray(history)) return { history, changed: false, stats };
   const templateIds = new Set();
@@ -1886,6 +2296,7 @@ function normalizeWorkoutIdentity(history, plans, { migrateExistingSets = true }
   }));
   stats.duplicateExerciseIds = [...exIdCount.values()].filter((n) => n > 1).length; // reported only — existing ids are never changed
   const seen = new Set();
+  const seenExIds = new Set();
   let changed = false;
   const out = history.map((session) => {
     if (!session || !Array.isArray(session.exercises)) return session;
@@ -1897,6 +2308,14 @@ function normalizeWorkoutIdentity(history, plans, { migrateExistingSets = true }
         next = { ...next, id: newUuid() };
         stats.exercisesChanged++;
         stats.newUuids++;
+      } else if (reidentifyRepeatedExerciseIds) {
+        const exId = String(ex.id);
+        if (seenExIds.has(exId)) {
+          next = { ...next, id: newUuid() };
+          stats.exercisesChanged++;
+          stats.newUuids++;
+        }
+        seenExIds.add(exId);
       }
       if (migrateExistingSets && Array.isArray(ex.sets)) {
         let setsChanged = false;
@@ -2154,6 +2573,147 @@ async function validateLocalDataForMigration() {
   return { errors, data: { exercises: ex || [], plans: pl || [], history: hi || [], measurements: me || [], customFields: cf || [], userName: un || "" } };
 }
 
+// =====================================================================================
+// Stage 4A.4 Part 1 — I-2: identity integrity of the dataset V1 uploads.
+// upsertByLegacyId finds a row by (user_id, legacy_id) and UPDATES it: two local records that end
+// up with the same legacy_id in one table would silently move one cloud row between parents (a set
+// under another workout, an item under another plan) — the cloud would hold fewer records than the
+// device, and the old verification (legacy ids only) could still pass. The helpers below derive the
+// legacy ids EXACTLY as the migrate*V1 functions write them; the gate refuses any repeat (fail closed,
+// before the first cloud write). The upload paths (4A.3 device → empty cloud, 4A.4 guest → empty
+// account) first prepare a normalised copy (prepareV1UploadDataset) so that real data passes.
+// =====================================================================================
+// Legacy ids of the workout exercises / sets of `historyList`, as migrateWorkoutsV1 writes them.
+// Hotfix I-1: an ex.id is the cloud identity only if it is unique in this history; otherwise (or
+// without an id) the historical "<workoutId>-posN" is used. Id-less sets use "<…-posN>-setM".
+function v1WorkoutLegacyIds(historyList) {
+  const wexIdCount = new Map();
+  for (const s of historyList || []) for (const ex of (s && Array.isArray(s.exercises) ? s.exercises : [])) if (ex && ex.id != null && ex.id !== "") wexIdCount.set(String(ex.id), (wexIdCount.get(String(ex.id)) || 0) + 1);
+  return {
+    exercise(session, pos, wex) {
+      const posLegacyId = `${String(session.id)}-pos${pos}`;
+      const legacyId = wex && wex.id != null && wex.id !== "" && wexIdCount.get(String(wex.id)) === 1 ? String(wex.id) : posLegacyId;
+      return { legacyId, posLegacyId };
+    },
+    set(posLegacyId, s, si) {
+      return String(s.id != null ? s.id : `${posLegacyId}-set${si}`);
+    },
+  };
+}
+const v1PlanItemSetLegacyId = (itemLegacyId, s, i) => String(s && s.id != null ? s.id : `${itemLegacyId}-${i}`);
+
+// Every legacy id V1 would write for `ds` ({ history, plans, measurements }), per table, with its
+// parent. Returns the list of problems (empty = safe to upload).
+function v1DatasetIntegrityIssues(ds) {
+  const issues = [];
+  const tally = (label) => {
+    const counts = new Map();
+    return {
+      add(id) {
+        counts.set(id, (counts.get(id) || 0) + 1);
+      },
+      report() {
+        const repeated = [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+        if (repeated.length) issues.push({ table: label, repeated: repeated.slice(0, 10), count: repeated.length });
+      },
+    };
+  };
+  const history = Array.isArray(ds && ds.history) ? ds.history : [];
+  const plans = Array.isArray(ds && ds.plans) ? ds.plans : [];
+  const measurements = Array.isArray(ds && ds.measurements) ? ds.measurements : [];
+  const workouts = tally("treningi");
+  const wexs = tally("ćwiczenia treningów");
+  const sets = tally("serie treningów");
+  const ids = v1WorkoutLegacyIds(history);
+  for (const session of history) {
+    if (!session || session.id == null) continue;
+    workouts.add(String(session.id));
+    const exs = Array.isArray(session.exercises) ? session.exercises : [];
+    exs.forEach((wex, pos) => {
+      if (!wex) return;
+      const { legacyId, posLegacyId } = ids.exercise(session, pos, wex);
+      wexs.add(legacyId);
+      (Array.isArray(wex.sets) ? wex.sets : []).forEach((s, si) => s && sets.add(ids.set(posLegacyId, s, si)));
+    });
+  }
+  const planT = tally("plany");
+  const items = tally("pozycje planów");
+  const itemSets = tally("serie planów");
+  for (const plan of plans) {
+    if (!plan || plan.id == null) continue;
+    planT.add(String(plan.id));
+    for (const item of Array.isArray(plan.exercises) ? plan.exercises : []) {
+      if (!item || item.id == null) continue;
+      items.add(String(item.id));
+      getPlanItemSetsDetail(item).forEach((s, i) => itemSets.add(v1PlanItemSetLegacyId(String(item.id), s, i)));
+    }
+  }
+  const meas = tally("pomiary");
+  for (const m of measurements) if (m && m.id != null) meas.add(String(m.id));
+  [workouts, wexs, sets, planT, items, itemSets, meas].forEach((t) => t.report());
+  return issues;
+}
+function v1IntegrityIssuesText(issues) {
+  const what = issues.map((i) => `${i.table} (${i.count})`).join(", ");
+  return `Dane mają powtórzone identyfikatory (${what}), więc nie można ich bezpiecznie wysłać. Nic nie zostało wysłane do chmury.`;
+}
+
+// Upload preparation (4A.3 / 4A.4): a NORMALISED COPY of `ds` — never mutates the input. Keeps order,
+// values, dates, exerciseId and plan links; only technical ids change:
+//   • history: normalizeWorkoutIdentity with set re-identification ON (template / repeated set ids →
+//     own id, old id kept as detailId) and repeated ex.id → new id after its first occurrence; an
+//     exercise without an id gets one (so no new "-posN" row is ever created);
+//   • plans: an item without an id gets one; a repeated item id or setsDetail id (after its first
+//     occurrence, across all plans) gets a new one.
+// Idempotent: a prepared dataset prepares to itself (changed = false). Workouts / plans / measurements
+// without an id are NOT invented here — validation refuses them.
+function prepareV1UploadDataset(ds) {
+  const src = ds || {};
+  const history0 = Array.isArray(src.history) ? src.history : [];
+  const plans0 = Array.isArray(src.plans) ? src.plans : [];
+  const hist = normalizeWorkoutIdentity(history0, plans0, { migrateExistingSets: true, reidentifyRepeatedExerciseIds: true });
+  let plansChanged = false;
+  const seenItems = new Set();
+  const seenItemSets = new Set();
+  const plans = plans0.map((plan) => {
+    if (!plan || typeof plan !== "object" || !Array.isArray(plan.exercises)) return plan;
+    let changedPlan = false;
+    const exercises = plan.exercises.map((item) => {
+      if (!item || typeof item !== "object") return item;
+      let next = item;
+      if (item.id == null || item.id === "" || seenItems.has(String(item.id))) {
+        next = { ...next, id: newUuid() };
+      }
+      seenItems.add(String(next.id));
+      if (Array.isArray(next.setsDetail) && next.setsDetail.length) {
+        let setsChanged = false;
+        const setsDetail = next.setsDetail.map((sd, i) => {
+          if (!sd || typeof sd !== "object") return sd;
+          const lid = v1PlanItemSetLegacyId(String(next.id), sd, i);
+          if (seenItemSets.has(lid)) {
+            setsChanged = true;
+            const fresh = { ...sd, id: newUuid() };
+            seenItemSets.add(String(fresh.id));
+            return fresh;
+          }
+          seenItemSets.add(lid);
+          return sd;
+        });
+        if (setsChanged) next = { ...next, setsDetail };
+      } else {
+        getPlanItemSetsDetail(next).forEach((sd, i) => seenItemSets.add(v1PlanItemSetLegacyId(String(next.id), sd, i)));
+      }
+      if (next !== item) changedPlan = true;
+      return next;
+    });
+    if (!changedPlan) return plan;
+    plansChanged = true;
+    return { ...plan, exercises };
+  });
+  const dataset = { ...src, history: hist.changed ? hist.history : history0, plans: plansChanged ? plans : plans0 };
+  return { dataset, changed: hist.changed || plansChanged, historyChanged: hist.changed, plansChanged, stats: hist.stats };
+}
+
 // --- Per-collection migration functions. Each returns a map of old id -> new Supabase uuid. ---
 
 async function migrateExercisesV1(userId, exercisesList, deviceId) {
@@ -2208,7 +2768,7 @@ async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId) {
       const effectiveSets = getPlanItemSetsDetail(item);
       for (let i = 0; i < effectiveSets.length; i++) {
         const s = effectiveSets[i];
-        const setLegacyId = String(s.id != null ? s.id : `${itemLegacyId}-${i}`);
+        const setLegacyId = v1PlanItemSetLegacyId(itemLegacyId, s, i);
         await upsertByLegacyId(
           "nextrep_plan_item_sets",
           userId,
@@ -2250,9 +2810,9 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
   const workoutIdMap = {};
   // Hotfix I-1: an ex.id is a usable identity only if it is unique in this history (old data may repeat
   // one across sessions — normalizeWorkoutIdentity only reports that); a repeated one keeps the old
-  // "-posN" id, so one cloud row is never moved between workouts.
-  const wexIdCount = new Map();
-  for (const s of historyList) for (const ex of (s && Array.isArray(s.exercises) ? s.exercises : [])) if (ex && ex.id != null && ex.id !== "") wexIdCount.set(String(ex.id), (wexIdCount.get(String(ex.id)) || 0) + 1);
+  // "-posN" id, so one cloud row is never moved between workouts. Stage 4A.4: the derivation lives in
+  // v1WorkoutLegacyIds, shared with the integrity gate and the verification.
+  const legacyIds = v1WorkoutLegacyIds(historyList);
   for (const session of historyList) {
     if (!session || session.id == null) continue;
     const workoutLegacyId = String(session.id);
@@ -2281,8 +2841,7 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
       // the same legacy_id the sync engine pushes and matches on PULL. The old deterministic
       // "<workoutLegacyId>-posN" is only the fallback for an exercise without an id, and remains the
       // base of the legacy ids of id-less sets below (unchanged, so existing set rows keep theirs).
-      const wexPosLegacyId = `${workoutLegacyId}-pos${pos}`;
-      const wexLegacyId = wex.id != null && wex.id !== "" && wexIdCount.get(String(wex.id)) === 1 ? String(wex.id) : wexPosLegacyId;
+      const { legacyId: wexLegacyId, posLegacyId: wexPosLegacyId } = legacyIds.exercise(session, pos, wex);
       const mappedExerciseId = wex.exerciseId != null ? exerciseIdMap[String(wex.exerciseId)] || null : null;
       const wexRow = {
         workout_id: workoutId,
@@ -2299,7 +2858,7 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
       for (let si = 0; si < sets.length; si++) {
         const s = sets[si];
         if (!s) continue;
-        const setLegacyId = String(s.id != null ? s.id : `${wexPosLegacyId}-set${si}`);
+        const setLegacyId = legacyIds.set(wexPosLegacyId, s, si);
         await upsertByLegacyId(
           "nextrep_workout_sets",
           userId,
@@ -2454,11 +3013,13 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
     ["measurements", "nextrep_measurements", (x) => String(x.id), "measurements"],
   ];
 
+  const remoteRowsByKey = {};
   for (const [localKey, table, legacyIdOf, pullTable] of tableMap) {
     const localItems = localEligible[localKey] || [];
     const localLegacyIds = localItems.map(legacyIdOf);
 
     const remoteRows = await readAll(pullTable, table);
+    remoteRowsByKey[localKey] = remoteRows;
     const count = remoteRows.length;
 
     const remoteLegacyIds = new Set((remoteRows || []).map((r) => r.legacy_id));
@@ -2497,6 +3058,81 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
       missingFieldKeysSample: missing.slice(0, 10),
       allFound: missing.length === 0,
     };
+  }
+
+  // Stage 4A.4 Part 1 (I-2): the child tables. A child counts as found only when a remote row with its
+  // legacy id hangs under the remote row of its OWN parent (parent identity, not just existence): a set
+  // that exists but sits under another workout exercise — or a plan item set under another item — is
+  // missing. Legacy ids are derived exactly as V1 writes them (v1WorkoutLegacyIds / v1PlanItemSetLegacyId).
+  {
+    const byLegacy = (rows) => {
+      const m = new Map();
+      for (const r of rows || []) {
+        if (!r || r.legacy_id == null) continue;
+        const k = String(r.legacy_id);
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push(r);
+      }
+      return m;
+    };
+    // remote row ids of the parent with legacy id `parentLegacyId`
+    const parentIds = (m, parentLegacyId) => new Set((m.get(String(parentLegacyId)) || []).map((r) => r.id));
+    const rowUnder = (m, legacyId, parentCol, parentIdSet) => (m.get(String(legacyId)) || []).some((r) => parentIdSet.has(r[parentCol]));
+    const childResult = (table, expected) => {
+      const missing = expected.filter((e) => !e.found).map((e) => e.legacyId);
+      return {
+        table,
+        localEligibleCount: expected.length,
+        localRecordsFoundInRemote: expected.length - missing.length,
+        localRecordsMissingInRemote: missing.length,
+        missingLegacyIdsSample: missing.slice(0, 10),
+        allFound: missing.length === 0,
+      };
+    };
+    const workoutsM = byLegacy(remoteRowsByKey.history);
+    const wexM = byLegacy(await readAll("workout_exercises", "nextrep_workout_exercises"));
+    const setM = byLegacy(await readAll("workout_sets", "nextrep_workout_sets"));
+    const history = localEligible.history || [];
+    const ids = v1WorkoutLegacyIds(history);
+    const wexExpected = [];
+    const setExpected = [];
+    for (const session of history) {
+      const workoutRowIds = parentIds(workoutsM, String(session.id));
+      (Array.isArray(session.exercises) ? session.exercises : []).forEach((wex, pos) => {
+        if (!wex) return;
+        const { legacyId, posLegacyId } = ids.exercise(session, pos, wex);
+        wexExpected.push({ legacyId, found: rowUnder(wexM, legacyId, "workout_id", workoutRowIds) });
+        const wexRowIds = new Set((wexM.get(legacyId) || []).filter((r) => workoutRowIds.has(r.workout_id)).map((r) => r.id));
+        (Array.isArray(wex.sets) ? wex.sets : []).forEach((s, si) => {
+          if (!s) return;
+          const setLegacyId = ids.set(posLegacyId, s, si);
+          setExpected.push({ legacyId: setLegacyId, found: rowUnder(setM, setLegacyId, "workout_exercise_id", wexRowIds) });
+        });
+      });
+    }
+    results.workoutExercises = childResult("nextrep_workout_exercises", wexExpected);
+    results.workoutSets = childResult("nextrep_workout_sets", setExpected);
+
+    const plansM = byLegacy(remoteRowsByKey.plans);
+    const itemM = byLegacy(await readAll("plan_items", "nextrep_plan_items"));
+    const itemSetM = byLegacy(await readAll("plan_item_sets", "nextrep_plan_item_sets"));
+    const itemExpected = [];
+    const itemSetExpected = [];
+    for (const plan of localEligible.plans || []) {
+      const planRowIds = parentIds(plansM, String(plan.id));
+      for (const item of Array.isArray(plan.exercises) ? plan.exercises : []) {
+        if (!item || item.id == null) continue;
+        const itemLegacyId = String(item.id);
+        itemExpected.push({ legacyId: itemLegacyId, found: rowUnder(itemM, itemLegacyId, "plan_id", planRowIds) });
+        const itemRowIds = new Set((itemM.get(itemLegacyId) || []).filter((r) => planRowIds.has(r.plan_id)).map((r) => r.id));
+        getPlanItemSetsDetail(item).forEach((s, i) => {
+          const lid = v1PlanItemSetLegacyId(itemLegacyId, s, i);
+          itemSetExpected.push({ legacyId: lid, found: rowUnder(itemSetM, lid, "plan_item_id", itemRowIds) });
+        });
+      }
+    }
+    results.planItems = childResult("nextrep_plan_items", itemExpected);
+    results.planItemSets = childResult("nextrep_plan_item_sets", itemSetExpected);
   }
 
   // device_id / version integrity, across all 9 tables covered by migration V1. Missing
@@ -2567,6 +3203,14 @@ async function runMigrationV1(onProgress) {
   if (validationErrors.length) {
     setMigrationStatus("failed", { error: validationErrors.join(" ") }, statusUserId);
     return { success: false, error: `Dane lokalne są uszkodzone: ${validationErrors.join(" ")}` };
+  }
+  // Stage 4A.4 Part 1 (I-2): repeated identities would make upsertByLegacyId move one cloud row
+  // between parents. Refused here — after validation, before the device row and before ANY cloud write.
+  const integrityIssues = v1DatasetIntegrityIssues(local);
+  if (integrityIssues.length) {
+    const msg = v1IntegrityIssuesText(integrityIssues);
+    setMigrationStatus("failed", { error: msg, integrityIssues }, statusUserId);
+    return { success: false, error: msg, integrityIssues };
   }
 
   const deviceId = getOrCreateDeviceId();
@@ -5345,7 +5989,8 @@ function createBackupSnapshot(reason, options = {}) {
     // keep BACKUP_LIMIT per namespace (one account's backups never push out another's)
     const owner = (b) => backupOwnerNamespace(b);
     // the device snapshot taken before "Wczytaj z chmury" is never trimmed away by later backups
-    const trimmable = (b) => owner(b) === snapshot.namespace && b.kind !== BEFORE_CLOUD_RESTORE_KIND;
+    // Stage 4A.4: nor the guest snapshot taken before a guest → account migration (own retention)
+    const trimmable = (b) => owner(b) === snapshot.namespace && b.kind !== BEFORE_CLOUD_RESTORE_KIND && b.kind !== BEFORE_GUEST_MIGRATION_KIND;
     while (list.filter(trimmable).length > BACKUP_LIMIT) {
       list.splice(list.findIndex(trimmable), 1);
     }
@@ -5410,6 +6055,7 @@ const BACKUP_REASON_LABELS = {
   "before-import": "Przed importem",
   "before-restore": "Przed przywróceniem",
   "before-reset": "Przed resetem",
+  "before-guest-migration": "Przed przeniesieniem do konta", // Stage 4A.4
 };
 
 const SLOGANS = [
@@ -7644,7 +8290,7 @@ function ConflictCenterScreen({ onNavigate, exercises, isOnline }) {
 
 
 // Stage 4A.2 — full-screen account initialisation (shows NO app data while undecided).
-function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceSnapshotStatus, onAbandonCloud, onRetryUpload, onAbandonUpload }) {
+function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceSnapshotStatus, onAbandonCloud, onRetryUpload, onAbandonUpload, onGuestMigrate, onGuestLater, onGuestAbandon }) {
   // Stage 4A.3: "go back to the device data" is offered only when that restore can really happen.
   const deviceRestorePossible = deviceSnapshotStatus === "ok";
   const snapshotNote = deviceRestorePossible
@@ -7672,12 +8318,18 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
       {init.error}
     </p>
   ) : null;
-  if (init.status === "checking" || init.status === "loading_cloud" || init.status === "uploading") {
+  if (init.status === "checking" || init.status === "loading_cloud" || init.status === "uploading" || init.status === "guest_migrating") {
     return shell(
       <div className="text-center">
         <p className="font-display text-2xl text-neutral-50 tracking-wide">NEXTREP</p>
         <p className="text-neutral-400 text-sm mt-2" data-testid="init-progress">
-          {init.status === "checking" ? "Sprawdzanie danych konta…" : init.status === "loading_cloud" ? "Pobieranie danych z chmury…" : "Wysyłanie danych z urządzenia do chmury…"}
+          {init.status === "checking"
+            ? "Sprawdzanie danych konta…"
+            : init.status === "loading_cloud"
+            ? "Pobieranie danych z chmury…"
+            : init.status === "guest_migrating"
+            ? "Przenoszenie danych z trybu bez logowania na konto…"
+            : "Wysyłanie danych z urządzenia do chmury…"}
         </p>
         {email && <p className="text-neutral-600 text-xs mt-1 break-all">{email}</p>}
       </div>
@@ -7749,6 +8401,46 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
         <p className="text-neutral-400 text-sm mb-4">Dane na tym urządzeniu nie zostały zmienione. Synchronizacja pozostaje wyłączona.</p>
         {btn(interrupted ? "Ponów wysyłanie" : "Spróbuj ponownie", onRetryUpload, true, "init-retry-upload")}
         {btn("Wróć do wyboru źródła danych", onAbandonUpload, false, "init-abandon-upload")}
+        {errorLine}
+      </>
+    );
+  }
+  // Stage 4A.4: an empty account and guest data on this device — offer to move it (nothing happens without a tap).
+  if (init.status === "guest_offer") {
+    const g = init.guest || {};
+    const parts = [];
+    if (g.history) parts.push(`${g.history} ${plWord(g.history, "trening", "treningi", "treningów")}`);
+    if (g.plans) parts.push(`${g.plans} ${plWord(g.plans, "plan", "plany", "planów")}`);
+    if (g.measurements) parts.push(`${g.measurements} ${plWord(g.measurements, "pomiar", "pomiary", "pomiarów")}`);
+    if (g.customExercises) parts.push(`${g.customExercises} ${plWord(g.customExercises, "własne ćwiczenie", "własne ćwiczenia", "własnych ćwiczeń")}`);
+    if (g.customFields) parts.push(`${g.customFields} ${plWord(g.customFields, "własny parametr pomiarów", "własne parametry pomiarów", "własnych parametrów pomiarów")}`);
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">DANE Z TRYBU BEZ LOGOWANIA</p>
+        <p className="text-neutral-300 text-sm mb-2">To konto jest jeszcze puste. Na tym urządzeniu są dane zapisane w trybie bez logowania — możesz przenieść je na to konto.</p>
+        <p className="text-neutral-500 text-xs mb-2" data-testid="init-guest-summary">W trybie bez logowania: {parts.join(", ")}</p>
+        <p className="text-neutral-500 text-xs mb-3">Przed przeniesieniem zostanie zapisana kopia zapasowa tych danych.</p>
+        {init.guestDraft && <p className="text-neutral-400 text-xs mb-3" data-testid="init-guest-draft-note">Niedokończony trening nie zostanie przeniesiony — pozostanie w trybie bez logowania.</p>}
+        {btn("Przenieś dane na konto", onGuestMigrate, true, "init-guest-migrate")}
+        {btn("Nie teraz", onGuestLater, false, "init-guest-later")}
+        <p className="text-neutral-600 text-xs mt-2">„Nie teraz” — konto zacznie od pustych danych, a dane z trybu bez logowania zostaną na tym urządzeniu bez zmian.</p>
+        {errorLine}
+      </>
+    );
+  }
+  if (init.status === "guest_migration_error" || init.status === "guest_migration_interrupted") {
+    const interrupted = init.status === "guest_migration_interrupted";
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">{interrupted ? "PRZENOSZENIE DANYCH ZOSTAŁO PRZERWANE" : "NIE UDAŁO SIĘ PRZENIEŚĆ DANYCH"}</p>
+        <p className="text-neutral-300 text-sm mb-1">
+          {interrupted
+            ? "Przenoszenie danych z trybu bez logowania na to konto nie zostało dokończone — część danych mogła już trafić do chmury."
+            : "Przenoszenie danych z trybu bez logowania na to konto nie powiodło się."}
+        </p>
+        <p className="text-neutral-400 text-sm mb-4">Dane w trybie bez logowania nie zostały zmienione, a ich kopia zapasowa jest zachowana. Synchronizacja tego konta pozostaje wyłączona.</p>
+        {btn(interrupted ? "Dokończ przenoszenie" : "Spróbuj ponownie", onGuestMigrate, true, "init-guest-retry")}
+        {btn("Wróć bez przenoszenia", onGuestAbandon, false, "init-guest-abandon")}
         {errorLine}
       </>
     );
@@ -15283,7 +15975,8 @@ function App() {
   const nsSwitchChainRef = useRef(Promise.resolve());
   // Decide the data source of the account whose namespace just became active. Every result is
   // discarded if the account / namespace changed while it was awaited (A → B never writes into B).
-  const runAccountInitCheck = useCallback(async (userId, ns) => {
+  // `notice` (Stage 4A.4): a message from the flow that ended here, shown on the resulting screen.
+  const runAccountInitCheck = useCallback(async (userId, ns, notice = null) => {
     const same = () => (authUserRef.current && authUserRef.current.id) === userId && getActiveDataNamespace() === ns;
     if (!same()) return;
     const local = hasLocalAccountData(userId);
@@ -15298,6 +15991,14 @@ function App() {
     }
     if (!same()) return;
     if (!local.hasData && !cloud.hasData) {
+      // Stage 4A.4: a genuinely empty account + guest data on this device → offer to move it (nothing is
+      // written until the user agrees). Not offered while the guest data is bound to another account's migration.
+      const guest = guestHasMigratableData();
+      const gm = getGuestMigrationMarker();
+      if (guest.hasData && !(gm && gm.targetUserId !== userId)) {
+        setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, error: notice });
+        return;
+      }
       setAccountInitMarker(userId, { status: "ready", source: "new", syncPaused: false });
       setAccountInit({ ns, status: "ready", local, cloud });
       return;
@@ -15306,7 +16007,7 @@ function App() {
     const deviceSnapshotInfo = snap
       ? { createdAt: snap.createdAt, details: { history: (snap.data.history || []).length, plans: (snap.data.plans || []).length, measurements: (snap.data.measurements || []).length } }
       : null;
-    setAccountInit({ ns, status: "choice", local, cloud, deviceSnapshot: deviceSnapshotInfo });
+    setAccountInit({ ns, status: "choice", local, cloud, deviceSnapshot: deviceSnapshotInfo, error: notice });
   }, []);
   const loadedOnceRef = useRef(false);
   // Session not confirmed yet (SDK still trying to refresh an expired token, typically offline):
@@ -15402,6 +16103,8 @@ function App() {
               ? { ns: targetNs, status: "cloud_interrupted" } // Stage 4A.3: data on the device may be partial — never used as device data
               : marker && marker.status === "uploading_device"
               ? { ns: targetNs, status: "upload_interrupted" } // Stage 4A.3: own partial upload may be in the cloud
+              : marker && marker.status === "migrating_guest"
+              ? { ns: targetNs, status: "guest_migration_interrupted" } // Stage 4A.4: unfinished guest → account migration
               : { ns: targetNs, status: "checking" }
           );
         } else {
@@ -15885,6 +16588,64 @@ function App() {
     setAccountInitMarker(initUserId, { status: "ready", source: "cloud", syncPaused: false });
     await finishInit();
   };
+  // ---- Stage 4A.4: guest → empty account ----
+  const runGuestMigration = async () => {
+    if (!sameInit() || isGuestMigrationRunning()) return;
+    const op = beginInitOp();
+    const prev = accountInit;
+    setAccountInit({ ns: initNs, status: "guest_migrating", error: null });
+    let r;
+    try {
+      r = await migrateGuestToEmptyAccount(initUserId, refFor(op));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return; // superseded — the newer flow owns the screen
+    if (r.ok || r.alreadyReady) {
+      await finishInit();
+      return;
+    }
+    if (r.discarded) r = { ...r, error: ACCOUNT_CHECK_FAILED_TEXT };
+    const m = getAccountInitMarker(initUserId);
+    if (m && m.status === "migrating_guest") {
+      // the attempt exists (markers written): its own retry / abandon screen
+      setAccountInit({ ns: initNs, status: prev.status === "guest_migration_interrupted" ? "guest_migration_interrupted" : "guest_migration_error", error: r.error });
+      return;
+    }
+    if (r.blocked === "not_empty" || r.blocked === "cloud_changed" || r.blocked === "nothing" || r.blocked === "guest_other_account") {
+      runAccountInitCheck(initUserId, initNs, r.error); // the offer no longer applies — decide again
+      return;
+    }
+    setAccountInit({ ...prev, error: r.error }); // nothing was written — back to the offer, with the reason
+  };
+  // "Nie teraz": the account starts as a new, empty account; the guest data stays where it is. Nothing is
+  // backed up, marked or sent.
+  const guestMigrationLater = async () => {
+    if (!sameInit() || isGuestMigrationRunning()) return;
+    setAccountInitMarker(initUserId, { status: "ready", source: "new", syncPaused: false });
+    await finishInit();
+  };
+  const abandonGuest = async () => {
+    if (!sameInit()) return;
+    const op = beginInitOp();
+    const prev = accountInit;
+    let r;
+    try {
+      r = await abandonGuestMigration(initUserId, refFor(op));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return;
+    if (!r.ok) {
+      setAccountInit({ ...prev, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
+      return;
+    }
+    await reloadLocalData();
+    if (!sameInit()) return;
+    setSyncQueueState(loadSyncQueue());
+    setAccountInit({ ns: initNs, status: "checking" });
+    runAccountInitCheck(initUserId, initNs);
+  };
   const workOffline = async () => {
     // usable now, but NOT initialised: no marker → sync stays off and the next start checks again
     if (!sameInit()) return;
@@ -15903,6 +16664,9 @@ function App() {
         onAbandonCloud={abandonInterruptedCloud}
         onRetryUpload={runDeviceUpload}
         onAbandonUpload={abandonDeviceUpload}
+        onGuestMigrate={runGuestMigration}
+        onGuestLater={guestMigrationLater}
+        onGuestAbandon={abandonGuest}
         onRetry={() => runAccountInitCheck(initUserId, initNs)}
         onWorkOffline={workOffline}
         onBack={() => setAccountInit({ ...accountInit, status: "choice", error: null })}
