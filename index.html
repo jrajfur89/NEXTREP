@@ -1117,9 +1117,19 @@ function hasLocalAccountData(userId) {
 // Stage 4A.3 option ignoreDeviceId: rows written by THAT device (an interrupted upload of this
 // device's own data) don't count; rows of any other device — or without a device — do. With it,
 // a profile name equal to localUserName doesn't count either (the upload wrote it).
-// Stage 4A.4 option anyExercise: ANY exercise row counts (also a default-atlas exercise: an edit of a
-// built-in exercise synced from another device is account data that a guest migration would overwrite).
-async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "", anyExercise = false } = {}) {
+// Stage 4A.4 option editedBuiltIns: a built-in (default-atlas) exercise row whose content differs from
+// the atlas counts too — an edit synced from another device is account data a guest migration would
+// overwrite. Unedited built-in rows (e.g. left by an interrupted upload) still don't count.
+const exerciseRowMatchesDefault = (row, def) => {
+  const d = normalizeExercise(def);
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  return (
+    same(row.name || "", d.name || "") && same(row.category || [], d.category) && same(row.equipment || [], d.equipment) &&
+    !!row.is_time_based === !!d.isTimeBased && !!row.is_sets_only === !!d.isSetsOnly && !!row.is_cardio === !!d.isCardio &&
+    (row.device_type || "") === (d.deviceType || "") && (row.video_url || "") === (d.videoUrl || "") && (row.notes || "") === (d.notes || "")
+  );
+};
+async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "", editedBuiltIns = false } = {}) {
   if (!supabase) throw new Error("Supabase nie jest skonfigurowane.");
   // Without ignoreDeviceId: one query. With it: rows of other devices + rows without a device.
   const variants = (build) => (ignoreDeviceId ? [build().neq("device_id", ignoreDeviceId), build().is("device_id", null)] : [build()]);
@@ -1137,10 +1147,14 @@ async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserN
   const customFields = await one("nextrep_custom_fields");
   const defaults = new Set(DEFAULT_EXERCISES.map((e) => String(e.id)));
   let customExercises = false;
-  for (const q of variants(() => supabase.from("nextrep_exercises").select("legacy_id").eq("user_id", userId).is("deleted_at", null))) {
+  const defaultsById = new Map(DEFAULT_EXERCISES.map((e) => [String(e.id), e]));
+  const exCols = editedBuiltIns ? "legacy_id, name, category, equipment, is_time_based, is_sets_only, is_cardio, device_type, video_url, notes" : "legacy_id";
+  for (const q of variants(() => supabase.from("nextrep_exercises").select(exCols).eq("user_id", userId).is("deleted_at", null))) {
     const { data: exRows, error: exErr } = await q;
     if (exErr) throw new Error(exErr.message || "błąd odczytu nextrep_exercises");
-    if ((exRows || []).some((r) => r && (anyExercise || (r.legacy_id != null && !defaults.has(String(r.legacy_id)))))) customExercises = true;
+    const counts = (r) =>
+      r && r.legacy_id != null && (!defaults.has(String(r.legacy_id)) || (editedBuiltIns && !exerciseRowMatchesDefault(r, defaultsById.get(String(r.legacy_id)))));
+    if ((exRows || []).some(counts)) customExercises = true;
   }
   const { data: prof, error: profErr } = await supabase.from("nextrep_profiles").select("display_name").eq("user_id", userId).limit(1);
   if (profErr) throw new Error(profErr.message || "błąd odczytu nextrep_profiles");
@@ -1813,9 +1827,9 @@ function accountLocalBlocksGuestMigration(userId) {
   }
   return false;
 }
-// The cloud side of the same rule (fresh attempt: any row at all; resume: rows of other devices).
+// The cloud side of the same rule (also edited built-in exercise rows; resume: only other devices' rows).
 function guestMigrationCloudOptions(resuming, deviceId, userId) {
-  return resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId), anyExercise: true } : { anyExercise: true };
+  return resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId), editedBuiltIns: true } : { editedBuiltIns: true };
 }
 
 let _guestMigrationRunning = false; // one guest migration at a time in this tab (double tap, two starts)
@@ -2855,7 +2869,7 @@ async function adoptV1PosWorkoutExercise(userId, canonicalLegacyId, posLegacyId,
   if (updErr) throw new Error(`${table}: aktualizacja rekordu nie powiodła się — ${updErr.message}`);
 }
 
-async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, deviceId) {
+async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, deviceId, beforeEachWorkout = null) {
   const workoutIdMap = {};
   // Hotfix I-1: an ex.id is a usable identity only if it is unique in this history (old data may repeat
   // one across sessions — normalizeWorkoutIdentity only reports that); a repeated one keeps the old
@@ -2864,6 +2878,7 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
   const legacyIds = v1WorkoutLegacyIds(historyList);
   for (const session of historyList) {
     if (!session || session.id == null) continue;
+    if (beforeEachWorkout) await beforeEachWorkout(); // Stage 4A.4: session re-check per workout (V1 upload)
     const workoutLegacyId = String(session.id);
     const mappedPlanId = session.planId != null ? planIdMap[String(session.planId)] || null : null;
     const workoutRow = {
@@ -3286,7 +3301,9 @@ async function runMigrationV1(onProgress) {
     // Stage 4A.4: the session is re-checked before every phase — after a logout / account switch no
     // further phase starts (RLS would reject the rows anyway; the app does not even send them).
     const assertSameSession = async () => {
-      if ((await currentSessionUserId()) !== user.id) throw new Error("Zmiana konta w trakcie wysyłania danych — wysyłanie zostało przerwane.");
+      const now = await currentSessionUserId();
+      if (now === user.id) return;
+      throw new Error(now ? "Zmiana konta w trakcie wysyłania danych — wysyłanie zostało przerwane." : "Nie udało się potwierdzić sesji logowania — wysyłanie zostało przerwane. Spróbuj ponownie.");
     };
     await assertSameSession();
     onProgress?.("exercises");
@@ -3298,12 +3315,14 @@ async function runMigrationV1(onProgress) {
 
     await assertSameSession();
     onProgress?.("history");
-    await migrateWorkoutsV1(user.id, local.history, exerciseIdMap, planIdMap, deviceId);
+    await migrateWorkoutsV1(user.id, local.history, exerciseIdMap, planIdMap, deviceId, assertSameSession);
 
     await assertSameSession();
     onProgress?.("measurements");
     await migrateMeasurementsV1(user.id, local.measurements, deviceId);
+    await assertSameSession();
     await migrateCustomFieldsV1(user.id, local.customFields, deviceId);
+    await assertSameSession();
     await migrateProfileV1(user.id, local.userName);
 
     // Order per agreed design: migrate -> repair any leftover NULL device_id (e.g. from records
@@ -3311,6 +3330,7 @@ async function runMigrationV1(onProgress) {
     // repair step throws, lands in the catch block below, and correctly prevents `completed`.
     onProgress?.("checking");
     if (deviceId) {
+      await assertSameSession();
       await repairMissingDeviceIdsV1(user.id, deviceId);
     }
 

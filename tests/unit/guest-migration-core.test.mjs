@@ -429,9 +429,19 @@ describe("'genuinely empty' also covers edits of built-in exercises, unsent chan
     localStorage.setItem(key(UA, "sync_conflicts"), JSON.stringify([{ id: "c1", status: "pending" }]));
     assert.equal((await migrate()).blocked, "not_empty");
   });
-  test("cloud holds a built-in exercise row from another device (an edit synced there) → cloud_changed, row untouched", async () => {
+  const builtInRow = (e, extra = {}) => {
+    const n = A.normalizeExercise(e);
+    return { id: `row-${n.id}`, user_id: UA, legacy_id: String(n.id), name: n.name, category: n.category, equipment: n.equipment, is_time_based: n.isTimeBased, is_sets_only: n.isSetsOnly, is_cardio: n.isCardio, device_type: n.deviceType, video_url: n.videoUrl, notes: n.notes, device_id: "other", version: 1, deleted_at: null, ...extra };
+  };
+  test("cloud holds UNEDITED built-in exercise rows only (e.g. left by an interrupted upload) → still empty, migration runs", async () => {
     seedGuest();
-    S.tables.nextrep_exercises = [{ id: "r1", user_id: UA, legacy_id: String(A.DEFAULT_EXERCISES[0].id), notes: "edycja z telefonu", device_id: "other", deleted_at: null }];
+    S.tables.nextrep_exercises = A.DEFAULT_EXERCISES.slice(0, 3).map((e) => builtInRow(e));
+    const r = await migrate();
+    assert.equal(r.ok, true, r.error);
+  });
+  test("cloud holds an EDITED built-in exercise row from another device → cloud_changed, row untouched", async () => {
+    seedGuest();
+    S.tables.nextrep_exercises = [builtInRow(A.DEFAULT_EXERCISES[0], { notes: "edycja z telefonu" })];
     const before = clone(S.tables.nextrep_exercises);
     S.calls = [];
     const r = await migrate();
@@ -501,6 +511,24 @@ describe("account switch, multi-start", () => {
     assert.notEqual(marker().status, "ready");
     const after = S.calls.filter((c) => c.kind === "table" && ["insert", "update"].includes(c.op) && ["nextrep_plans", "nextrep_workouts", "nextrep_workout_exercises", "nextrep_workout_sets", "nextrep_measurements", "nextrep_custom_fields", "nextrep_profiles"].includes(c.table));
     assert.equal(after.length, 0, "plans / workouts / measurements / profile never sent after the switch");
+  });
+  test("session switches DURING the workouts phase → the next workout and every later phase are not sent", async () => {
+    seedGuest();
+    let switchedAt = null;
+    S.queryHook = (q) => {
+      if (switchedAt == null && q.table === "nextrep_workout_sets" && q.op === "insert") {
+        S.session = { user: { id: UB } };
+        switchedAt = S.calls.length;
+      }
+      return null;
+    };
+    const r = await migrate();
+    assert.equal(r.ok, false);
+    const later = S.calls.slice(switchedAt).filter((c) => c.kind === "table" && ["insert", "update"].includes(c.op));
+    assert.ok(!later.some((c) => c.table === "nextrep_workouts"), "the second workout is not started");
+    assert.ok(!later.some((c) => ["nextrep_measurements", "nextrep_custom_fields", "nextrep_profiles"].includes(c.table)), "no later phase");
+    assert.ok(!later.some((c) => c.op === "update" && c.args && c.args[0] && "device_id" in c.args[0]), "no device_id repair");
+    assert.ok(later.length <= 2, `only the rest of the workout in flight (${later.length} writes)`);
   });
 
   test("A → B right before the first upload → stops (discarded): nothing uploaded, nothing in B, A stays resumable", async () => {

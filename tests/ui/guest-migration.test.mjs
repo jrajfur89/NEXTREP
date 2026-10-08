@@ -196,6 +196,24 @@ describe("interrupted attempt after a restart", () => {
   });
 });
 
+describe("abandon after a partial upload of built-in exercises only", () => {
+  test("'Wróć bez przenoszenia' → the offer comes back (never an automatic ready/new)", async () => {
+    const { S } = await bootApp({ session: sessA, storage: guestStorage() });
+    await settle();
+    let n = 0;
+    S.queryHook = (q) => (q.table === "nextrep_exercises" && q.op === "insert" && ++n === 3 ? { message: "Failed to fetch" } : null);
+    await press("init-guest-migrate");
+    S.queryHook = null;
+    assert.equal((S.tables.nextrep_exercises || []).length, 2, "2 built-in rows reached the cloud");
+    await press("init-guest-abandon");
+    assert.ok(byTestId("init-guest-migrate"), "offer again");
+    assert.equal(read(key(UA, "account_init")), null, "no source decided for the user");
+    await press("init-guest-migrate");
+    assert.ok(appShown(), "a new attempt completes");
+    assert.equal(read(key(UA, "account_init")).source, "guest");
+  });
+});
+
 describe("active guest workout: never migrated mid-session", () => {
   const workoutOpen = () => !$$("[data-testid]").some((e) => /^dashboard-/.test(e.dataset.testid)) && $$("input").length > 0;
   const buttonText = (t) => $$("button").filter((b) => b.textContent.trim() === t);
