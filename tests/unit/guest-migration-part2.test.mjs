@@ -550,3 +550,47 @@ describe("phase audit — deterministic behaviour of every persistent state", ()
     assert.equal(rows("nextrep_workout_sets").length, 4);
   });
 });
+
+// ---- review P1 (F-3 follow-up): soft-deleted cloud rows colliding with the data to upload ---------------
+describe("soft-deleted cloud row with the same identity → refused BEFORE the first cloud write", () => {
+  test("4A.3 device → 'empty' cloud whose only row is a deleted built-in exercise → refused, zero writes, no marker, local unchanged", async () => {
+    localStorage.setItem(key(UA, "history"), JSON.stringify([GUEST.history[0]]));
+    localStorage.setItem(key(UA, "exercises"), JSON.stringify(A.DEFAULT_EXERCISES.map(A.normalizeExercise)));
+    S.tables.nextrep_exercises = [{ id: "d1", user_id: UA, legacy_id: "bench_press", name: "x", device_id: "phone", version: 3, deleted_at: "2026-10-01T00:00:00.000Z" }];
+    const raw = localStorage.getItem(key(UA, "history"));
+    S.calls = [];
+    const r = await quiet(() => A.uploadAccountDataToEmptyCloud(UA, ref));
+    assert.equal(r.ok, false);
+    assert.ok(r.deletedCollisions.some((c) => c.table === "exercises"));
+    assert.match(r.error, /usunięte rekordy/);
+    assert.equal(cloudWrites(S).length, 0);
+    assert.equal(marker(), null);
+    assert.equal(localStorage.getItem(key(UA, "history")), raw);
+  });
+  test("guest custom field with the key of a field DELETED in the account → refused before backup / markers / writes", async () => {
+    seedGuest();
+    S.tables.nextrep_custom_fields = [{ id: "cf", user_id: UA, field_key: "biceps", label: "Biceps", device_id: "phone", version: 2, deleted_at: "2026-10-01T00:00:00.000Z" }];
+    const guestBefore = guestDump();
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.blocked, "deleted_collision");
+    assert.ok(r.deletedCollisions.some((c) => c.table === "custom_fields"));
+    assert.equal(cloudWrites(S).length, 0);
+    assert.equal(marker(), null);
+    assert.equal(localStorage.getItem(GM_KEY), null);
+    assert.equal(gmBackups().length, 0);
+    assert.deepEqual(guestDump(), guestBefore);
+  });
+  test("resume of an upload whose copy now collides with a deleted row → refused before V1, attempt kept", async () => {
+    seedGuest();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    S.tables.nextrep_measurements = [{ id: "mx", user_id: UA, legacy_id: "gm1", device_id: "phone", version: 4, deleted_at: "2026-10-02T00:00:00.000Z" }, ...rows("nextrep_measurements")];
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.ok, false);
+    assert.ok(r.deletedCollisions);
+    assert.equal(cloudWrites(S).length, 0);
+    assert.equal(marker().status, "migrating_guest");
+  });
+});

@@ -1546,6 +1546,18 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
     // Stage 4A.4 Part 1 (I-2 / F-1): the account data is uploaded as a prepared copy with unique
     // identities (backup first, then written back to this account's namespace). Resuming an upload that
     // an older version started is refused when preparation would change identities — see the helper.
+    // Stage 4A.4 Part 2 (F-3): soft-deleted cloud rows with the same identities → stop before any write
+    const toUpload = readMigratableDataset(userId);
+    if (!toUpload.malformed.length && !toUpload.shapeErrors.length) {
+      let collisions;
+      try {
+        collisions = await v1DeletedRowCollisions(userId, prepareV1UploadDataset(toUpload).dataset);
+      } catch (e) {
+        return { ok: false, error: authErrorText(e) };
+      }
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+      if (collisions.length) return { ok: false, deletedCollisions: collisions, error: DELETED_COLLISION_TEXT };
+    }
     const prep = prepareAccountDatasetForUpload(userId, { resuming });
     if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
     if (!resuming) setAccountInitMarker(userId, { status: "uploading_device", source: "device", syncPaused: true, userId, namespace: ns, deviceId, startedAt: new Date().toISOString() });
@@ -2071,6 +2083,15 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         const prepared = { ...prepareV1UploadDataset(guest), present: guest.present };
         const integrityIssues = v1DatasetIntegrityIssues(prepared.dataset);
         if (integrityIssues.length) return { ok: false, blocked: "integrity", integrityIssues, error: v1IntegrityIssuesText(integrityIssues) };
+        // F-3 (review P1): soft-deleted cloud rows with the same identities → stop before the backup / any write
+        let collisions;
+        try {
+          collisions = await v1DeletedRowCollisions(userId, prepared.dataset);
+        } catch (e) {
+          return { ok: false, error: authErrorText(e) };
+        }
+        if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+        if (collisions.length) return { ok: false, blocked: "deleted_collision", deletedCollisions: collisions, error: DELETED_COLLISION_TEXT };
         if (!resuming) {
           const backup = createGuestMigrationBackup({ targetUserId: userId, fingerprint, attemptId });
           if (!backup) return { ok: false, blocked: "backup_failed", error: GUEST_MIGRATION_TEXTS.backupFailed };
@@ -2096,6 +2117,14 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         // still change, rows already sent could be orphaned (F-1) → refuse.
         const prep = prepareAccountDatasetForUpload(userId, { resuming: true });
         if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
+        let collisions;
+        try {
+          collisions = await v1DeletedRowCollisions(userId, readMigratableDataset(userId));
+        } catch (e) {
+          return { ok: false, error: authErrorText(e) };
+        }
+        if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+        if (collisions.length) return { ok: false, deletedCollisions: collisions, error: DELETED_COLLISION_TEXT };
       }
       // Re-check the cloud right before the first cloud write: only this attempt's own device rows may be there.
       let recheck;
@@ -2115,13 +2144,18 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
       setAccountInitMarker(userId, { status: "ready", source: "guest", syncPaused: false });
       // Stage 4A.4 Part 2: the completed marker — this guest data (fingerprint) is now in this account.
       // It keeps the guest data bound to it (F-4) and protects the backup; no user data in it.
-      const gmNow = getGuestMigrationMarker();
-      if (gmNow && gmNow.attemptId === attemptId && gmNow.targetUserId === userId) {
-        setGuestMigrationMarker({ status: "completed", targetUserId: userId, fingerprint, backupId, attemptId, startedAt: gmNow.startedAt || null, completedAt: new Date().toISOString(), cleanup: "pending" });
+      let cleanupStatus = "failed";
+      try {
+        const gmNow = getGuestMigrationMarker();
+        if (gmNow && gmNow.attemptId === attemptId && gmNow.targetUserId === userId) {
+          setGuestMigrationMarker({ status: "completed", targetUserId: userId, fingerprint, backupId, attemptId, startedAt: gmNow.startedAt || null, completedAt: new Date().toISOString(), cleanup: "pending" });
+        }
+        // D1: cleanup of the moved guest data — never a condition of the account's success
+        cleanupStatus = (await cleanupMigratedGuestData(userId, currentRefUserId)).status;
+      } catch (e) {
+        console.error("guest cleanup after migration failed", e); // the account is ready; cleanup is retried later
       }
-      // D1: cleanup of the moved guest data — never a condition of the account's success
-      const cleanup = await cleanupMigratedGuestData(userId, currentRefUserId);
-      return { ok: true, cleanup: cleanup.status, draftKept: readNamespaceEntry("active_workout_draft", null).state !== "missing" };
+      return { ok: true, cleanup: cleanupStatus, draftKept: readNamespaceEntry("active_workout_draft", null).state !== "missing" };
     } finally {
       _accountInitBusy = false;
     }
@@ -2933,6 +2967,52 @@ function v1DatasetIntegrityIssues(ds) {
   [workouts, wexs, sets, planT, items, itemSets, meas].forEach((t) => t.report());
   return issues;
 }
+// Stage 4A.4 Part 2 (F-3, review P1): a SOFT-DELETED cloud row with the same identity as a record about to be
+// uploaded. upsertByLegacyId would update that row without reviving it (deleted_at stays), the verification
+// (live rows only) can then never pass and every retry fails after rows were written. So this is checked
+// BEFORE the first cloud write; any collision stops the upload (tombstone vs live semantics = Stage 4A.5).
+// Returns [{ table, count, sample }]; read errors throw (never "no collision" by guess).
+async function v1DeletedRowCollisions(userId, ds) {
+  const keys = {
+    exercises: new Set(), plans: new Set(), plan_items: new Set(), plan_item_sets: new Set(), workouts: new Set(),
+    workout_exercises: new Set(), workout_sets: new Set(), measurements: new Set(), custom_fields: new Set(),
+  };
+  for (const e of Array.isArray(ds.exercises) ? ds.exercises : []) if (e && e.id != null) keys.exercises.add(String(e.id));
+  for (const plan of Array.isArray(ds.plans) ? ds.plans : []) {
+    if (!plan || plan.id == null) continue;
+    keys.plans.add(String(plan.id));
+    for (const item of Array.isArray(plan.exercises) ? plan.exercises : []) {
+      if (!item || item.id == null) continue;
+      keys.plan_items.add(String(item.id));
+      getPlanItemSetsDetail(item).forEach((sd, i) => keys.plan_item_sets.add(v1PlanItemSetLegacyId(String(item.id), sd, i)));
+    }
+  }
+  const history = Array.isArray(ds.history) ? ds.history : [];
+  const ids = v1WorkoutLegacyIds(history);
+  for (const session of history) {
+    if (!session || session.id == null) continue;
+    keys.workouts.add(String(session.id));
+    (Array.isArray(session.exercises) ? session.exercises : []).forEach((wex, pos) => {
+      if (!wex) return;
+      const { legacyId, posLegacyId } = ids.exercise(session, pos, wex);
+      keys.workout_exercises.add(legacyId);
+      (Array.isArray(wex.sets) ? wex.sets : []).forEach((st, si) => st && keys.workout_sets.add(ids.set(posLegacyId, st, si)));
+    });
+  }
+  for (const m of Array.isArray(ds.measurements) ? ds.measurements : []) if (m && m.id != null) keys.measurements.add(String(m.id));
+  for (const f of Array.isArray(ds.customFields) ? ds.customFields : []) if (f && f.key) keys.custom_fields.add(String(f.key));
+  const out = [];
+  for (const [table, set] of Object.entries(keys)) {
+    if (!set.size) continue;
+    const remote = await fetchRemoteTable(table, userId);
+    const keyOf = (r) => String(table === "custom_fields" ? r.field_key : r.legacy_id);
+    const hits = remote.filter((r) => r && !isLiveRemoteRow(r) && set.has(keyOf(r))).map(keyOf);
+    if (hits.length) out.push({ table, count: hits.length, sample: hits.slice(0, 5) });
+  }
+  return out;
+}
+const DELETED_COLLISION_TEXT =
+  "W chmurze tego konta są wcześniej usunięte rekordy o tych samych identyfikatorach co dane do wysłania (np. usunięte ćwiczenie lub parametr pomiaru). Takich danych nie można bezpiecznie wysłać bez łączenia — to osobny, kolejny etap. Nic nie zostało wysłane ani zmienione.";
 function v1IntegrityIssuesText(issues) {
   const what = issues.map((i) => `${i.table} (${i.count})`).join(", ");
   return `Dane mają powtórzone identyfikatory (${what}), więc nie można ich bezpiecznie wysłać. Nic nie zostało wysłane do chmury.`;
@@ -8814,7 +8894,7 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
           Ta niekompletna kopia nie zostanie użyta jako zwykłe dane konta. Dane w trybie bez logowania nie zostały zmienione, a ich kopia zapasowa jest zachowana.
         </p>
         {btn("Dokończ przenoszenie", onGuestMigrate, true, "init-guest-retry")}
-        {init.partialUnknown && btn("Sprawdź ponownie", onGuestAbandon, false, "init-guest-abandon")}
+        {init.partialUnknown && btn("Spróbuj ponownie wrócić bez przenoszenia", onGuestAbandon, false, "init-guest-abandon")}
         {btn("Zacznij konto bez tych danych", onGuestStartWithout, false, "init-guest-start-without")}
         <p className="text-neutral-600 text-xs mt-2">„Zacznij konto bez tych danych” — konto zacznie od pustych danych, a synchronizacja pozostanie wstrzymana, żeby niekompletna kopia z chmury nie trafiła na urządzenie.</p>
         {errorLine}
