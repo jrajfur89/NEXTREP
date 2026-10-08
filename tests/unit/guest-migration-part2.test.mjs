@@ -291,3 +291,76 @@ describe("F-4 — guest marker bound to another account: never released by age, 
     assert.equal(A.releaseGuestMigrationBinding(UA).ok, false, "own marker is not 'another account'");
   });
 });
+
+// ---- F-3 ------------------------------------------------------------------------------------------
+describe("F-3 — a soft-deleted cloud row never verifies a live local record", () => {
+  const PLAN = [{ id: "p1", name: "P", exercises: [{ id: "i1", exerciseId: "bench_press", setsDetail: [{ id: "x1" }, { id: "x2" }] }] }];
+  const H = [{ id: "w1", date: "2026-10-01T10:00:00.000Z", exercises: [{ id: "e1", exerciseId: "bench_press", type: "weight", sets: [st("a1", 1, 1), st("a2", 1, 1)] }] }];
+  async function uploaded() {
+    localStorage.setItem(key(UA, "history"), JSON.stringify(H));
+    localStorage.setItem(key(UA, "plans"), JSON.stringify(PLAN));
+    localStorage.setItem(key(UA, "measurements"), JSON.stringify([{ id: "m1", date: "2026-10-01", weight: 80 }]));
+    localStorage.setItem(key(UA, "custom_fields"), JSON.stringify([{ key: "biceps", label: "Biceps", unit: "cm" }]));
+    localStorage.setItem(key(UA, "exercises"), JSON.stringify([...A.DEFAULT_EXERCISES.map(A.normalizeExercise), { id: "c1", name: "Moje" }]));
+    const r = await quiet(() => A.runMigrationV1());
+    assert.equal(r.success, true, r.error);
+    return {
+      history: H,
+      plans: PLAN,
+      measurements: [{ id: "m1" }],
+      customFields: [{ key: "biceps" }],
+      exercises: [...A.DEFAULT_EXERCISES, { id: "c1" }],
+    };
+  }
+  const del = (table, match) => {
+    const row = rows(table).find(match);
+    assert.ok(row, `row in ${table}`);
+    row.deleted_at = "2026-10-05T10:00:00.000Z";
+  };
+  const cases = [
+    ["workout", "nextrep_workouts", (r) => r.legacy_id === "w1", "history"],
+    ["workout exercise", "nextrep_workout_exercises", (r) => r.legacy_id === "e1", "workoutExercises"],
+    ["set", "nextrep_workout_sets", (r) => r.legacy_id === "a2", "workoutSets"],
+    ["plan", "nextrep_plans", (r) => r.legacy_id === "p1", "plans"],
+    ["plan item", "nextrep_plan_items", (r) => r.legacy_id === "i1", "planItems"],
+    ["plan item set", "nextrep_plan_item_sets", (r) => r.legacy_id === "x2", "planItemSets"],
+    ["measurement", "nextrep_measurements", (r) => r.legacy_id === "m1", "measurements"],
+    ["custom field", "nextrep_custom_fields", (r) => r.field_key === "biceps", "customFields"],
+    ["custom exercise", "nextrep_exercises", (r) => r.legacy_id === "c1", "exercises"],
+  ];
+  for (const [name, table, match, resultKey] of cases) {
+    test(`live local ${name} + deleted cloud row → not found; a V1 re-run (which does not revive it) is not 'completed'`, async () => {
+      const eligible = await uploaded();
+      del(table, match);
+      const v = await quiet(() => A.verifyMigrationV1(UA, eligible, A.getOrCreateDeviceId()));
+      assert.equal(v.results[resultKey].allFound, false, resultKey);
+      const r = await quiet(() => A.runMigrationV1());
+      assert.equal(r.success, false);
+      assert.notEqual(A.getMigrationStatus().status, "completed");
+    });
+  }
+  test("a deleted PARENT makes its live children unverifiable too (set under a deleted workout exercise)", async () => {
+    const eligible = await uploaded();
+    del("nextrep_workout_exercises", (r) => r.legacy_id === "e1");
+    const v = await quiet(() => A.verifyMigrationV1(UA, eligible, A.getOrCreateDeviceId()));
+    assert.equal(v.results.workoutSets.allFound, false);
+  });
+  test("pagination: with a server cap of 2 rows per response a deleted set on a later page is still detected", async () => {
+    const many = [{ id: "w1", date: "2026-10-01T10:00:00.000Z", exercises: [{ id: "e1", exerciseId: "bench_press", type: "weight", sets: Array.from({ length: 7 }, (_, i) => st(`m${i}`, 1, 1)) }] }];
+    localStorage.setItem(key(UA, "history"), JSON.stringify(many));
+    assert.equal((await quiet(() => A.runMigrationV1())).success, true);
+    S.maxRows = 2;
+    del("nextrep_workout_sets", (r) => r.legacy_id === "m6");
+    const v = await quiet(() => A.verifyMigrationV1(UA, { history: many, plans: [], measurements: [], customFields: [], exercises: [] }, A.getOrCreateDeviceId()));
+    assert.deepEqual(v.results.workoutSets.missingLegacyIdsSample, ["m6"]);
+  });
+  test("guest flow: a built-in exercise DELETED in the account's cloud makes it non-empty (no stuck migration)", async () => {
+    seedGuest();
+    const n = A.normalizeExercise(A.DEFAULT_EXERCISES[0]);
+    S.tables.nextrep_exercises = [{ id: "r", user_id: UA, legacy_id: String(n.id), name: n.name, category: n.category, equipment: n.equipment, device_id: "other", version: 2, deleted_at: "2026-10-01T00:00:00.000Z" }];
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.blocked, "cloud_changed");
+    assert.equal(cloudWrites(S).length, 0);
+  });
+});

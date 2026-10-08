@@ -19,7 +19,7 @@
 // eq, neq, is, match, not, limit, order, in, gte, lte, gt, lt, range, single, maybeSingle.
 // Filters eq/neq/is/match/in/gte/lte/gt/lt are applied; order (one column) and range (offset
 // window) are applied to reads; select(cols, { count: "exact" }) returns the total before range.
-// `not` is recorded only.
+// `not(col, "is", null)` is applied; other `not` forms are recorded only.
 
 function state() {
   if (!globalThis.__nrSupabase) {
@@ -103,7 +103,11 @@ class Query {
   gt(c, v) { this.filters.push((r) => r[c] > v); return this._log("gt", [c, v]); }
   lt(c, v) { this.filters.push((r) => r[c] < v); return this._log("lt", [c, v]); }
   match(obj) { this.filters.push((r) => Object.entries(obj || {}).every(([k, v]) => r[k] === v)); return this._log("match", [obj]); }
-  not(...a) { return this._log("not", a); }
+  // Stage 4A.4 Part 2: `not(col, "is", null)` (the only form index.html uses) is applied; other forms recorded only.
+  not(c, op, v) {
+    if (op === "is" && v === null) this.filters.push((r) => r[c] != null);
+    return this._log("not", [c, op, v]);
+  }
   order(col, opts) { this.orderBy = { col, asc: !(opts && opts.ascending === false) }; return this._log("order", [col, opts]); }
   range(from, to) { this.rangeWin = [from, to]; return this._log("range", [from, to]); }
   limit(n) { this.limitN = n; return this._log("limit", [n]); }

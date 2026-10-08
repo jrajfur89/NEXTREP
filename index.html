@@ -1159,6 +1159,15 @@ async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserN
       r && r.legacy_id != null && (!defaults.has(String(r.legacy_id)) || (editedBuiltIns && !exerciseRowMatchesDefault(r, defaultsById.get(String(r.legacy_id)))));
     if ((exRows || []).some(counts)) customExercises = true;
   }
+  if (editedBuiltIns && !customExercises) {
+    // Stage 4A.4 Part 2 (F-3): an exercise DELETED in this account (soft-deleted row) is account data too —
+    // an upload would update that row without reviving it, and the verification would never pass.
+    for (const q of variants(() => supabase.from("nextrep_exercises").select("legacy_id").eq("user_id", userId).not("deleted_at", "is", null))) {
+      const { data: delRows, error: delErr } = await q.limit(1);
+      if (delErr) throw new Error(delErr.message || "błąd odczytu nextrep_exercises");
+      if (Array.isArray(delRows) && delRows.length > 0) customExercises = true;
+    }
+  }
   let displayName = false;
   if (!onlyDeviceId) {
     const { data: prof, error: profErr } = await supabase.from("nextrep_profiles").select("display_name").eq("user_id", userId).limit(1);
@@ -3196,6 +3205,9 @@ async function repairMissingDeviceIdsV1(userId, deviceId) {
   return results;
 }
 
+// Stage 4A.4 Part 2 (F-3): a row is live when it is not soft-deleted. Verification only — tombstone
+// semantics between two existing data sets belong to Stage 4A.5.
+const isLiveRemoteRow = (r) => !!r && (r.deleted_at === null || r.deleted_at === undefined);
 // --- Post-migration verification: compares LOCAL counts to REMOTE counts, per table. ---
 async function verifyMigrationV1(userId, localEligible, deviceId) {
   // Existence check, not a totals check: for each table, does every legacy_id (or, for
@@ -3231,7 +3243,8 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
     remoteRowsByKey[localKey] = remoteRows;
     const count = remoteRows.length;
 
-    const remoteLegacyIds = new Set((remoteRows || []).map((r) => r.legacy_id));
+    // Stage 4A.4 Part 2 (F-3): a soft-deleted cloud row (deleted_at set) never counts as the live local record
+    const remoteLegacyIds = new Set((remoteRows || []).filter(isLiveRemoteRow).map((r) => r.legacy_id));
     const missing = localLegacyIds.filter((lid) => !remoteLegacyIds.has(lid));
 
     results[localKey] = {
@@ -3255,7 +3268,7 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
     const remoteRows = await readAll("custom_fields", "nextrep_custom_fields");
     const count = remoteRows.length;
 
-    const remoteFieldKeys = new Set((remoteRows || []).map((r) => r.field_key));
+    const remoteFieldKeys = new Set((remoteRows || []).filter(isLiveRemoteRow).map((r) => r.field_key)); // F-3
     const missing = localFieldKeys.filter((k) => !remoteFieldKeys.has(k));
 
     results.customFields = {
@@ -3277,7 +3290,7 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
     const byLegacy = (rows) => {
       const m = new Map();
       for (const r of rows || []) {
-        if (!r || r.legacy_id == null) continue;
+        if (!r || r.legacy_id == null || !isLiveRemoteRow(r)) continue; // F-3: only live rows (and live parents)
         const k = String(r.legacy_id);
         if (!m.has(k)) m.set(k, []);
         m.get(k).push(r);
