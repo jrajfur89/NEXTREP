@@ -54,7 +54,10 @@ const __testState = {
   get activeDataNamespace() { return _activeDataNamespace; },
   resetActiveDataNamespace() { _activeDataNamespace = null; },
   // a test that simulates a killed app leaves an operation in flight forever — clear its module flag
-  resetAccountInitBusy() { if (typeof _accountInitBusy !== "undefined") _accountInitBusy = false; },
+  resetAccountInitBusy() {
+    if (typeof _accountInitBusy !== "undefined") _accountInitBusy = false;
+    if (typeof _v1MigrationToken !== "undefined") _v1MigrationToken = null; // Stage 4A.4 F-5: the V1 token of the killed run
+  },
 };
 `;
 code = code.replace(RENDER_LINE, `${extra}\nexport { ${names.join(", ")}, __testState };`);

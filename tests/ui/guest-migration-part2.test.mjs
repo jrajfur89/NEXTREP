@@ -99,16 +99,22 @@ describe("F-5 — partial upload → abandon", () => {
     await settle();
     assert.match(byTestId("account-init").textContent, /PRZENOSZENIE DANYCH ZOSTAŁO PRZERWANE/);
   });
-  test("→ 'Zacznij konto bez tych danych' → app, sync paused; a later source choice warns the cloud data is incomplete", async () => {
+  test("→ 'Zacznij konto bez tych danych' (two steps) → app, sync resumed with the flagged-incomplete cloud data; a later source choice still warns", async () => {
     const S = await partialThenAbandon();
     await press("init-guest-start-without");
+    // F-5 (Etap 6): a conscious acceptance needs a second, explicit step that says the data is incomplete
+    assert.ok(!appShown(), "the first tap only asks for confirmation");
+    assert.match(byTestId("init-guest-start-without-warning").textContent, /NIEKOMPLETNE/);
+    await press("init-guest-start-without-confirm");
     assert.ok(appShown());
-    assert.deepEqual([read(key(UA, "account_init")).source, read(key(UA, "account_init")).syncPaused], ["empty", true]);
-    assert.equal((read(key(UA, "history")) || []).length, 0, "nothing of the partial cloud on the device");
+    assert.ok((S.tables.nextrep_migration_attempts || []).some((a) => a.status === "accepted_incomplete"), "accepted on the server");
+    // Stage 4A.4 F-5 (Etap 6): server-confirmed acceptance → normal sync (server policy); flagged permanently
+    assert.deepEqual([read(key(UA, "account_init")).source, read(key(UA, "account_init")).syncPaused], ["cloud", false]);
     await click(buttonByText("Więcej"));
     await settle();
     await click(buttonByText("Moje konto"));
     await settle();
+    assert.ok(byTestId("account-incomplete-accepted"), "permanent note in the account section");
     const rechoose = buttonByText("Wybierz ponownie źródło danych");
     assert.ok(rechoose);
     await click(rechoose);

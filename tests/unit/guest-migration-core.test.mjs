@@ -143,7 +143,10 @@ describe("success path — guest → empty account", () => {
     // Stage 4A.4 Part 2: the completed marker (replaces Part 1's accountReadyAt) — still no user data
     assert.equal(gm.status, "completed");
     assert.ok(gm.completedAt);
-    assert.deepEqual(Object.keys(gm).sort(), ["attemptId", "backupId", "cleaned", "cleanup", "cleanupAt", "completedAt", "fingerprint", "keptExercises", "startedAt", "status", "targetUserId"], "no user data in the marker");
+    assert.deepEqual(Object.keys(gm).sort(), ["attemptId", "backupId", "cleaned", "cleanup", "cleanupAt", "completedAt", "fingerprint", "keptExercises", "serverAttemptId", "startedAt", "status", "targetUserId"], "no user data in the marker");
+    // Stage 4A.4 F-5 (Etap 6): the server attempt of exactly this migration is `completed`
+    assert.match(gm.serverAttemptId, /^[0-9a-f-]{36}$/);
+    assert.deepEqual(S.tables.nextrep_migration_attempts.map((a) => [a.attempt_id, a.status, a.kind]), [[gm.serverAttemptId, "completed", "guest_to_account"]]);
     assert.equal(A.getMigrationStatus().status, "completed");
     assert.equal(r.ok && A.getMigrationStatus().verification.results.workoutSets.allFound, true, "child verification ran");
   });
@@ -182,7 +185,9 @@ describe("success path — guest → empty account", () => {
     assert.equal(seen.gm.status, "migrating");
     assert.equal(seen.acc.status, "migrating_guest");
     assert.equal(seen.acc.phase, "uploading");
-    assert.deepEqual(Object.keys(seen.acc).sort(), ["at", "attemptId", "backupId", "deviceId", "fingerprint", "namespace", "phase", "source", "startedAt", "status", "syncPaused", "userId"]);
+    assert.deepEqual(Object.keys(seen.acc).sort(), ["at", "attemptId", "backupId", "deviceId", "fingerprint", "namespace", "phase", "serverAttemptId", "source", "startedAt", "status", "syncPaused", "userId"]);
+    // Stage 4A.4 F-5 (Etap 6): the server attempt was already `uploading` at the first cloud write
+    assert.equal(seen.acc.serverAttemptId, seen.acc.attemptId, "the guest attempt id doubles as the server attempt id");
     assert.equal(seen.acc.backupId, seen.gm.backupId);
     assert.equal(seen.acc.attemptId, seen.gm.attemptId);
     assert.equal(seen.history.length, 2, "account copy complete before the upload");

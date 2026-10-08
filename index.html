@@ -1042,6 +1042,11 @@ const NETWORK_ERROR_TEXT = "Nie można połączyć się z serwerem. Sprawdź po�
 // Error text for the auth / account screens: a friendly network message, known texts translated.
 function authErrorText(error) {
   if (isNetworkError(error)) return NETWORK_ERROR_TEXT;
+  // Stage 4A.4 F-5: the server lock of a migration attempt — never shown as a raw code
+  const mk = migrationErrorKind(error);
+  if (mk === "in_progress") return MIGRATION_TEXTS.locked;
+  if (mk === "closed") return MIGRATION_TEXTS.closedElsewhere;
+  if (mk === "timeout") return MIGRATION_TEXTS.busy;
   const msg = String((error && error.message) || error || "");
   if (msg === "Invalid login credentials") return "Nieprawidłowy e-mail lub hasło.";
   return msg || "Wystąpił nieoczekiwany błąd. Spróbuj ponownie.";
@@ -1079,6 +1084,335 @@ function isAccountSyncAllowed(userId) {
   const m = getAccountInitMarker(userId);
   return !!m && m.status === "ready" && !m.syncPaused;
 }
+
+// =====================================================================================
+// Stage 4A.4 F-5 — SERVER MIGRATION ATTEMPTS (client side of SQL v3 + read guard C v2)
+// Every V1 upload (guest → account, device → empty cloud, the manual V1 tool) runs as ONE server attempt
+// in public.nextrep_migration_attempts. While it is `uploading` or `abandoned` the server refuses every
+// write of the account (NR001) and every data read (read guard C, NR001) — except requests carrying the
+// attempt's id in the header x-nextrep-migration-attempt (the uploading device). A closed attempt's id
+// gets NR002. The attempt id is created and PERSISTED locally before the start RPC (so a crash / retry
+// reuses it — the RPC is idempotent), and the account is "ready" only after the server confirmed
+// `completed` for exactly that id, which the client asks for only after the full V1 verification.
+//   local record (account namespace) migration_attempt = { attemptId, userId, deviceId, kind, flow,
+//                  status (last known server status), startedAt, updatedAt } — no user data
+// The token is set per request (setHeader) — never on the shared client — and only by V1 code.
+// =====================================================================================
+const MIGRATION_ATTEMPT_HEADER = "x-nextrep-migration-attempt";
+const MIGRATION_ATTEMPT_KEY = "migration_attempt";
+const MIGRATION_BLOCKING_STATUSES = new Set(["uploading", "abandoned"]);
+// bounded retries of an RPC that hit the statement timeout (start() waits for in-flight writes of the
+// account — 8 s on Supabase) and the pause between gated sync retries while the account is locked.
+// Mutable object: tests shorten the delays.
+const MIGRATION_TIMING = { rpcRetryDelaysMs: [1000, 2000, 4000], pausedRetryMs: 60000, inactiveNoticeMs: 24 * 60 * 60 * 1000 };
+const MIGRATION_TEXTS = {
+  inProgressHere: "Trwa przenoszenie danych z tego urządzenia na konto — synchronizacja jest wstrzymana do jego zakończenia.",
+  inProgressOther: "Na innym urządzeniu trwa przenoszenie danych na to konto — synchronizacja jest wstrzymana do jego zakończenia. Dane na tym urządzeniu są bezpieczne.",
+  abandoned: "Przenoszenie danych na to konto zostało przerwane i nie jest jeszcze rozstrzygnięte. Dopóki nie zostanie dokończone albo świadomie zamknięte, konto jest zablokowane (dane w chmurze mogą być niekompletne). Dane na tym urządzeniu są bezpieczne.",
+  checkFailed: "Nie udało się sprawdzić, czy synchronizacja tego konta jest bezpieczna, dlatego jest wstrzymana. Dane na tym urządzeniu są bezpieczne — spróbuj ponownie później.",
+  locked: "Trwa albo zostało przerwane przenoszenie danych na to konto, więc operacja jest teraz wstrzymana. Dane na tym urządzeniu są bezpieczne i nie zostały zmienione.",
+  partialDevice: "Część danych z tego urządzenia jest już w chmurze, a wysyłanie nie zostało dokończone. Konto pozostaje zablokowane, dopóki nie dokończysz wysyłania albo świadomie nie przyjmiesz niekompletnych danych w chmurze. Dane na tym urządzeniu nie zostały zmienione.",
+  acceptFailed: "Nie udało się zapisać decyzji na serwerze, więc nic nie zostało zmienione. Spróbuj ponownie po połączeniu z internetem.",
+  unavailable: "Serwer nie obsługuje jeszcze bezpiecznego przenoszenia danych, więc nie zostało ono rozpoczęte. Nic nie zostało wysłane.",
+  busy: "Konto jest teraz zajęte zapisem z innego urządzenia — spróbuj ponownie za chwilę. Nic nie zostało wysłane.",
+  otherAttempt: "Na innym urządzeniu trwa (albo zostało przerwane) przenoszenie danych na to konto, więc nie można teraz rozpocząć kolejnego. Nic nie zostało wysłane.",
+  incompleteAccepted: "Dane w chmurze tego konta zostały świadomie przyjęte jako niekompletne. Kolejne przenoszenie danych jest zablokowane do czasu łączenia danych (kolejny etap). Nic nie zostało wysłane.",
+  closedElsewhere: "Przenoszenie zostało zamknięte na innym urządzeniu, więc to urządzenie przestało wysyłać dane. Dane na tym urządzeniu nie zostały zmienione.",
+  closedIncomplete: "Przenoszenie zostało zamknięte na innym urządzeniu — dane w chmurze przyjęto jako niekompletne. To urządzenie przestało wysyłać dane; dane na nim nie zostały zmienione.",
+  completeFailed: "Dane zostały wysłane i sprawdzone, ale nie udało się potwierdzić zakończenia przenoszenia na serwerze. Konto nie zostało jeszcze oznaczone jako gotowe — ponów, żeby dokończyć.",
+  notYours: "Nie można dokończyć tego przenoszenia na tym urządzeniu. Nic nie zostało wysłane.",
+  network: "Nie można połączyć się z serwerem. Nic nie zostało wysłane — spróbuj ponownie po połączeniu z internetem.",
+  error: "Nie udało się rozpocząć bezpiecznego przenoszenia danych. Nic nie zostało wysłane.",
+};
+
+function getMigrationAttemptRecord(userId) {
+  const r = readNamespaceJson(MIGRATION_ATTEMPT_KEY, userId);
+  return r && typeof r === "object" && !Array.isArray(r) && r.attemptId ? r : null;
+}
+// Written and read back (a record that was not stored would let a crash lose the attempt id). → bool
+function setMigrationAttemptRecord(userId, rec) {
+  try {
+    const k = getStorageKey(MIGRATION_ATTEMPT_KEY, userId);
+    const raw = JSON.stringify({ ...rec, updatedAt: new Date().toISOString() });
+    localStorage.setItem(k, raw);
+    return localStorage.getItem(k) === raw;
+  } catch (e) {
+    console.error("setMigrationAttemptRecord failed", e);
+    return false;
+  }
+}
+// the record is only ever updated for the SAME attempt (a status write never revives / swaps another one)
+function noteMigrationAttemptStatus(userId, attemptId, status) {
+  const r = getMigrationAttemptRecord(userId);
+  if (r && r.attemptId === attemptId && status && r.status !== status) setMigrationAttemptRecord(userId, { ...r, status });
+}
+
+// NR001 / NR002 / 57014 / missing SQL / network, from a PostgREST error OR from an Error whose message
+// carries it (V1 wraps errors as "<table>: … — <message>").
+function migrationErrorKind(error) {
+  if (!error) return null;
+  const code = String(error.code || "");
+  const msg = String(error.message || error || "");
+  if (code === "NR001" || /migration_in_progress/.test(msg)) return "in_progress";
+  if (code === "NR002" || /migration_attempt_closed/.test(msg)) return "closed";
+  if (code === "57014" || /statement timeout/i.test(msg)) return "timeout";
+  if (["PGRST202", "PGRST205", "42P01", "42883"].includes(code) || /could not find the (function|table)/i.test(msg)) return "unavailable";
+  if (isNetworkError(error)) return "network";
+  return null;
+}
+async function migrationRpc(fn, args) {
+  for (let i = 0; ; i++) {
+    let r;
+    try {
+      r = await supabase.rpc(fn, args);
+    } catch (e) {
+      r = { data: null, error: e };
+    }
+    if (!r || !r.error) return { data: r ? r.data : null, error: null };
+    if (migrationErrorKind(r.error) !== "timeout" || i >= MIGRATION_TIMING.rpcRetryDelaysMs.length) return { data: null, error: r.error };
+    await new Promise((res) => setTimeout(res, MIGRATION_TIMING.rpcRetryDelaysMs[i]));
+  }
+}
+function migrationRpcFailure(error) {
+  const msg = String((error && error.message) || error || "");
+  if (/active_attempt_exists/.test(msg)) return { reason: "other_attempt", error: MIGRATION_TEXTS.otherAttempt };
+  if (/incomplete_data_accepted/.test(msg)) return { reason: "incomplete_accepted", error: MIGRATION_TEXTS.incompleteAccepted };
+  if (/attempt_not_yours/.test(msg)) return { reason: "not_yours", error: MIGRATION_TEXTS.notYours };
+  const kind = migrationErrorKind(error);
+  if (kind === "timeout") return { reason: "busy", error: MIGRATION_TEXTS.busy };
+  if (kind === "unavailable") return { reason: "unavailable", error: MIGRATION_TEXTS.unavailable };
+  if (kind === "network") return { reason: "network", error: MIGRATION_TEXTS.network };
+  return { reason: "error", error: MIGRATION_TEXTS.error };
+}
+// the server column is uuid — an id that is not one (an old browser's fallback, a damaged marker) is never sent
+const MIGRATION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isMigrationUuid = (v) => typeof v === "string" && MIGRATION_UUID_RE.test(v);
+const migrationAttemptIdFrom = (...candidates) => candidates.find(isMigrationUuid) || newUuid();
+const migrationClosedText = (row) => (row && row.status === "accepted_incomplete" ? MIGRATION_TEXTS.closedIncomplete : MIGRATION_TEXTS.closedElsewhere);
+// Start (idempotent for the same id) — or resume an `abandoned` attempt of THIS device. → { ok: true, row }
+// with row.status "uploading" of this device, or { ok: false, reason, row?, error }:
+//   other_attempt | incomplete_accepted | not_yours | closed (row: completed / cancelled / accepted_incomplete /
+//   abandoned elsewhere) | unavailable (SQL missing) | busy (57014 after the bounded retries) | network | error
+async function acquireMigrationAttempt({ userId, deviceId, kind, attemptId }) {
+  if (!supabase || !userId || !deviceId || !isMigrationUuid(attemptId)) return { ok: false, reason: "error", error: MIGRATION_TEXTS.error };
+  const start = await migrationRpc("nextrep_migration_attempt_start", { p_attempt_id: attemptId, p_device_id: deviceId, p_kind: kind, p_app_version: BACKUP_APP_VERSION });
+  if (start.error) return { ok: false, ...migrationRpcFailure(start.error) };
+  let row = start.data;
+  if (!row || row.attempt_id !== attemptId || row.user_id !== userId) return { ok: false, reason: "error", error: MIGRATION_TEXTS.error };
+  if (row.status === "abandoned" && row.device_id === deviceId) {
+    const res = await migrationRpc("nextrep_migration_attempt_resume", { p_attempt_id: attemptId, p_device_id: deviceId });
+    if (res.error) return { ok: false, ...migrationRpcFailure(res.error) };
+    row = res.data;
+  }
+  if (row && row.attempt_id === attemptId && row.status === "uploading" && row.device_id === deviceId) return { ok: true, row };
+  return { ok: false, reason: "closed", row: row || null, error: migrationClosedText(row) };
+}
+// numbers only — what the V1 verification found (never user data)
+function migrationVerifiedCounts(verification) {
+  const out = {};
+  for (const [k, v] of Object.entries((verification && verification.results) || {})) out[k] = Number((v && v.localRecordsFoundInRemote) || 0);
+  return out;
+}
+// Only after the FULL V1 verification. ok only when the server confirms `completed` for exactly this id.
+async function completeMigrationAttempt({ userId, attemptId, deviceId, verification }) {
+  const r = await migrationRpc("nextrep_migration_attempt_complete", { p_attempt_id: attemptId, p_device_id: deviceId, p_verified_counts: migrationVerifiedCounts(verification) });
+  if (r.error) return { ok: false, ...migrationRpcFailure(r.error), error: MIGRATION_TEXTS.completeFailed };
+  const row = r.data;
+  if (row && row.attempt_id === attemptId && row.user_id === userId && row.status === "completed") return { ok: true, row };
+  // no row / another account's answer (session changed meanwhile): unknown — the attempt may still be open
+  if (!row || row.attempt_id !== attemptId || row.user_id !== userId) return { ok: false, reason: "error", row: null, error: MIGRATION_TEXTS.completeFailed };
+  return { ok: false, reason: "closed", row, error: migrationClosedText(row) };
+}
+// Ending an attempt this device owns: `cancelled` ONLY when the server confirms zero writes of it; with
+// writes the safe way is `abandoned` (the account stays locked until resumed or consciously accepted).
+// → { ok, status: "cancelled" | "abandoned" | <other server status> | "missing", row } or { ok: false, reason, error }
+async function endOwnMigrationAttempt({ attemptId, deviceId }) {
+  const c = await migrationRpc("nextrep_migration_attempt_cancel", { p_attempt_id: attemptId, p_device_id: deviceId });
+  if (c.error) return { ok: false, ...migrationRpcFailure(c.error) };
+  const row = c.data;
+  if (!row) return { ok: true, status: "missing", row: null }; // the start never reached the server
+  if (row.status === "uploading" && row.device_id === deviceId) {
+    const a = await migrationRpc("nextrep_migration_attempt_abandon", { p_attempt_id: attemptId, p_device_id: deviceId });
+    if (a.error) return { ok: false, ...migrationRpcFailure(a.error) };
+    return { ok: true, status: a.data ? a.data.status : "missing", row: a.data || null };
+  }
+  return { ok: true, status: row.status, row };
+}
+// Any device of the account, abandoned / uploading attempt with ZERO server-counted writes → cancelled.
+async function cancelEmptyMigrationAttempt({ attemptId, deviceId }) {
+  const c = await migrationRpc("nextrep_migration_attempt_cancel", { p_attempt_id: attemptId, p_device_id: deviceId });
+  if (c.error) return { ok: false, ...migrationRpcFailure(c.error) };
+  return { ok: !!c.data && c.data.status === "cancelled", status: c.data ? c.data.status : "missing", row: c.data || null };
+}
+// The conscious acceptance of incomplete cloud data (after an explicit confirmation in the UI). Terminal:
+// the attempt never becomes `completed`, the old uploader is stopped (NR002), no new V1 may start.
+async function acceptIncompleteMigrationAttempt({ attemptId, deviceId }) {
+  const r = await migrationRpc("nextrep_migration_attempt_accept_incomplete", { p_attempt_id: attemptId, p_device_id: deviceId });
+  if (r.error) return { ok: false, ...migrationRpcFailure(r.error) };
+  return { ok: !!r.data && r.data.status === "accepted_incomplete", status: r.data ? r.data.status : "missing", row: r.data || null };
+}
+
+// The server view of the account's attempts — read before any sync, fail closed on ANY error (missing
+// table included: the client is deployed only after SQL v3). The table is never behind the read guard.
+//   { ok: true, blocking: row|null (uploading/abandoned), acceptedIncomplete: row|null, own: bool }
+//   { ok: false, reason: "unavailable" | "network" | "error" }
+let _migrationGate = null;
+const _migrationGateListeners = new Set();
+function getLastMigrationGate(userId) {
+  return _migrationGate && _migrationGate.userId === userId ? _migrationGate : null;
+}
+function onMigrationGateChange(cb) {
+  _migrationGateListeners.add(cb);
+  return () => _migrationGateListeners.delete(cb);
+}
+function noteMigrationGate(gate) {
+  _migrationGate = gate;
+  _migrationGateListeners.forEach((cb) => {
+    try {
+      cb(gate);
+    } catch {}
+  });
+}
+const MIGRATION_GATE_COLUMNS = "attempt_id, device_id, kind, status, started_at, updated_at, last_write_at, writes_count, abandoned_at, resolved_at, resolved_by_device, resume_count";
+async function readMigrationGate(userId) {
+  const fail = (reason, error) => {
+    const g = { ok: false, userId, reason, error: error || null, checkedAt: Date.now() };
+    noteMigrationGate(g);
+    return g;
+  };
+  if (!supabase || !userId) return fail("unavailable");
+  let res;
+  try {
+    // all statuses, newest change first: besides the lock it yields a stamp of the latest change, so a PULL can
+    // tell that an attempt started AND ended while it was reading (a blocking attempt or one accepted as
+    // incomplete can never be pushed out of this window: no new attempt can start while one exists)
+    res = await supabase.from("nextrep_migration_attempts").select(MIGRATION_GATE_COLUMNS).eq("user_id", userId).order("updated_at", { ascending: false }).limit(100);
+  } catch (e) {
+    return fail(migrationErrorKind(e) === "network" ? "network" : "error", e);
+  }
+  if (!res || res.error) {
+    const k = res ? migrationErrorKind(res.error) : null;
+    return fail(k === "unavailable" ? "unavailable" : k === "network" ? "network" : "error", res && res.error);
+  }
+  if (!Array.isArray(res.data)) return fail("error");
+  const rows = res.data;
+  const blocking = rows.find((r) => r && MIGRATION_BLOCKING_STATUSES.has(r.status)) || null;
+  const acceptedIncomplete = rows.find((r) => r && r.status === "accepted_incomplete") || null;
+  let deviceId = null;
+  try {
+    deviceId = localStorage.getItem(getStorageKey("device_id", userId));
+  } catch {}
+  const top = rows[0] || null;
+  const stamp = `${rows.length}|${top ? `${top.attempt_id}:${top.status}:${top.updated_at}` : ""}`;
+  const gate = { ok: true, userId, blocking, acceptedIncomplete, own: !!(blocking && deviceId && blocking.device_id === deviceId), stamp, checkedAt: Date.now() };
+  noteMigrationGate(gate);
+  return gate;
+}
+// Last activity of an attempt, and whether the 24-hour notice applies (information only — time never
+// changes the status or releases the lock).
+function migrationLastActivity(row) {
+  if (!row) return null;
+  const t = [row.last_write_at, row.updated_at, row.started_at].map((x) => Date.parse(x || "")).filter((n) => Number.isFinite(n));
+  return t.length ? new Date(Math.max(...t)).toISOString() : null;
+}
+function migrationInactiveLong(row, now = Date.now()) {
+  const last = migrationLastActivity(row);
+  return !!last && now - Date.parse(last) >= MIGRATION_TIMING.inactiveNoticeMs;
+}
+
+// The V1 token: set ONLY around one V1 run (withV1MigrationToken) and applied ONLY by V1 code (v1Req) —
+// per request, never on the shared client, so sync / PULL / other requests can never carry it.
+let _v1MigrationToken = null;
+function v1Req(builder) {
+  return _v1MigrationToken ? builder.setHeader(MIGRATION_ATTEMPT_HEADER, _v1MigrationToken) : builder;
+}
+function withMigrationToken(builder, token) {
+  return token ? builder.setHeader(MIGRATION_ATTEMPT_HEADER, token) : builder;
+}
+async function withV1MigrationToken(token, fn) {
+  if (_v1MigrationToken) throw new Error("Inne przenoszenie danych jest już w toku na tym urządzeniu.");
+  _v1MigrationToken = token || null;
+  try {
+    return await fn();
+  } finally {
+    _v1MigrationToken = null;
+  }
+}
+
+// Start / resume the server attempt of one flow ("device" | "guest" | "manual"). The id is written to the
+// local record (and, through persistId, to the flow's own marker) and read back BEFORE every start RPC.
+// An attempt that another device `cancelled` (server-confirmed: zero writes — nothing of it is in the
+// cloud) is replaced by a NEW id once; the flow's cloud checks run again after this anyway.
+async function acquireFlowAttempt({ userId, deviceId, kind, flow, attemptId, persistId = () => true }) {
+  let id = attemptId;
+  for (let round = 0; round < 2; round++) {
+    const prev = getMigrationAttemptRecord(userId);
+    const startedAt = prev && prev.attemptId === id ? prev.startedAt : new Date().toISOString();
+    if (!persistId(id) || !setMigrationAttemptRecord(userId, { attemptId: id, userId, deviceId, kind, flow, status: prev && prev.attemptId === id ? prev.status || "starting" : "starting", startedAt })) {
+      return { ok: false, reason: "error", attemptId: id, error: "Nie udało się zapisać stanu przenoszenia na tym urządzeniu, więc nie zostało ono rozpoczęte. Nic nie zostało wysłane." };
+    }
+    const acq = await acquireMigrationAttempt({ userId, deviceId, kind, attemptId: id });
+    if (acq.ok) {
+      noteMigrationAttemptStatus(userId, id, "uploading");
+      return { ...acq, attemptId: id };
+    }
+    if (acq.reason === "closed" && acq.row) noteMigrationAttemptStatus(userId, id, acq.row.status);
+    if (acq.reason === "closed" && acq.row && acq.row.status === "cancelled" && round === 0) {
+      id = newUuid();
+      continue;
+    }
+    return { ...acq, attemptId: id };
+  }
+  return { ok: false, reason: "error", attemptId: id, error: MIGRATION_TEXTS.error };
+}
+// definite refusals: the start RPC answered and created NOTHING on the server
+const MIGRATION_START_REFUSED = new Set(["other_attempt", "incomplete_accepted", "unavailable", "not_yours"]);
+// The current server row of an attempt of this account (touch returns it in any status). null = unknown.
+async function readOwnMigrationAttempt({ attemptId, deviceId }) {
+  const r = await migrationRpc("nextrep_migration_attempt_touch", { p_attempt_id: attemptId, p_device_id: deviceId });
+  return r.error ? null : r.data || null;
+}
+// V1 under the attempt's token, then `complete` — asked for ONLY after the full V1 verification passed, and
+// successful ONLY when the server answers `completed` for exactly this id. A write refused with NR002 (the
+// attempt was closed elsewhere) stops V1 at once (it throws on the first refused row).
+async function runV1UnderAttempt({ userId, deviceId, attemptId, onProgress }) {
+  let result;
+  try {
+    result = await withV1MigrationToken(attemptId, () => runMigrationV1(onProgress));
+  } catch (e) {
+    result = { success: false, error: (e && e.message) || String(e) };
+  }
+  if (!result || !result.success) {
+    const err = (result && result.error) || "";
+    if (migrationErrorKind({ message: err }) === "closed") {
+      const row = await readOwnMigrationAttempt({ attemptId, deviceId });
+      if (row) noteMigrationAttemptStatus(userId, attemptId, row.status);
+      return { ok: false, closed: true, row, error: migrationClosedText(row) };
+    }
+    return { ok: false, error: err ? authErrorText(err) : "Nie udało się wysłać danych do chmury." };
+  }
+  const c = await completeMigrationAttempt({ userId, attemptId, deviceId, verification: result.verification });
+  if (!c.ok) {
+    if (c.row) noteMigrationAttemptStatus(userId, attemptId, c.row.status);
+    if (result.statusUserId !== undefined) setMigrationStatus("verified", { error: c.error, verification: result.verification }, result.statusUserId); // rows are in the cloud, not confirmed
+    return { ok: false, closed: c.reason === "closed", row: c.row || null, error: c.error };
+  }
+  noteMigrationAttemptStatus(userId, attemptId, "completed");
+  if (result.statusUserId !== undefined) setMigrationStatus("completed", { verification: result.verification, attemptId }, result.statusUserId);
+  return { ok: true, verification: result.verification };
+}
+// The server already confirmed `completed` for THIS device's attempt (the app stopped before finishing locally)?
+// Asked BEFORE purely local resume checks, so a finished upload is never blocked by them. Unknown → false.
+async function ownAttemptCompletedOnServer(userId, attemptId, deviceId) {
+  if (!isMigrationUuid(attemptId) || !deviceId) return false;
+  const row = await readOwnMigrationAttempt({ attemptId, deviceId });
+  const done = !!(row && row.attempt_id === attemptId && row.user_id === userId && row.device_id === deviceId && row.status === "completed");
+  if (done) noteMigrationAttemptStatus(userId, attemptId, "completed");
+  return done;
+}
+// a server answer "completed" for THIS device's attempt (e.g. the app was killed right after the RPC):
+// the verified upload already happened — nothing is uploaded again
+const isOwnCompletedAttempt = (acq, deviceId) => !!(acq && acq.reason === "closed" && acq.row && acq.row.status === "completed" && acq.row.device_id === deviceId);
 
 // "Has data" = something the user actually created. Technical keys (sync queue/meta/conflicts,
 // migration statuses, device id, the init marker) never count, and neither does the default
@@ -1131,11 +1465,15 @@ const exerciseRowMatchesDefault = (row, d) => {
 };
 // Stage 4A.4 Part 2 option onlyDeviceId (F-5): ONLY rows written by that device count — "did this device's
 // interrupted upload leave data in the cloud?". The profile (no device column) is not counted then.
-async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "", editedBuiltIns = false, onlyDeviceId = null } = {}) {
+// Stage 4A.4 F-5 (Etap 6) option migrationToken: the id of THIS device's active server attempt — the read
+// guard lets only that attempt read the account while it uploads (re-check after start, resume).
+async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserName = "", editedBuiltIns = false, onlyDeviceId = null, migrationToken = null } = {}) {
   if (!supabase) throw new Error("Supabase nie jest skonfigurowane.");
   // Without ignoreDeviceId: one query. With it: rows of other devices + rows without a device.
-  const variants = (build) =>
-    onlyDeviceId ? [build().eq("device_id", onlyDeviceId)] : ignoreDeviceId ? [build().neq("device_id", ignoreDeviceId), build().is("device_id", null)] : [build()];
+  const variants = (build0) => {
+    const build = () => withMigrationToken(build0(), migrationToken);
+    return onlyDeviceId ? [build().eq("device_id", onlyDeviceId)] : ignoreDeviceId ? [build().neq("device_id", ignoreDeviceId), build().is("device_id", null)] : [build()];
+  };
   const one = async (table) => {
     for (const q of variants(() => supabase.from(table).select("id").eq("user_id", userId).is("deleted_at", null))) {
       const { data, error } = await q.limit(1);
@@ -1170,7 +1508,7 @@ async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserN
   }
   let displayName = false;
   if (!onlyDeviceId) {
-    const { data: prof, error: profErr } = await supabase.from("nextrep_profiles").select("display_name").eq("user_id", userId).limit(1);
+    const { data: prof, error: profErr } = await withMigrationToken(supabase.from("nextrep_profiles").select("display_name"), migrationToken).eq("user_id", userId).limit(1);
     if (profErr) throw new Error(profErr.message || "błąd odczytu nextrep_profiles");
     const cloudName = Array.isArray(prof) && prof[0] && typeof prof[0].display_name === "string" ? prof[0].display_name.trim() : "";
     displayName = cloudName !== "" && !(ignoreDeviceId && cloudName === String(localUserName || "").trim());
@@ -1422,6 +1760,12 @@ async function loadAccountFromCloud(userId, currentRefUserId) {
   const resuming = !!(markerNow && markerNow.status === "loading_cloud" && markerNow.userId === userId && markerNow.namespace === getLocalDataNamespace(userId));
   const blocker = cloudRestoreBlocker(userId);
   if (blocker) return { ok: false, blocked: blocker.reason, error: blocker.message };
+  // Stage 4A.4 F-5 (Etap 6): never load while the account is locked by a migration attempt (or its state is
+  // unknown) — checked BEFORE the first destructive step; nothing is changed when it fails
+  const gate = await readMigrationGate(userId);
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (!gate.ok) return { ok: false, blocked: "migration_check", error: MIGRATION_TEXTS.checkFailed };
+  if (gate.blocking) return { ok: false, blocked: "migration", error: MIGRATION_TEXTS.locked };
   _accountInitBusy = true;
   const markerKey = getStorageKey("account_init", userId);
   const pointerKey = getStorageKey("last_cloud_restore", userId);
@@ -1468,6 +1812,12 @@ async function loadAccountFromCloud(userId, currentRefUserId) {
     if (!pull || !pull.success) {
       giveBack();
       return { ok: false, error: (pull && pull.error) || "Nie udało się pobrać danych z chmury." };
+    }
+    // F-5: the same server state as before the read — otherwise the copy may mix states → nothing applied
+    const gateAfter = await readMigrationGate(userId);
+    if (!gateAfter.ok || gateAfter.blocking || gateAfter.stamp !== gate.stamp) {
+      giveBack();
+      return { ok: false, error: gateAfter.ok && !gateAfter.blocking ? "Dane konta zmieniły się w trakcie pobierania — spróbuj ponownie." : gateAfter.ok ? MIGRATION_TEXTS.locked : MIGRATION_TEXTS.checkFailed };
     }
     let apply;
     try {
@@ -1529,16 +1879,49 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
   const ns = getLocalDataNamespace(userId);
   const resuming = !!(markerNow && markerNow.status === "uploading_device" && markerNow.userId === userId && markerNow.namespace === ns && markerNow.deviceId);
   const deviceId = resuming ? markerNow.deviceId : getOrCreateDeviceId();
+  if (!deviceId) return { ok: false, error: MIGRATION_TEXTS.error };
+  // Stage 4A.4 F-5 (Etap 6): the server attempt id lives in the "uploading_device" marker (written + read back
+  // before every start). A RESUMED upload takes its attempt FIRST — while it is uploading / abandoned only
+  // its own id may read this account (read guard), so every check below carries it.
+  const persistId = (id) => {
+    const m = getAccountInitMarker(userId);
+    if (!m || m.status !== "uploading_device" || m.deviceId !== deviceId) return false;
+    if (m.serverAttemptId !== id) setAccountInitMarker(userId, { ...m, serverAttemptId: id });
+    return (getAccountInitMarker(userId) || {}).serverAttemptId === id;
+  };
+  let token = null;
+  if (resuming) {
+    if (await ownAttemptCompletedOnServer(userId, markerNow.serverAttemptId, deviceId)) {
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+      return { ok: true, alreadyCompleted: true }; // verified + confirmed earlier — nothing is uploaded again
+    }
+    // purely local refusals (F-1 / F-2 / I-2) come BEFORE the server attempt — a resume that cannot happen
+    // never locks the account
+    const localCheck = prepareAccountDatasetForUpload(userId, { resuming: true });
+    if (!localCheck.ok) return { ok: false, resumeUnsafe: !!localCheck.resumeUnsafe, integrityIssues: localCheck.integrityIssues, error: localCheck.error };
+    const acq = await acquireFlowAttempt({ userId, deviceId, kind: "device_upload", flow: "device", attemptId: migrationAttemptIdFrom(markerNow.serverAttemptId), persistId });
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    if (isOwnCompletedAttempt(acq, deviceId)) return { ok: true, alreadyCompleted: true };
+    if (!acq.ok) return { ok: false, migration: acq.reason, closed: acq.reason === "closed", row: acq.row || null, error: acq.error };
+    token = acq.attemptId;
+  }
   let cloud;
   try {
-    cloud = await checkCloudAccountData(userId, resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId) } : {});
+    cloud = await checkCloudAccountData(userId, resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId), migrationToken: token } : {});
   } catch (e) {
     return { ok: false, error: authErrorText(e) };
   }
   if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
   if (cloud.hasData) {
     // someone else's data is in the cloud now: stop, never overwrite, decide the source again
-    if (resuming) clearAccountInitMarker(userId);
+    if (resuming) {
+      // F-5: the server attempt ends FIRST (cancelled when it wrote nothing) — never a lock without its marker
+      const end = await endOwnMigrationAttempt({ attemptId: token, deviceId });
+      if (!end.ok) return { ok: false, error: end.error };
+      noteMigrationAttemptStatus(userId, token, end.status);
+      if (end.status === "abandoned" || end.status === "uploading") return { ok: false, partial: true, row: end.row, error: MIGRATION_TEXTS.partialDevice };
+      clearAccountInitMarker(userId);
+    }
     return { ok: false, cloudChanged: true, cloud };
   }
   _accountInitBusy = true;
@@ -1551,7 +1934,7 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
     if (!toUpload.malformed.length && !toUpload.shapeErrors.length) {
       let collisions;
       try {
-        collisions = await v1DeletedRowCollisions(userId, prepareV1UploadDataset(toUpload).dataset);
+        collisions = await v1DeletedRowCollisions(userId, prepareV1UploadDataset(toUpload).dataset, { migrationToken: token });
       } catch (e) {
         return { ok: false, error: authErrorText(e) };
       }
@@ -1560,9 +1943,36 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
     }
     const prep = prepareAccountDatasetForUpload(userId, { resuming });
     if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
-    if (!resuming) setAccountInitMarker(userId, { status: "uploading_device", source: "device", syncPaused: true, userId, namespace: ns, deviceId, startedAt: new Date().toISOString() });
-    const result = await runMigrationV1();
-    if (!result || !result.success) return { ok: false, error: (result && result.error) ? authErrorText(result.error) : "Nie udało się wysłać danych do chmury." };
+    if (!resuming) {
+      const attemptId = newUuid();
+      setAccountInitMarker(userId, { status: "uploading_device", source: "device", syncPaused: true, userId, namespace: ns, deviceId, serverAttemptId: attemptId, startedAt: new Date().toISOString() });
+      const acq = await acquireFlowAttempt({ userId, deviceId, kind: "device_upload", flow: "device", attemptId, persistId });
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true }; // marker stays: resumable, the attempt (if any) wrote nothing
+      if (!acq.ok) {
+        // a definite refusal created nothing on the server and nothing was sent → back to the state before;
+        // an unknown outcome (network, timeout) keeps the marker so the attempt can be resumed or ended
+        if (MIGRATION_START_REFUSED.has(acq.reason)) clearAccountInitMarker(userId);
+        return { ok: false, migration: acq.reason, error: acq.error };
+      }
+      token = acq.attemptId;
+      // the start waited for every in-flight write of the account — check again WITH the attempt's id
+      let recheck;
+      try {
+        recheck = await checkCloudAccountData(userId, { migrationToken: token });
+      } catch (e) {
+        return { ok: false, error: authErrorText(e) }; // marker + attempt stay → "upload interrupted" (retry / back)
+      }
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+      if (recheck.hasData) {
+        const end = await endOwnMigrationAttempt({ attemptId: token, deviceId });
+        if (!end.ok) return { ok: false, error: end.error };
+        noteMigrationAttemptStatus(userId, token, end.status);
+        clearAccountInitMarker(userId);
+        return { ok: false, cloudChanged: true, cloud: recheck };
+      }
+    }
+    const up = await runV1UnderAttempt({ userId, deviceId, attemptId: token });
+    if (!up.ok) return { ok: false, closed: !!up.closed, row: up.row || null, error: up.error };
     if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
     return { ok: true };
   } catch (e) {
@@ -1570,6 +1980,63 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
   } finally {
     _accountInitBusy = false;
   }
+}
+// Stage 4A.4 F-5 (Etap 6): "Wróć do wyboru źródła danych" after an interrupted / failed device upload. The
+// server attempt ends first: `cancelled` when the server confirms it wrote nothing (then the marker goes and
+// the source is decided again); with writes it becomes `abandoned` — the account stays locked and the user
+// finishes the upload or consciously accepts the incomplete cloud data. A closed attempt (completed /
+// cancelled / accepted elsewhere) locks nothing any more. Nothing local is changed except the marker.
+async function abandonInterruptedDeviceUpload(userId, currentRefUserId) {
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const m = getAccountInitMarker(userId);
+  if (!m || m.status !== "uploading_device") return { ok: false, discarded: true };
+  if (m.serverAttemptId && m.deviceId) {
+    const end = await endOwnMigrationAttempt({ attemptId: m.serverAttemptId, deviceId: m.deviceId });
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    if (!end.ok) return { ok: false, error: end.error };
+    noteMigrationAttemptStatus(userId, m.serverAttemptId, end.status);
+    if (end.status === "abandoned" || end.status === "uploading") return { ok: false, partial: true, row: end.row, error: MIGRATION_TEXTS.partialDevice };
+    if (end.status === "completed" && end.row && end.row.device_id === m.deviceId) return { ok: false, completed: true }; // verified + confirmed — the caller finishes (no re-upload)
+  }
+  if ((getAccountInitMarker(userId) || {}).serverAttemptId !== m.serverAttemptId) return { ok: false, discarded: true }; // changed meanwhile
+  clearAccountInitMarker(userId);
+  return { ok: true };
+}
+// Stage 4A.4 F-5 (Etap 6): the explicit, confirmed acceptance of an incomplete upload of THIS device's attempt
+// (any flow). Terminal on the server; the local marker of the flow is settled by the caller. → { ok, error }
+async function acceptIncompleteOwnUpload(userId, currentRefUserId, { attemptId, deviceId }) {
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (!attemptId || !deviceId) return { ok: false, error: MIGRATION_TEXTS.acceptFailed };
+  const r = await acceptIncompleteMigrationAttempt({ attemptId, deviceId });
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (r.ok) {
+    noteMigrationAttemptStatus(userId, attemptId, "accepted_incomplete");
+    return { ok: true, status: "accepted_incomplete" };
+  }
+  if (r.status === "accepted_incomplete" || r.status === "cancelled") return { ok: true, status: r.status }; // already settled (e.g. on another device) — nothing to lock any more
+  return { ok: false, status: r.status, error: r.error || MIGRATION_TEXTS.acceptFailed };
+}
+// Device flow: the user confirmed (two steps in the UI) that the incomplete cloud data of THIS device's
+// interrupted upload is accepted. Server first; only then the marker changes — the device keeps all its
+// data, the account is "ready" and normal sync resumes (server policy after accepted_incomplete; no new V1
+// may start; the permanent "incomplete" note stays). An attempt another device cancelled (server: zero writes) wrote nothing — the source is
+// simply decided again.
+async function acceptIncompleteDeviceUpload(userId, currentRefUserId) {
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const m = getAccountInitMarker(userId);
+  if (!m || m.status !== "uploading_device" || !m.serverAttemptId || !m.deviceId) return { ok: false, discarded: true };
+  const r = await acceptIncompleteOwnUpload(userId, currentRefUserId, { attemptId: m.serverAttemptId, deviceId: m.deviceId });
+  if (!r.ok) return r;
+  const now = getAccountInitMarker(userId);
+  if (!now || now.status !== "uploading_device" || now.serverAttemptId !== m.serverAttemptId) return { ok: false, discarded: true };
+  if (r.status === "cancelled") {
+    clearAccountInitMarker(userId);
+    return { ok: true, recheck: true };
+  }
+  // the server accepted the incomplete cloud data (terminal; no new V1): normal sync resumes as its policy allows.
+  // The device keeps ALL its data; rows that never reached the cloud stay here (nothing is deleted).
+  setAccountInitMarker(userId, { status: "ready", source: "device", syncPaused: false, incompleteAccepted: m.serverAttemptId });
+  return { ok: true };
 }
 function readAccountUserName(userId) {
   try {
@@ -1986,6 +2453,12 @@ async function cleanupMigratedGuestData(userId, currentRefUserId) {
   if (!(await stillSameAccount(userId, currentRefUserId))) return { status: "not_now" }; // retried later
   const acc = getAccountInitMarker(userId);
   if (!acc || acc.status !== "ready" || acc.source !== "guest") return setCleanup("skipped_unverified");
+  // Stage 4A.4 F-5 (Etap 6): the server confirmed `completed` for exactly this migration's attempt (recorded
+  // when the complete RPC answered) — otherwise nothing of the guest is removed
+  if (gm.serverAttemptId) {
+    const rec = getMigrationAttemptRecord(userId);
+    if (!rec || rec.attemptId !== gm.serverAttemptId || rec.status !== "completed" || rec.userId !== userId) return setCleanup("skipped_unverified");
+  }
   if (migratableDataFingerprint(null) !== gm.fingerprint) return setCleanup("skipped_changed"); // new / changed guest data: keep everything
   const b = findGuestMigrationBackup(gm.backupId);
   if (!b || b.attemptId !== gm.attemptId || b.targetUserId !== userId || b.fingerprint !== gm.fingerprint || !b.data || typeof b.data !== "object") return setCleanup("skipped_unverified");
@@ -2037,6 +2510,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
     // an unknown / damaged marker counts as no marker (as everywhere in 4A.3) and is replaced below
     if (markerNow && isKnownAccountInitStatus(markerNow.status) && markerNow.status !== "migrating_guest") return { ok: false, blocked: "not_empty", error: GUEST_MIGRATION_TEXTS.notEmpty };
     const resuming = !!(markerNow && markerNow.status === "migrating_guest");
+    let serverDone = false;
     const gm = getGuestMigrationMarker();
     if (guestMarkerBinding(userId)) return { ok: false, blocked: "guest_other_account", error: GUEST_MIGRATION_TEXTS.otherAccount };
     if (resuming) {
@@ -2045,15 +2519,85 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         (markerNow.phase === "copying" || markerNow.phase === "uploading") &&
         gm && gm.attemptId === markerNow.attemptId && gm.backupId === markerNow.backupId;
       if (!consistent) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.resumeMismatch };
-      if (!findGuestMigrationBackup(markerNow.backupId)) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.noBackup };
+      // F-5 (Etap 6): an upload the server already confirmed as `completed` is only finalized (below)
+      serverDone = markerNow.phase === "uploading" && (await ownAttemptCompletedOnServer(userId, markerNow.serverAttemptId, markerNow.deviceId));
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+      if (!serverDone && !findGuestMigrationBackup(markerNow.backupId)) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.noBackup };
     }
     // Fresh checks — the result shown on the offer screen is never trusted on its own.
     if (!resuming && accountLocalBlocksGuestMigration(userId)) return { ok: false, blocked: "not_empty", error: GUEST_MIGRATION_TEXTS.notEmpty };
     const deviceId = resuming ? markerNow.deviceId : getOrCreateDeviceId();
     if (!deviceId) return { ok: false, error: GUEST_MIGRATION_TEXTS.copyFailed };
+
+    // Stage 4A.4 F-5 (Etap 6): the server attempt. Its id (first: the guest attempt id) is kept in the
+    // "migrating_guest" marker, written and read back before every start RPC.
+    const persistId = (id) => {
+      const m = getAccountInitMarker(userId);
+      if (!m || m.status !== "migrating_guest" || m.deviceId !== deviceId) return false;
+      if (m.serverAttemptId !== id) setAccountInitMarker(userId, { ...m, serverAttemptId: id });
+      return (getAccountInitMarker(userId) || {}).serverAttemptId === id;
+    };
+    // the account becomes ready only here — after the server confirmed `completed` for this attempt
+    const finalize = async (attemptIdLocal, fingerprintLocal, backupIdLocal, serverAttemptId) => {
+      setAccountInitMarker(userId, { status: "ready", source: "guest", syncPaused: false });
+      // Stage 4A.4 Part 2: the completed marker — this guest data (fingerprint) is now in this account.
+      // It keeps the guest data bound to it (F-4) and protects the backup; no user data in it.
+      let cleanupStatus = "not_started"; // the completed marker could not be written → nothing was cleaned
+      try {
+        const gmNow = getGuestMigrationMarker();
+        if (gmNow && gmNow.attemptId === attemptIdLocal && gmNow.targetUserId === userId) {
+          setGuestMigrationMarker({ status: "completed", targetUserId: userId, fingerprint: fingerprintLocal, backupId: backupIdLocal, attemptId: attemptIdLocal, serverAttemptId, startedAt: gmNow.startedAt || null, completedAt: new Date().toISOString(), cleanup: "pending" });
+        }
+        // D1: cleanup of the moved guest data — never a condition of the account's success
+        cleanupStatus = "failed";
+        cleanupStatus = (await cleanupMigratedGuestData(userId, currentRefUserId)).status;
+      } catch (e) {
+        console.error("guest cleanup after migration failed", e); // the account is ready; cleanup is retried later
+      }
+      return { ok: true, cleanup: cleanupStatus, draftKept: readNamespaceEntry("active_workout_draft", null).state !== "missing" };
+    };
+    let token = null;
+    if (resuming && serverDone) {
+      _accountInitBusy = true;
+      try {
+        return await finalize(markerNow.attemptId, markerNow.fingerprint, markerNow.backupId, markerNow.serverAttemptId);
+      } finally {
+        _accountInitBusy = false;
+      }
+    }
+    if (resuming) {
+      // purely local refusals first — a resume that cannot happen never locks the account
+      if (markerNow.phase !== "uploading") {
+        const guest = readMigratableDataset(null);
+        if (guest.damage.length) return { ok: false, blocked: "damaged", damage: guest.damage, error: `${GUEST_MIGRATION_TEXTS.damaged} Uszkodzone: ${damageText(guest.damage)}.` };
+        if (migratableDataFingerprint(null) !== markerNow.fingerprint) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.guestChanged };
+      } else {
+        const localCheck = prepareAccountDatasetForUpload(userId, { resuming: true });
+        if (!localCheck.ok) return { ok: false, resumeUnsafe: !!localCheck.resumeUnsafe, integrityIssues: localCheck.integrityIssues, error: localCheck.error };
+      }
+      const acq = await acquireFlowAttempt({ userId, deviceId, kind: "guest_to_account", flow: "guest", attemptId: migrationAttemptIdFrom(markerNow.serverAttemptId, markerNow.attemptId), persistId });
+      if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+      if (isOwnCompletedAttempt(acq, deviceId) && markerNow.phase === "uploading") {
+        _accountInitBusy = true;
+        try {
+          return await finalize(markerNow.attemptId, markerNow.fingerprint, markerNow.backupId, acq.attemptId);
+        } finally {
+          _accountInitBusy = false;
+        }
+      }
+      if (!acq.ok) return { ok: false, migration: acq.reason, closed: acq.reason === "closed", row: acq.row || null, error: acq.error };
+      token = acq.attemptId;
+    }
+    // F-5: ends this device's server attempt (cancelled when it wrote nothing) BEFORE local markers go
+    const endServerAttempt = async () => {
+      if (!token) return { ok: true, status: "missing" };
+      const end = await endOwnMigrationAttempt({ attemptId: token, deviceId });
+      if (end.ok) noteMigrationAttemptStatus(userId, token, end.status);
+      return end;
+    };
     let cloud;
     try {
-      cloud = await checkCloudAccountData(userId, guestMigrationCloudOptions(resuming, deviceId, userId));
+      cloud = await checkCloudAccountData(userId, { ...guestMigrationCloudOptions(resuming, deviceId, userId), migrationToken: token });
     } catch (e) {
       return { ok: false, error: authErrorText(e) };
     }
@@ -2065,6 +2609,9 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
       if (cloud.hasData) {
         // resuming, and data of ANOTHER device appeared meanwhile: never overwrite / merge — drop our local
         // copy (the account had nothing before it), end the attempt, decide the source again.
+        const end = await endServerAttempt();
+        if (!end.ok) return { ok: false, error: end.error };
+        if (end.status === "abandoned" || end.status === "uploading") return { ok: false, partial: true, error: GUEST_MIGRATION_TEXTS.partial };
         endAttemptAfterForeignData(userId, markerNow, markerNow.phase === "uploading");
         return { ok: false, blocked: "cloud_changed", cloud, error: GUEST_MIGRATION_TEXTS.cloudChanged };
       }
@@ -2088,7 +2635,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         try {
           // the exercise list V1 will really upload (the default atlas when the guest has none — guestMigrationEntries)
           const ex = prepared.present && prepared.present.exercises && prepared.dataset.exercises.length ? prepared.dataset.exercises : DEFAULT_EXERCISES.map(normalizeExercise);
-          collisions = await v1DeletedRowCollisions(userId, { ...prepared.dataset, exercises: ex });
+          collisions = await v1DeletedRowCollisions(userId, { ...prepared.dataset, exercises: ex }, { migrationToken: token });
         } catch (e) {
           return { ok: false, error: authErrorText(e) };
         }
@@ -2100,13 +2647,30 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
           backupId = backup.backupId;
           const startedAt = new Date().toISOString();
           setGuestMigrationMarker({ status: "migrating", targetUserId: userId, fingerprint, backupId, attemptId, startedAt });
-          setAccountInitMarker(userId, { status: "migrating_guest", source: "guest", syncPaused: true, userId, namespace: ns, deviceId, backupId, fingerprint, attemptId, phase: "copying", startedAt });
+          const serverId = migrationAttemptIdFrom(attemptId);
+          setAccountInitMarker(userId, { status: "migrating_guest", source: "guest", syncPaused: true, userId, namespace: ns, deviceId, backupId, fingerprint, attemptId, serverAttemptId: serverId, phase: "copying", startedAt });
+          // F-5: the server attempt starts BEFORE the copy is written and before any cloud write
+          const acq = await acquireFlowAttempt({ userId, deviceId, kind: "guest_to_account", flow: "guest", attemptId: serverId, persistId });
+          if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true }; // markers stay: resumable (nothing written)
+          if (!acq.ok) {
+            // a definite refusal created nothing on the server and nothing was copied or sent → the state before
+            if (MIGRATION_START_REFUSED.has(acq.reason)) {
+              clearAccountInitMarker(userId);
+              const gmNow = getGuestMigrationMarker();
+              if (gmNow && gmNow.targetUserId === userId && gmNow.attemptId === attemptId) clearGuestMigrationMarker();
+            }
+            return { ok: false, migration: acq.reason, error: acq.error };
+          }
+          token = acq.attemptId;
         } else {
           clearGuestMigrationCopy(userId); // an unconfirmed copy from the interrupted attempt
         }
         if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
         const includeUserName = readAccountUserName(userId).trim() === "" && !(cloud.details && cloud.details.displayName);
         if (!writeNamespaceEntries(userId, guestMigrationEntries(prepared, { includeUserName }))) {
+          // the attempt wrote nothing in the cloud — it ends first (server-confirmed cancel), then the markers
+          const end = await endServerAttempt();
+          if (!end.ok || (end.status !== "cancelled" && end.status !== "missing")) return { ok: false, blocked: "copy_failed", error: GUEST_MIGRATION_TEXTS.copyFailed };
           clearGuestMigrationCopy(userId);
           clearAccountInitMarker(userId);
           clearGuestMigrationMarker();
@@ -2121,44 +2685,33 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
         let collisions;
         try {
-          collisions = await v1DeletedRowCollisions(userId, readMigratableDataset(userId));
+          collisions = await v1DeletedRowCollisions(userId, readMigratableDataset(userId), { migrationToken: token });
         } catch (e) {
           return { ok: false, error: authErrorText(e) };
         }
         if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
         if (collisions.length) return { ok: false, deletedCollisions: collisions, error: DELETED_COLLISION_TEXT };
       }
-      // Re-check the cloud right before the first cloud write: only this attempt's own device rows may be there.
+      // Re-check the cloud right before the first cloud write (after the start, WITH the attempt's id): only this
+      // attempt's own device rows may be there.
       let recheck;
       try {
-        recheck = await checkCloudAccountData(userId, guestMigrationCloudOptions(resuming, deviceId, userId));
+        recheck = await checkCloudAccountData(userId, { ...guestMigrationCloudOptions(resuming, deviceId, userId), migrationToken: token });
       } catch (e) {
         return { ok: false, error: authErrorText(e) };
       }
       if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
       if (recheck.hasData) {
+        const end = await endServerAttempt();
+        if (!end.ok) return { ok: false, error: end.error };
+        if (end.status === "abandoned" || end.status === "uploading") return { ok: false, partial: true, error: GUEST_MIGRATION_TEXTS.partial };
         endAttemptAfterForeignData(userId, getAccountInitMarker(userId), resuming && phase === "uploading");
         return { ok: false, blocked: "cloud_changed", cloud: recheck, error: GUEST_MIGRATION_TEXTS.cloudChanged };
       }
-      const result = await runMigrationV1();
-      if (!result || !result.success) return { ok: false, error: result && result.error ? authErrorText(result.error) : "Nie udało się wysłać danych do chmury." };
+      const up = await runV1UnderAttempt({ userId, deviceId, attemptId: token });
+      if (!up.ok) return { ok: false, closed: !!up.closed, row: up.row || null, error: up.error };
       if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
-      setAccountInitMarker(userId, { status: "ready", source: "guest", syncPaused: false });
-      // Stage 4A.4 Part 2: the completed marker — this guest data (fingerprint) is now in this account.
-      // It keeps the guest data bound to it (F-4) and protects the backup; no user data in it.
-      let cleanupStatus = "not_started"; // the completed marker could not be written → nothing was cleaned
-      try {
-        const gmNow = getGuestMigrationMarker();
-        if (gmNow && gmNow.attemptId === attemptId && gmNow.targetUserId === userId) {
-          setGuestMigrationMarker({ status: "completed", targetUserId: userId, fingerprint, backupId, attemptId, startedAt: gmNow.startedAt || null, completedAt: new Date().toISOString(), cleanup: "pending" });
-        }
-        // D1: cleanup of the moved guest data — never a condition of the account's success
-        cleanupStatus = "failed";
-        cleanupStatus = (await cleanupMigratedGuestData(userId, currentRefUserId)).status;
-      } catch (e) {
-        console.error("guest cleanup after migration failed", e); // the account is ready; cleanup is retried later
-      }
-      return { ok: true, cleanup: cleanupStatus, draftKept: readNamespaceEntry("active_workout_draft", null).state !== "missing" };
+      return await finalize(attemptId, fingerprint, backupId, token);
     } finally {
       _accountInitBusy = false;
     }
@@ -2192,7 +2745,20 @@ async function abandonGuestMigrationUnlocked(userId, currentRefUserId) {
   if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
   const m = getAccountInitMarker(userId);
   if (!m || m.status !== "migrating_guest") return { ok: false, discarded: true };
-  if (m.phase !== "copying") {
+  if (m.serverAttemptId && m.deviceId) {
+    // Stage 4A.4 F-5 (Etap 6): the SERVER decides — `cancelled` only when it confirms that this attempt wrote
+    // nothing; with writes the attempt becomes `abandoned` (account locked until finished or consciously
+    // accepted) and nothing local changes. Unreachable server → nothing changes either ("unknown").
+    const end = await endOwnMigrationAttempt({ attemptId: m.serverAttemptId, deviceId: m.deviceId });
+    if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+    if (!end.ok) return { ok: false, partial: "unknown", error: GUEST_MIGRATION_TEXTS.partialUnknown };
+    noteMigrationAttemptStatus(userId, m.serverAttemptId, end.status);
+    // the server already confirmed `completed` for this device's attempt (the app stopped before finishing
+    // locally): nothing is undone — the caller finishes the migration (resume → finalize, no re-upload)
+    if (end.status === "completed" && end.row && end.row.device_id === m.deviceId) return { ok: false, completed: true };
+    if (end.status !== "cancelled" && end.status !== "missing") return { ok: false, partial: true, serverStatus: end.status, error: GUEST_MIGRATION_TEXTS.partial };
+    if ((getAccountInitMarker(userId) || {}).serverAttemptId !== m.serverAttemptId) return { ok: false, discarded: true }; // changed meanwhile
+  } else if (m.phase !== "copying") {
     let own;
     try {
       own = m.deviceId ? await checkCloudAccountData(userId, { onlyDeviceId: m.deviceId, editedBuiltIns: true }) : null;
@@ -2216,8 +2782,11 @@ async function abandonGuestMigrationUnlocked(userId, currentRefUserId) {
   }
 }
 
-// F-5, the conscious way out after a partial upload: the account starts WITHOUT the guest data. Its local
-// copy is removed; sync stays PAUSED (ready/empty, syncPaused) so the incomplete rows are never pulled in;
+// F-5, the conscious way out after a partial upload: the account goes on WITHOUT the local copy of the guest data
+// (the guest data itself + its backup stay in guest mode). Stage 4A.4 F-5 (Etap 6): when the SERVER confirmed
+// the acceptance (accepted_incomplete — terminal, never `completed`, no new V1), normal sync resumes as the
+// server policy allows: the account uses what the cloud holds, flagged permanently as incomplete. Only a legacy
+// transfer without a server attempt (nothing for the server to know) keeps sync PAUSED (ready/empty, syncPaused).
 // a note `guest_partial_upload` (no user data) remembers on this device that the cloud holds an incomplete
 // transfer, so a later source choice never presents it as normal data. The guest data stays bound to this
 // account's attempt (guest marker "abandoned_partial") — another account needs an explicit release (F-4).
@@ -2239,11 +2808,22 @@ async function startAccountWithoutGuestPartialUnlocked(userId, currentRefUserId)
   if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
   const m = getAccountInitMarker(userId);
   if (!m || m.status !== "migrating_guest" || m.phase === "copying") return { ok: false, discarded: true };
+  let serverAccepted = false;
+  if (m.serverAttemptId && m.deviceId) {
+    // Stage 4A.4 F-5 (Etap 6): the explicit (UI-confirmed) acceptance of the incomplete cloud data — on the
+    // server FIRST (terminal; never `completed`; no new V1 afterwards). Refused / unreachable → nothing changes.
+    const acc = await acceptIncompleteOwnUpload(userId, currentRefUserId, { attemptId: m.serverAttemptId, deviceId: m.deviceId });
+    if (!acc.ok) return { ok: false, discarded: !!acc.discarded, error: acc.error };
+    const now = getAccountInitMarker(userId);
+    if (!now || now.status !== "migrating_guest" || now.serverAttemptId !== m.serverAttemptId) return { ok: false, discarded: true };
+    serverAccepted = acc.status === "accepted_incomplete";
+  }
   _accountInitBusy = true;
   try {
     localStorage.setItem(getStorageKey(GUEST_PARTIAL_NOTE, userId), JSON.stringify({ deviceId: m.deviceId || null, attemptId: m.attemptId || null, backupId: m.backupId || null, at: new Date().toISOString() }));
     clearGuestMigrationCopy(userId);
-    setAccountInitMarker(userId, { status: "ready", source: "empty", syncPaused: true });
+    if (serverAccepted) setAccountInitMarker(userId, { status: "ready", source: "cloud", syncPaused: false, incompleteAccepted: m.serverAttemptId });
+    else setAccountInitMarker(userId, { status: "ready", source: "empty", syncPaused: true });
     const gm = getGuestMigrationMarker();
     if (gm && gm.targetUserId === userId && gm.attemptId === m.attemptId) setGuestMigrationMarker({ ...gm, status: "abandoned_partial", abandonedAt: new Date().toISOString() });
     return { ok: true };
@@ -2586,7 +3166,7 @@ function setWorkoutIdentityMigrationStatus(status, extra = {}) {
 function isHistoryCloudLinked() {
   try {
     const v1 = getMigrationStatus();
-    if (v1 && (v1.status === "completed" || v1.status === "in_progress")) return true;
+    if (v1 && (v1.status === "completed" || v1.status === "in_progress" || v1.status === "verified")) return true; // F-5: "verified" = uploaded, awaiting the server's completed
     const meta = loadSyncMeta();
     if (Object.keys(meta).some((k) => /^workout(s|_exercises|_sets):/.test(k))) return true;
     if (loadSyncQueue().some((q) => /^workout/.test(q.table))) return true;
@@ -2731,9 +3311,7 @@ async function upsertByLegacyId(table, userId, legacyId, rowData, deviceId) {
     requestTarget: { table, select: "id", filters: [["user_id", userId], ["legacy_id", legacyId]], limit: 1 },
     startedAt: selectStartedAt,
   });
-  const selResponse = await supabase
-    .from(table)
-    .select("id")
+  const selResponse = await v1Req(supabase.from(table).select("id"))
     .eq("user_id", userId)
     .eq("legacy_id", legacyId)
     .limit(1);
@@ -2788,7 +3366,7 @@ async function upsertByLegacyId(table, userId, legacyId, rowData, deviceId) {
       payloadKeys: Object.keys(rowData),
       payload: rowData,
     });
-    const updResponse = await supabase.from(table).update(rowData).eq("id", id);
+    const updResponse = await v1Req(supabase.from(table).update(rowData)).eq("id", id);
     console.log("[migration diag] UPDATE response", {
       table,
       recordId: id,
@@ -2814,7 +3392,7 @@ async function upsertByLegacyId(table, userId, legacyId, rowData, deviceId) {
     payloadKeys: Object.keys(insertRow),
     payload: insertRow,
   });
-  const insResponse = await supabase.from(table).insert(insertRow);
+  const insResponse = await v1Req(supabase.from(table).insert(insertRow));
   console.log("[migration diag] INSERT response", {
     table,
     newId,
@@ -2834,9 +3412,7 @@ async function upsertByLegacyId(table, userId, legacyId, rowData, deviceId) {
 // upsertByLegacyId exactly, just keyed on (user_id, field_key) rather than (user_id, legacy_id),
 // and never issues `.eq("legacy_id", ...)` against this table.
 async function upsertCustomFieldByKey(userId, fieldKey, rowData, deviceId) {
-  const { data: existing, error: selErr } = await supabase
-    .from("nextrep_custom_fields")
-    .select("id")
+  const { data: existing, error: selErr } = await v1Req(supabase.from("nextrep_custom_fields").select("id"))
     .eq("user_id", userId)
     .eq("field_key", fieldKey)
     .limit(1);
@@ -2846,15 +3422,13 @@ async function upsertCustomFieldByKey(userId, fieldKey, rowData, deviceId) {
     // Same principle as upsertByLegacyId: never touch device_id on update — preserves the
     // record's original device.
     const id = existing[0].id;
-    const { error: updErr } = await supabase.from("nextrep_custom_fields").update(rowData).eq("id", id);
+    const { error: updErr } = await v1Req(supabase.from("nextrep_custom_fields").update(rowData)).eq("id", id);
     if (updErr) throw new Error(`nextrep_custom_fields: aktualizacja rekordu nie powiodła się — ${updErr.message}`);
     return id;
   }
 
   const newId = newUuid();
-  const { error: insErr } = await supabase
-    .from("nextrep_custom_fields")
-    .insert({ id: newId, user_id: userId, field_key: fieldKey, device_id: deviceId ?? null, ...rowData });
+  const { error: insErr } = await v1Req(supabase.from("nextrep_custom_fields").insert({ id: newId, user_id: userId, field_key: fieldKey, device_id: deviceId ?? null, ...rowData }));
   if (insErr) throw new Error(`nextrep_custom_fields: dodanie rekordu nie powiodło się — ${insErr.message}`);
   return newId;
 }
@@ -2975,7 +3549,7 @@ function v1DatasetIntegrityIssues(ds) {
 // (live rows only) can then never pass and every retry fails after rows were written. So this is checked
 // BEFORE the first cloud write; any collision stops the upload (tombstone vs live semantics = Stage 4A.5).
 // Returns [{ table, count, sample }]; read errors throw (never "no collision" by guess).
-async function v1DeletedRowCollisions(userId, ds) {
+async function v1DeletedRowCollisions(userId, ds, { migrationToken = null } = {}) {
   const keys = {
     exercises: new Set(), plans: new Set(), plan_items: new Set(), plan_item_sets: new Set(), workouts: new Set(),
     workout_exercises: new Set(), workout_sets: new Set(), measurements: new Set(), custom_fields: new Set(),
@@ -3007,7 +3581,7 @@ async function v1DeletedRowCollisions(userId, ds) {
   const out = [];
   for (const [table, set] of Object.entries(keys)) {
     if (!set.size) continue;
-    const remote = await fetchRemoteTable(table, userId);
+    const remote = await fetchRemoteTable(table, userId, { migrationToken });
     const keyOf = (r) => String(table === "custom_fields" ? r.field_key : r.legacy_id);
     const hits = remote.filter((r) => r && !isLiveRemoteRow(r) && set.has(keyOf(r))).map(keyOf);
     if (hits.length) out.push({ table, count: hits.length, sample: hits.slice(0, 5) });
@@ -3176,15 +3750,15 @@ async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId, before
 // historical row is left untouched; nothing is ever deleted here. Read errors throw (no guessing).
 async function adoptV1PosWorkoutExercise(userId, canonicalLegacyId, posLegacyId, workoutId, mappedExerciseId) {
   const table = "nextrep_workout_exercises";
-  const { data: canonical, error: canErr } = await supabase.from(table).select("id").eq("user_id", userId).eq("legacy_id", canonicalLegacyId).limit(1);
+  const { data: canonical, error: canErr } = await v1Req(supabase.from(table).select("id")).eq("user_id", userId).eq("legacy_id", canonicalLegacyId).limit(1);
   if (canErr) throw new Error(`${table}: odczyt istniejącego rekordu nie powiódł się — ${canErr.message}`);
   if (canonical && canonical.length) return;
-  const { data: old, error: oldErr } = await supabase.from(table).select("id, workout_id, exercise_id").eq("user_id", userId).eq("legacy_id", posLegacyId).limit(2);
+  const { data: old, error: oldErr } = await v1Req(supabase.from(table).select("id, workout_id, exercise_id")).eq("user_id", userId).eq("legacy_id", posLegacyId).limit(2);
   if (oldErr) throw new Error(`${table}: odczyt istniejącego rekordu nie powiódł się — ${oldErr.message}`);
   if (!old || old.length !== 1) return;
   const row = old[0];
   if (row.workout_id !== workoutId || (row.exercise_id ?? null) !== (mappedExerciseId ?? null)) return;
-  const { error: updErr } = await supabase.from(table).update({ legacy_id: canonicalLegacyId }).eq("id", row.id).eq("user_id", userId);
+  const { error: updErr } = await v1Req(supabase.from(table).update({ legacy_id: canonicalLegacyId })).eq("id", row.id).eq("user_id", userId);
   if (updErr) throw new Error(`${table}: aktualizacja rekordu nie powiodła się — ${updErr.message}`);
 }
 
@@ -3315,14 +3889,14 @@ async function migrateCustomFieldsV1(userId, customFieldsList, deviceId) {
 }
 
 async function migrateProfileV1(userId, displayName) {
-  const { data: existing, error: selErr } = await supabase.from("nextrep_profiles").select("user_id").eq("user_id", userId).limit(1);
+  const { data: existing, error: selErr } = await v1Req(supabase.from("nextrep_profiles").select("user_id")).eq("user_id", userId).limit(1);
   if (selErr) throw new Error(`nextrep_profiles: odczyt nie powiódł się — ${selErr.message}`);
   if (existing && existing.length) {
-    const { error: updErr } = await supabase.from("nextrep_profiles").update({ display_name: displayName || "" }).eq("user_id", userId);
+    const { error: updErr } = await v1Req(supabase.from("nextrep_profiles").update({ display_name: displayName || "" })).eq("user_id", userId);
     if (updErr) throw new Error(`nextrep_profiles: aktualizacja nie powiodła się — ${updErr.message}`);
     return userId;
   }
-  const { error: insErr } = await supabase.from("nextrep_profiles").insert({ user_id: userId, display_name: displayName || "" });
+  const { error: insErr } = await v1Req(supabase.from("nextrep_profiles").insert({ user_id: userId, display_name: displayName || "" }));
   if (insErr) throw new Error(`nextrep_profiles: dodanie nie powiodło się — ${insErr.message}`);
   return userId;
 }
@@ -3363,7 +3937,7 @@ const MIGRATION_V1_TABLES = [
 async function repairMissingDeviceIdsV1(userId, deviceId) {
   const results = {};
   for (const table of MIGRATION_V1_TABLES) {
-    const { error } = await supabase.from(table).update({ device_id: deviceId }).eq("user_id", userId).is("device_id", null);
+    const { error } = await v1Req(supabase.from(table).update({ device_id: deviceId })).eq("user_id", userId).is("device_id", null);
     if (error) throw new Error(`${table}: naprawa brakującego device_id nie powiodła się — ${error.message}`);
     results[table] = true;
   }
@@ -3387,7 +3961,7 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
   // bigger accounts fail verification. What is compared did not change.
   const readAll = async (pullTable, table) => {
     try {
-      return await fetchRemoteTable(pullTable, userId);
+      return await fetchRemoteTable(pullTable, userId, { migrationToken: _v1MigrationToken });
     } catch (e) {
       throw new Error(`${table}: odczyt rekordów zdalnych nie powiódł się — ${(e && e.message) || e}`);
     }
@@ -3529,25 +4103,19 @@ async function verifyMigrationV1(userId, localEligible, deviceId) {
   // — it's surfaced as information only, and never blocks `completed`.
   const deviceChecks = {};
   for (const table of MIGRATION_V1_TABLES) {
-    const { count: missingDeviceId, error: devErr } = await supabase
-      .from(table)
-      .select("id", { count: "exact", head: true })
+    const { count: missingDeviceId, error: devErr } = await v1Req(supabase.from(table).select("id", { count: "exact", head: true }))
       .eq("user_id", userId)
       .is("device_id", null);
     if (devErr) throw new Error(`${table}: sprawdzenie brakującego device_id nie powiodło się — ${devErr.message}`);
 
-    const { count: missingVersion, error: verErr } = await supabase
-      .from(table)
-      .select("id", { count: "exact", head: true })
+    const { count: missingVersion, error: verErr } = await v1Req(supabase.from(table).select("id", { count: "exact", head: true }))
       .eq("user_id", userId)
       .is("version", null);
     if (verErr) throw new Error(`${table}: sprawdzenie brakującej version nie powiodło się — ${verErr.message}`);
 
     let mismatchedDeviceId = 0;
     if (deviceId) {
-      const { count, error: misErr } = await supabase
-        .from(table)
-        .select("id", { count: "exact", head: true })
+      const { count, error: misErr } = await v1Req(supabase.from(table).select("id", { count: "exact", head: true }))
         .eq("user_id", userId)
         .not("device_id", "is", null)
         .neq("device_id", deviceId);
@@ -3689,9 +4257,11 @@ async function runMigrationV1(onProgress) {
       return { success: false, error: "Migracja zakończona, ale część rekordów nadal nie ma uzupełnionego device_id lub version. Spróbuj ponownie.", verification };
     }
 
-    setMigrationStatus("completed", { verification }, statusUserId);
+    // Stage 4A.4 F-5 (Etap 6): under a server attempt the run is "completed" only after the server confirms it
+    // (runV1UnderAttempt) — until then it is merely verified
+    setMigrationStatus(_v1MigrationToken ? "verified" : "completed", { verification }, statusUserId);
     onProgress?.("done");
-    return { success: true, verification };
+    return { success: true, verification, statusUserId };
   } catch (e) {
     setMigrationStatus("failed", { error: e?.message || "Nieznany błąd migracji." }, statusUserId);
     return { success: false, error: e?.message || "Nie udało się przenieść danych do konta." };
@@ -3713,10 +4283,39 @@ async function manualMigrationBlocker() {
   if (m.syncPaused) return "Synchronizacja tego konta jest wstrzymana, bo w chmurze są inne dane niż na tym urządzeniu. Przeniesienie danych mogłoby je nadpisać — wybierz ponownie źródło danych.";
   return null;
 }
+// Stage 4A.4 F-5 (Etap 6): the repair tool never writes outside a server attempt either. An interrupted run of
+// THIS device (record flow "manual", uploading / abandoned) is resumed with the SAME id; otherwise a new id is
+// persisted before the start. While it runs every other device of the account is paused (server lock); the
+// server refuses it when another attempt is open or the account holds data accepted as incomplete.
+let _manualMigrationRunning = false;
 async function runManualMigrationV1(onProgress) {
+  if (_manualMigrationRunning) return { success: false, blocked: true, error: "Przenoszenie danych już trwa — poczekaj na jego zakończenie." };
   const blocked = await manualMigrationBlocker();
   if (blocked) return { success: false, blocked: true, error: blocked };
-  return runMigrationV1(onProgress);
+  _manualMigrationRunning = true;
+  _accountInitBusy = true; // no source-selection step may start while the tool writes this account
+  try {
+    const userId = await currentSessionUserId();
+    const deviceId = getOrCreateDeviceId();
+    if (!userId || !deviceId || !isActiveNamespaceFor(userId)) return { success: false, blocked: true, error: "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę." };
+    const prev = getMigrationAttemptRecord(userId);
+    const resumeOwn = !!(prev && prev.flow === "manual" && prev.deviceId === deviceId && prev.userId === userId && (prev.status === "uploading" || prev.status === "abandoned" || prev.status === "starting"));
+    const acq = await acquireFlowAttempt({ userId, deviceId, kind: "device_upload", flow: "manual", attemptId: resumeOwn ? migrationAttemptIdFrom(prev.attemptId) : newUuid() });
+    if (isOwnCompletedAttempt(acq, deviceId)) return { success: true, alreadyCompleted: true };
+    if (!acq.ok) return { success: false, blocked: acq.reason !== "closed", migration: acq.reason, closed: acq.reason === "closed", error: acq.error };
+    if ((await currentSessionUserId()) !== userId || !isActiveNamespaceFor(userId)) return { success: false, error: "Zmiana konta w trakcie przenoszenia danych — nic nie zostało wysłane." };
+    const up = await runV1UnderAttempt({ userId, deviceId, attemptId: acq.attemptId, onProgress });
+    if (!up.ok) return { success: false, closed: !!up.closed, attemptOpen: !up.closed, error: up.error };
+    return { success: true, verification: up.verification };
+  } finally {
+    _accountInitBusy = false;
+    _manualMigrationRunning = false;
+  }
+}
+// The interrupted manual run of THIS device (its attempt is still open on the server) — for the account screen.
+function getOpenManualAttempt(userId) {
+  const r = getMigrationAttemptRecord(userId);
+  return r && r.flow === "manual" && r.userId === userId && (r.status === "uploading" || r.status === "abandoned" || r.status === "starting") ? r : null;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -3832,10 +4431,15 @@ function clearSyncQueue() {
   saveSyncQueue([]);
 }
 
-// --- Error classification (point 6). Never throws, always returns one of the 6 kinds. ---
+// --- Error classification (point 6). Never throws, always returns one of the 6 kinds (+ Stage 4A.4 F-5:
+// "migration_paused"). ---
 function classifySyncError(error) {
   if (!error) return "unknown";
   if (typeof navigator !== "undefined" && navigator.onLine === false) return "network";
+  // Stage 4A.4 F-5: the account is locked by a migration attempt (NR001) — the change is kept and waits; a
+  // closed-attempt answer (NR002) can't come from sync (it never sends a token) but is treated the same way.
+  const mk = migrationErrorKind(error);
+  if (mk === "in_progress" || mk === "closed") return "migration_paused";
 
   const message = String((error && error.message) || error || "");
   const name = (error && error.name) || "";
@@ -3888,6 +4492,12 @@ async function attemptSyncQueueItem(item, syncFn = syncQueueItemStub) {
     const attempts = (item.attempts || 0) + 1;
     console.log("[push diag] attemptSyncQueueItem(): classifySyncError ->", kind, "attempts now", attempts);
 
+    if (kind === "migration_paused") {
+      // Stage 4A.4 F-5: kept; retried through the gate only after the lock ends (no hammering)
+      updateSyncQueueItem(item.id, { attempts, status: "failed" });
+      scheduleSyncRetry(item.id, MIGRATION_TIMING.pausedRetryMs, syncFn);
+      return { ok: false, kind, itemId: item.id, attempts, retryScheduled: true, delayMs: MIGRATION_TIMING.pausedRetryMs };
+    }
     if (kind === "network" || kind === "server" || kind === "unknown") {
       updateSyncQueueItem(item.id, { attempts, status: "failed" });
       const delay = getRetryDelayMs(attempts);
@@ -3913,10 +4523,37 @@ function scheduleSyncRetry(itemId, delayMs, syncFn = syncQueueItemStub) {
     const current = queue.find((it) => it.id === itemId);
     if (!current) return; // removed/succeeded elsewhere in the meantime
     if (current.status !== "failed" && current.status !== "pending") return; // e.g. now "conflict" — leave it alone
-    attemptSyncQueueItem(current, syncFn);
+    runGatedSyncRetry(itemId, syncFn).catch((e) => console.error("sync retry failed", e));
   }, delayMs);
   _syncRetryTimers[itemId] = timer;
   return timer;
+}
+// Stage 4A.4 F-5 (Etap 6): a retry is a PUSH like any other — it never goes around the gates runSync()
+// applies: session + own namespace + account ready (marker) + the server migration lock (fail closed),
+// and it holds the same single-flight lock as runSync(), so a retry and a sync pass never overlap.
+// Locked / unknown → the item stays (failed) and is tried again later; the queue is never cleared.
+async function runGatedSyncRetry(itemId, syncFn) {
+  if (_syncRunInProgress) {
+    scheduleSyncRetry(itemId, 2000, syncFn); // a sync pass is running — it (or the next retry) takes the item
+    return { ok: false, reason: "busy" };
+  }
+  _syncRunInProgress = true;
+  try {
+    const userId = await currentSessionUserId();
+    if (!userId || !isActiveNamespaceFor(userId) || !isAccountSyncAllowed(userId)) return { ok: false, reason: "not_allowed" };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, reason: "offline" };
+    const gate = await readMigrationGate(userId);
+    if (!gate.ok || gate.blocking) {
+      if (isActiveNamespaceFor(userId)) scheduleSyncRetry(itemId, MIGRATION_TIMING.pausedRetryMs, syncFn);
+      return { ok: false, reason: gate.ok ? "migration_locked" : "migration_check_failed" };
+    }
+    if (!isActiveNamespaceFor(userId) || !isAccountSyncAllowed(userId) || (await currentSessionUserId()) !== userId) return { ok: false, reason: "not_allowed" };
+    const current = loadSyncQueue().find((it) => it.id === itemId);
+    if (!current || (current.status !== "failed" && current.status !== "pending")) return { ok: false, reason: "gone" };
+    return await attemptSyncQueueItem(current, syncFn);
+  } finally {
+    _syncRunInProgress = false;
+  }
 }
 
 function cancelAllScheduledSyncRetries() {
@@ -4574,6 +5211,22 @@ async function runSyncUnlocked() {
     return { started: false, pushed: 0, failed: 0, conflicts: 0, message: "Brak połączenia z internetem — zmiany pozostają zapisane lokalnie." };
   }
 
+  // Stage 4A.4 F-5 (Etap 6): the SERVER migration lock decides before any PUSH / PULL. While an attempt of
+  // this account is uploading or abandoned nothing is sent or applied; an unreadable status (network,
+  // missing table, any error) stops the sync too (fail closed). The queue is kept as it is.
+  const gate = await readMigrationGate(user.id);
+  if (!gate.ok || gate.blocking) {
+    const abandoned = gate.ok && gate.blocking.status === "abandoned";
+    return {
+      started: false, skipped: true, reason: !gate.ok ? "migration_check_failed" : abandoned ? "migration_abandoned" : "migration_in_progress", gate,
+      pushed: 0, failed: 0, conflicts: 0,
+      message: !gate.ok ? MIGRATION_TEXTS.checkFailed : abandoned ? MIGRATION_TEXTS.abandoned : gate.own ? MIGRATION_TEXTS.inProgressHere : MIGRATION_TEXTS.inProgressOther,
+    };
+  }
+  if (!isActiveNamespaceFor(user.id) || !isAccountSyncAllowed(user.id)) {
+    return { started: false, skipped: true, reason: "namespace_switching", pushed: 0, failed: 0, conflicts: 0, message: "Trwa wczytywanie danych konta — synchronizacja za chwilę." };
+  }
+
   // FIX 1: fill missing sync_meta baselines for pre-existing local records BEFORE PUSH/PULL, so a
   // device's first PULL doesn't report false potential_conflicts. Never blocks the sync: any
   // failure simply leaves meta as it was (the next online sync tries again).
@@ -4591,6 +5244,7 @@ async function runSyncUnlocked() {
   let pushed = 0;
   let failed = 0;
   let conflicts = 0;
+  let pausedByMigration = false; // Stage 4A.4 F-5: a lock appeared during this pass (NR001)
 
   // Step 8C.8: an empty queue means "nothing to PUSH", not "skip the whole sync" — PULL/APPLY
   // below must still run so a device with no local changes can pick up remote ones (e.g. Device
@@ -4645,6 +5299,11 @@ async function runSyncUnlocked() {
       }
       else if (result.kind === "conflict") conflicts++;
       else failed++;
+      if (result.kind === "migration_paused") {
+        // the account got locked meanwhile: no further item is sent now (they all stay queued)
+        pausedByMigration = true;
+        break;
+      }
     }
     console.log("[push diag] ===== PUSH phase END ===== queue state:", loadSyncQueue());
   }
@@ -4662,17 +5321,35 @@ async function runSyncUnlocked() {
   let pullError = null;
   console.log("[push diag] ===== PULL phase START =====");
   let pullResult;
-  try {
-    pullResult = await pullRemoteChanges();
-  } catch (e) {
-    console.log("[push diag] pullRemoteChanges() THREW unexpectedly", e);
-    pullResult = { success: false, error: e && e.message ? e.message : String(e) };
+  if (pausedByMigration) {
+    pullResult = { success: false, error: MIGRATION_TEXTS.locked }; // the read guard would refuse it anyway
+  } else {
+    try {
+      pullResult = await pullRemoteChanges();
+    } catch (e) {
+      console.log("[push diag] pullRemoteChanges() THREW unexpectedly", e);
+      pullResult = { success: false, error: e && e.message ? e.message : String(e) };
+    }
   }
   console.log("[push diag] pullRemoteChanges() result", pullResult);
   // Stage 4A.1: never apply pulled rows into local storage if the account (session) or the
   // active local namespace changed while this run was in flight.
   if (pullResult && pullResult.success && (getActiveDataNamespace() !== syncNamespaceAtStart || (await currentSessionUserId()) !== user.id)) {
     pullResult = { success: false, error: "Zmieniono konto w trakcie synchronizacji — pobrane zmiany zostały pominięte." };
+  }
+  // Stage 4A.4 F-5 (Etap 6): the status is checked AGAIN right before anything pulled is applied — a migration
+  // that started meanwhile (or an unreadable status) drops the pulled data; nothing partial is applied.
+  if (pullResult && pullResult.success) {
+    const gateBeforeApply = await readMigrationGate(user.id);
+    if (!gateBeforeApply.ok || gateBeforeApply.blocking) {
+      pullResult = { success: false, error: gateBeforeApply.ok ? MIGRATION_TEXTS.locked : MIGRATION_TEXTS.checkFailed };
+    } else if (gateBeforeApply.stamp !== gate.stamp) {
+      // an attempt started and ended while this pass was reading: the pulled tables may mix the state before
+      // and after it — nothing is applied now, the next pass reads it again
+      pullResult = { success: false, error: "Dane konta zmieniły się w trakcie pobierania — zmiany zostaną pobrane przy następnej synchronizacji." };
+    } else if (getActiveDataNamespace() !== syncNamespaceAtStart || (await currentSessionUserId()) !== user.id) {
+      pullResult = { success: false, error: "Zmieniono konto w trakcie synchronizacji — pobrane zmiany zostały pominięte." };
+    }
   }
   if (pullResult && pullResult.success) {
     pullSuccess = true;
@@ -4712,7 +5389,8 @@ async function runSyncUnlocked() {
     pullConflicts,
     pullError,
     bootstrap: bootstrapResult, // FIX 1 diagnostics only (message text unchanged)
-    message: parts.length ? `Synchronizacja: ${parts.join(", ")}.` : "Synchronizacja zakończona.",
+    ...(pausedByMigration ? { reason: "migration_in_progress" } : {}),
+    message: pausedByMigration ? MIGRATION_TEXTS.locked : parts.length ? `Synchronizacja: ${parts.join(", ")}.` : "Synchronizacja zakończona.",
   };
 }
 
@@ -4980,6 +5658,10 @@ async function bootstrapSyncMetaForExistingDataUnlocked() {
   const metaAtStart = loadSyncMeta();
   const missing = collectLocalSyncKeys(localSnapshot).filter((k) => !metaAtStart[k]);
   if (missing.length === 0) return { ...result, skipped: "nothing_missing" }; // no network call at all
+  // Stage 4A.4 F-5 (Etap 6): no remote read while a migration attempt locks the account (fail closed)
+  const gate = await readMigrationGate(user.id);
+  if (!gate.ok || gate.blocking) return { ...result, success: gate.ok, skipped: gate.ok ? "migration_locked" : "migration_check_failed" };
+  if (getActiveDataNamespace() !== bootstrapNamespace) return { ...result, success: false, skipped: "context_changed" };
 
   const remoteByTable = {};
   try {
@@ -5173,7 +5855,8 @@ const PULL_TABLE_TO_SUPABASE = {
 // the rows actually received, so a server cap smaller than the page size can't end it early. Any
 // page error fails the whole fetch — a partial table is never returned as if it were complete.
 const REMOTE_FETCH_PAGE_SIZE = 500;
-async function fetchRemoteTable(pullTable, userId) {
+// Stage 4A.4 F-5 (Etap 6): `migrationToken` only from V1 code (verification / collision check) — sync never passes it.
+async function fetchRemoteTable(pullTable, userId, { migrationToken = null } = {}) {
   const supabaseTable = PULL_TABLE_TO_SUPABASE[pullTable];
   const orderColumn = pullTable === "profiles" ? "user_id" : "id";
   const rows = [];
@@ -5182,7 +5865,7 @@ async function fetchRemoteTable(pullTable, userId) {
   let from = 0;
   for (;;) {
     let query = supabase.from(supabaseTable);
-    query = from === 0 ? query.select("*", { count: "exact" }) : query.select("*");
+    query = withMigrationToken(from === 0 ? query.select("*", { count: "exact" }) : query.select("*"), migrationToken);
     const { data, error, count } = await query.eq("user_id", userId).order(orderColumn, { ascending: true }).range(from, from + REMOTE_FETCH_PAGE_SIZE - 1);
     if (error) throw error;
     const page = Array.isArray(data) ? data : [];
@@ -8705,7 +9388,106 @@ function ConflictCenterScreen({ onNavigate, exercises, isOnline }) {
 
 
 // Stage 4A.2 — full-screen account initialisation (shows NO app data while undecided).
-function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceSnapshotStatus, onAbandonCloud, onRetryUpload, onAbandonUpload, onGuestMigrate, onGuestLater, onGuestAbandon, onGuestStartWithout, onGuestRelease, onGuestReleaseConfirm }) {
+// Stage 4A.4 F-5 (Etap 6): what the server says about the account's migration attempts, in words — and the
+// only ways out of a lock: finish it on the owner device (onResumeOwn), close an attempt that the server
+// counts ZERO writes for, or (two-step confirmation) consciously accept the incomplete cloud data. Time never
+// changes anything: after 24 h without activity only the last activity is shown.
+function migrationGateDescription(gate, now = Date.now()) {
+  if (!gate) return null;
+  if (!gate.ok) return { kind: "check_failed", text: MIGRATION_TEXTS.checkFailed };
+  const b = gate.blocking;
+  if (!b) return null;
+  const last = migrationLastActivity(b);
+  const lastText = last ? `Ostatnia aktywność przenoszenia: ${fmtDMYHM(last)}.` : null;
+  const inactive = migrationInactiveLong(b, now);
+  const text = b.status === "abandoned" ? MIGRATION_TEXTS.abandoned : gate.own ? MIGRATION_TEXTS.inProgressHere : MIGRATION_TEXTS.inProgressOther;
+  return {
+    kind: b.status === "abandoned" ? "abandoned" : gate.own ? "uploading_here" : "uploading_other",
+    text,
+    lastText,
+    inactiveText: inactive
+      ? "Od ponad 24 godzin nie było żadnej aktywności tego przenoszenia. Jego stan nie zmienia się sam — dokończ je na urządzeniu, które je rozpoczęło, albo świadomie przyjmij niekompletne dane."
+      : null,
+    canCancel: Number(b.writes_count) === 0 && (b.status === "abandoned" || gate.own),
+    row: b,
+  };
+}
+function MigrationLockPanel({ userId, gate, onChanged, onResumeOwn, testPrefix = "mig" }) {
+  const [confirmAccept, setConfirmAccept] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const d = migrationGateDescription(gate);
+  if (!d) return null;
+  const recheck = async () => {
+    setBusy(true);
+    setError(null);
+    const g = await readMigrationGate(userId);
+    setBusy(false);
+    setConfirmAccept(false);
+    if (onChanged) onChanged(g);
+  };
+  const act = async (fn) => {
+    setBusy(true);
+    setError(null);
+    let deviceId = null;
+    try {
+      deviceId = getOrCreateDeviceId();
+    } catch {}
+    const row = d.row;
+    const r = deviceId ? await fn({ attemptId: row.attempt_id, deviceId }) : { ok: false, error: MIGRATION_TEXTS.acceptFailed };
+    if (r && r.row) noteMigrationAttemptStatus(userId, row.attempt_id, r.row.status);
+    const g = await readMigrationGate(userId);
+    setBusy(false);
+    setConfirmAccept(false);
+    if (!r || !r.ok) setError((r && r.error) || (r && r.status ? "Serwer nie zgodził się na tę zmianę — stan przenoszenia zmienił się w międzyczasie. Sprawdź ponownie." : MIGRATION_TEXTS.acceptFailed));
+    if (onChanged) onChanged(g);
+  };
+  const b = (label, onClick, primary, testid, disabled) => (
+    <button
+      onClick={onClick}
+      disabled={busy || disabled}
+      data-testid={testid}
+      className={`w-full py-2.5 rounded-xl font-semibold text-sm mt-2 disabled:opacity-50 ${primary ? "bg-orange-500 text-neutral-950" : "bg-neutral-800 text-neutral-100"}`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div data-testid={`${testPrefix}-lock`} data-kind={d.kind}>
+      <p className={`text-sm leading-relaxed ${d.kind === "check_failed" ? "text-red-400" : "text-amber-400"}`} data-testid={`${testPrefix}-lock-text`}>
+        {d.text}
+      </p>
+      {d.lastText && <p className="text-neutral-400 text-xs mt-1" data-testid={`${testPrefix}-lock-last`}>{d.lastText}</p>}
+      {d.inactiveText && <p className="text-neutral-400 text-xs mt-1" data-testid={`${testPrefix}-lock-inactive`}>{d.inactiveText}</p>}
+      {d.kind !== "check_failed" && d.row && Number(d.row.writes_count) > 0 && (
+        <p className="text-neutral-500 text-xs mt-1">Część danych tego przenoszenia jest już w chmurze — dane w chmurze mogą być niekompletne.</p>
+      )}
+      {d.kind === "uploading_other" && d.row && Number(d.row.writes_count) === 0 && (
+        <p className="text-neutral-500 text-xs mt-1" data-testid={`${testPrefix}-lock-nothing-sent`}>
+          Z tego przenoszenia nic jeszcze nie trafiło do chmury. Najlepiej dokończ je albo przerwij na urządzeniu, które je rozpoczęło — wtedy konto odblokuje się bez przyjmowania niekompletnych danych.
+        </p>
+      )}
+      {onResumeOwn && gate.own && b("Dokończ przenoszenie", onResumeOwn, true, `${testPrefix}-lock-resume`)}
+      {b("Sprawdź ponownie", recheck, !(onResumeOwn && gate.own) && d.kind === "check_failed", `${testPrefix}-lock-recheck`)}
+      {d.kind !== "check_failed" && d.canCancel && b("Zamknij przenoszenie (nic nie zostało wysłane)", () => act(cancelEmptyMigrationAttempt), false, `${testPrefix}-lock-cancel`)}
+      {d.kind !== "check_failed" && !d.canCancel && !confirmAccept && b("Przyjmij niekompletne dane w chmurze", () => setConfirmAccept(true), false, `${testPrefix}-lock-accept`)}
+      {d.kind !== "check_failed" && !d.canCancel && confirmAccept && (
+        <>
+          <p className="text-red-400 text-xs mt-2 leading-relaxed" data-testid={`${testPrefix}-lock-accept-warning`}>
+            Dane w chmurze tego konta mogą być NIEKOMPLETNE — przenoszenie nie zostało dokończone i nie zostanie już dokończone{d.kind === "uploading_other" ? " (urządzenie, które je prowadzi, przestanie wysyłać dane)" : ""}. Kolejne przenoszenie danych na to konto będzie zablokowane do czasu łączenia danych (kolejny etap). Nic nie zostanie usunięte.
+          </p>
+          {b("Tak, przyjmuję niekompletne dane", () => act(acceptIncompleteMigrationAttempt), false, `${testPrefix}-lock-accept-confirm`)}
+          {b("Anuluj", () => setConfirmAccept(false), false, `${testPrefix}-lock-accept-cancel`)}
+        </>
+      )}
+      {error && <p className="text-red-400 text-xs mt-2" data-testid={`${testPrefix}-lock-error`}>{error}</p>}
+    </div>
+  );
+}
+const ACCEPTED_INCOMPLETE_NOTE =
+  "Dane w chmurze tego konta zostały świadomie przyjęte jako NIEKOMPLETNE (przenoszenie danych nie zostało dokończone). Nie są oznaczone jako pełne, a kolejne przenoszenie danych na to konto jest zablokowane do czasu łączenia danych (kolejny etap).";
+
+function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChooseEmpty, onRetry, onWorkOffline, onBack, onConfirmCloud, deviceSnapshotStatus, onAbandonCloud, onRetryUpload, onAbandonUpload, onGuestMigrate, onGuestLater, onGuestAbandon, onGuestStartWithout, onGuestRelease, onGuestReleaseConfirm, userId, onGateChanged, onConfirmStep, onUploadAcceptIncomplete }) {
   // Stage 4A.3: "go back to the device data" is offered only when that restore can really happen.
   const deviceRestorePossible = deviceSnapshotStatus === "ok";
   const snapshotNote = deviceRestorePossible
@@ -8805,6 +9587,53 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
       </>
     );
   }
+  // Stage 4A.4 F-5 (Etap 6): the account is locked by a migration attempt (this or another device) — say
+  // why, show the last activity, and offer the only safe ways out.
+  if (init.status === "migration_blocked") {
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2" data-testid="init-migration-blocked">PRZENOSZENIE DANYCH NA TO KONTO</p>
+        <MigrationLockPanel userId={userId} gate={init.gate} onChanged={onGateChanged} testPrefix="init" />
+        {init.gate && init.gate.ok && !init.gate.blocking && <p className="text-neutral-300 text-sm">Przenoszenie danych zostało zakończone — sprawdź ponownie dane konta.</p>}
+        {btn("Sprawdź dane konta ponownie", onRetry, false, "init-retry")}
+        {btn(init.local && init.local.hasData ? "Pracuj z danymi na urządzeniu" : "Kontynuuj bez danych z chmury", onWorkOffline, false, "init-offline")}
+        <p className="text-neutral-600 text-xs mt-2">Synchronizacja tego konta ruszy dopiero po rozstrzygnięciu przenoszenia i sprawdzeniu chmury.</p>
+        {errorLine}
+      </>
+    );
+  }
+  // F-5: an interrupted device upload whose rows are partly in the cloud — finish it or consciously accept.
+  if (init.status === "upload_partial") {
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2" data-testid="init-upload-partial">CZĘŚĆ DANYCH JEST JUŻ W CHMURZE</p>
+        <p className="text-neutral-300 text-sm mb-2">{MIGRATION_TEXTS.partialDevice}</p>
+        {btn("Dokończ wysyłanie", onRetryUpload, true, "init-retry-upload")}
+        {!init.confirmAccept && btn("Przyjmij niekompletne dane w chmurze", () => onConfirmStep({ confirmAccept: true }), false, "init-upload-accept")}
+        {init.confirmAccept && (
+          <>
+            <p className="text-red-400 text-sm mb-2" data-testid="init-upload-accept-warning">
+              Dane w chmurze tego konta pozostaną NIEKOMPLETNE i nie zostaną już uzupełnione przenoszeniem (kolejne przenoszenie będzie zablokowane do czasu łączenia danych — kolejny etap). Synchronizacja zostanie wznowiona; dane z tego urządzenia, które nie trafiły do chmury, zostaną na nim. Nic nie zostanie usunięte.
+            </p>
+            {btn("Tak, przyjmuję niekompletne dane", onUploadAcceptIncomplete, false, "init-upload-accept-confirm")}
+            {btn("Anuluj", () => onConfirmStep({ confirmAccept: false }), false, "init-upload-accept-cancel")}
+          </>
+        )}
+        {btn("Pracuj z danymi na urządzeniu", onWorkOffline, false, "init-offline")}
+        {errorLine}
+      </>
+    );
+  }
+  // F-5: this device's attempt was closed on another device (accepted as incomplete there) — it stopped sending.
+  if (init.status === "migration_closed") {
+    return shell(
+      <>
+        <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2" data-testid="init-migration-closed">PRZENOSZENIE ZOSTAŁO ZAMKNIĘTE</p>
+        <p className="text-neutral-300 text-sm mb-4" data-testid="init-migration-closed-text">{init.error || MIGRATION_TEXTS.closedElsewhere}</p>
+        {btn("Wróć do wyboru źródła danych", init.flow === "guest" ? onGuestAbandon : onAbandonUpload, true, "init-closed-back")}
+      </>
+    );
+  }
   if (init.status === "error_upload" || init.status === "upload_interrupted") {
     const interrupted = init.status === "upload_interrupted";
     return shell(
@@ -8898,8 +9727,17 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
         </p>
         {btn("Dokończ przenoszenie", onGuestMigrate, true, "init-guest-retry")}
         {init.partialUnknown && btn("Spróbuj ponownie wrócić bez przenoszenia", onGuestAbandon, false, "init-guest-abandon")}
-        {btn("Zacznij konto bez tych danych", onGuestStartWithout, false, "init-guest-start-without")}
-        <p className="text-neutral-600 text-xs mt-2">„Zacznij konto bez tych danych” — konto zacznie od pustych danych, a synchronizacja pozostanie wstrzymana, żeby niekompletna kopia z chmury nie trafiła na urządzenie.</p>
+        {!init.confirmAccept && btn("Zacznij konto bez tych danych", () => onConfirmStep({ confirmAccept: true }), false, "init-guest-start-without")}
+        {init.confirmAccept && (
+          <>
+            <p className="text-red-400 text-sm mb-2" data-testid="init-guest-start-without-warning">
+              Dane w chmurze tego konta zostaną świadomie przyjęte jako NIEKOMPLETNE — przenoszenie nie zostanie już dokończone, a kolejne przenoszenie danych na to konto będzie zablokowane do czasu łączenia danych (kolejny etap). Synchronizacja zostanie wznowiona, więc konto będzie używać niekompletnych danych z chmury. Pełne dane w trybie bez logowania i ich kopia zapasowa zostają na tym urządzeniu.
+            </p>
+            {btn("Tak, zacznij bez tych danych", onGuestStartWithout, false, "init-guest-start-without-confirm")}
+            {btn("Anuluj", () => onConfirmStep({ confirmAccept: false }), false, "init-guest-start-without-cancel")}
+          </>
+        )}
+        <p className="text-neutral-600 text-xs mt-2">„Zacznij konto bez tych danych” — konto nie przejmie lokalnej kopii danych z trybu bez logowania; po potwierdzeniu będzie używać tego, co już jest w chmurze (oznaczone na stałe jako niekompletne).</p>
         {errorLine}
       </>
     );
@@ -8956,6 +9794,11 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
         </p>
       )}
       {local.hasData && btn("Wczytaj dane z urządzenia", onChooseLocal, !cloud.hasData, "init-local")}
+      {cloud.hasData && init.incompleteAccepted && (
+        <p className="text-amber-400 text-sm mb-3" data-testid="init-incomplete-accepted">
+          {ACCEPTED_INCOMPLETE_NOTE}
+        </p>
+      )}
       {cloud.hasData && init.partialGuestUpload && (
         <p className="text-amber-400 text-sm mb-3" data-testid="init-partial-warning">
           Uwaga: w chmurze tego konta jest niedokończone przeniesienie danych z trybu bez logowania. Dane z chmury mogą być niekompletne.
@@ -8993,6 +9836,24 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
   useEffect(() => {
     setPendingConflictCount(getPendingConflictCount());
   }, [syncQueueState]);
+  // Stage 4A.4 F-5 (Etap 6): the server view of the account's migration attempts + this device's open manual run
+  const accUid = authUser ? authUser.id : null;
+  const [migGate, setMigGate] = useState(() => (accUid ? getLastMigrationGate(accUid) : null));
+  const [openManual, setOpenManual] = useState(() => (accUid ? getOpenManualAttempt(accUid) : null));
+  const [manualEnding, setManualEnding] = useState(false);
+  useEffect(() => {
+    if (!supabase || !accUid) return;
+    setMigGate(getLastMigrationGate(accUid));
+    setOpenManual(getOpenManualAttempt(accUid));
+    const off = onMigrationGateChange((g) => {
+      if (g && g.userId === accUid) {
+        setMigGate(g);
+        setOpenManual(getOpenManualAttempt(accUid));
+      }
+    });
+    if (isOnline) readMigrationGate(accUid).catch(() => {});
+    return off;
+  }, [accUid, isOnline]);
 
   if (!supabase) {
     return (
@@ -9061,6 +9922,8 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
     }
     setMigrationStatusState(getMigrationStatus());
     setMigrationStage(null);
+    setOpenManual(getOpenManualAttempt(authUser.id));
+    readMigrationGate(authUser.id).catch(() => {});
     if (!result.success) {
       setMigrationResult({ ok: false, text: result.error ? authErrorText(result.error) : "Nie udało się przenieść danych do konta." });
       return;
@@ -9171,9 +10034,17 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
                     </p>
                   )}
                   {onRechooseDataSource && (
-                    <button onClick={onRechooseDataSource} className="w-full mt-3 py-2.5 rounded-xl bg-neutral-800 text-neutral-100 font-semibold text-sm">
+                    <button
+                      onClick={onRechooseDataSource}
+                      disabled={!!openManual || !!migrationStage}
+                      data-testid="rechoose-source"
+                      className="w-full mt-3 py-2.5 rounded-xl bg-neutral-800 text-neutral-100 font-semibold text-sm disabled:opacity-50"
+                    >
                       Wybierz ponownie źródło danych
                     </button>
+                  )}
+                  {onRechooseDataSource && openManual && (
+                    <p className="text-neutral-500 text-xs mt-2 leading-relaxed">Najpierw dokończ albo przerwij przenoszenie danych z tego urządzenia (sekcja „Migracja danych”).</p>
                   )}
                 </div>
               );
@@ -9234,13 +10105,59 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
                 koncie NEXTREP.
               </p>
 
+              {(() => {
+                // Stage 4A.4 F-5 (Etap 6): accepted-incomplete data is a PERMANENT note here (server view or this
+                // device's own record of it — also offline); locks and this device's open run are explained
+                const m = getAccountInitMarker(authUser.id);
+                const rec = getMigrationAttemptRecord(authUser.id);
+                const incomplete = !!((migGate && migGate.ok && migGate.acceptedIncomplete) || (m && m.incompleteAccepted) || getGuestPartialNote(authUser.id) || (rec && rec.status === "accepted_incomplete"));
+                const lockShown = !!(migGate && (!migGate.ok || migGate.blocking));
+                return (
+                  <>
+                    {incomplete && (
+                      <p className="text-amber-400 text-xs leading-relaxed mb-3" data-testid="account-incomplete-accepted">
+                        {ACCEPTED_INCOMPLETE_NOTE}
+                      </p>
+                    )}
+                    {lockShown && (
+                      <div className="mb-3">
+                        <MigrationLockPanel userId={authUser.id} gate={migGate} onChanged={(g) => setMigGate(g)} onResumeOwn={openManual && migGate.own ? handleMigrateToCloud : null} testPrefix="account" />
+                      </div>
+                    )}
+                    {openManual && !lockShown && !migrationStage && (
+                      <div className="mb-3" data-testid="account-manual-open">
+                        <p className="text-amber-400 text-xs leading-relaxed mb-2">Przenoszenie danych z tego urządzenia nie zostało dokończone — synchronizacja tego konta (także na innych urządzeniach) jest wstrzymana do jego zakończenia.</p>
+                        <button onClick={handleMigrateToCloud} className="w-full py-2.5 rounded-xl bg-orange-500 text-neutral-950 font-semibold text-sm mb-2" data-testid="account-manual-resume">
+                          Dokończ przenoszenie
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setManualEnding(true);
+                            const end = await endOwnMigrationAttempt({ attemptId: openManual.attemptId, deviceId: openManual.deviceId });
+                            if (end.ok) noteMigrationAttemptStatus(authUser.id, openManual.attemptId, end.status);
+                            setMigrationResult(end.ok ? null : { ok: false, text: end.error });
+                            await readMigrationGate(authUser.id).catch(() => {});
+                            setOpenManual(getOpenManualAttempt(authUser.id));
+                            setManualEnding(false);
+                          }}
+                          disabled={manualEnding}
+                          className="w-full py-2.5 rounded-xl bg-neutral-800 text-neutral-100 font-semibold text-sm disabled:opacity-50"
+                          data-testid="account-manual-end"
+                        >
+                          Przerwij przenoszenie
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               {migrationStatus.status === "completed" && !migrationStage ? (
                 <p className="text-lime-400 text-xs leading-relaxed mb-2">Migracja danych została już wykonana.</p>
               ) : null}
 
               <button
                 onClick={handleMigrateToCloud}
-                disabled={!!migrationStage}
+                disabled={!!migrationStage || !!(migGate && migGate.ok && migGate.acceptedIncomplete)}
                 className="w-full py-3 rounded-xl bg-orange-500 disabled:opacity-50 text-neutral-950 font-bold text-sm"
               >
                 {migrationStage ? MIGRATION_STAGE_LABELS[migrationStage] || "Przetwarzanie..." : "Przenieś dane do konta"}
@@ -16462,11 +17379,20 @@ function App() {
     if (!same()) return;
     const local = hasLocalAccountData(userId);
     setAccountInit({ ns, status: "checking", local });
+    // Stage 4A.4 F-5 (Etap 6): the cloud is locked by a migration attempt (NR001) → explain the lock
+    // (server view of the attempt) instead of a generic connection error
+    const blockedByMigration = async (e) => {
+      if (migrationErrorKind(e) !== "in_progress") return false;
+      const gate = await readMigrationGate(userId);
+      if (same()) setAccountInit({ ns, status: "migration_blocked", local, gate, error: notice });
+      return true;
+    };
     let cloud = null;
     try {
       cloud = await checkCloudAccountData(userId);
     } catch (e) {
       if (!same()) return;
+      if (await blockedByMigration(e)) return;
       setAccountInit({ ns, status: "error_check", local, error: (e && e.message) || String(e) });
       return;
     }
@@ -16494,6 +17420,7 @@ function App() {
           strict = await checkCloudAccountData(userId, guestMigrationCloudOptions(false, null, userId));
         } catch (e) {
           if (!same()) return;
+          if (await blockedByMigration(e)) return;
           setAccountInit({ ns, status: "error_check", local, error: (e && e.message) || String(e) });
           return;
         }
@@ -16515,7 +17442,14 @@ function App() {
     const deviceSnapshotInfo = snap
       ? { createdAt: snap.createdAt, details: { history: (snap.data.history || []).length, plans: (snap.data.plans || []).length, measurements: (snap.data.measurements || []).length } }
       : null;
-    setAccountInit({ ns, status: "choice", local, cloud, deviceSnapshot: deviceSnapshotInfo, partialGuestUpload: !!getGuestPartialNote(userId), error: notice });
+    // F-5: cloud data that was consciously accepted as incomplete is never presented as complete
+    let incompleteAccepted = false;
+    if (cloud.hasData) {
+      const gate = await readMigrationGate(userId);
+      if (!same()) return;
+      incompleteAccepted = !!(gate.ok && gate.acceptedIncomplete);
+    }
+    setAccountInit({ ns, status: "choice", local, cloud, deviceSnapshot: deviceSnapshotInfo, partialGuestUpload: !!getGuestPartialNote(userId), incompleteAccepted, error: notice });
   }, []);
   const loadedOnceRef = useRef(false);
   // Session not confirmed yet (SDK still trying to refresh an expired token, typically offline):
@@ -16551,6 +17485,10 @@ function App() {
   else if (expectedNs === "guest") heldSwitchRef.current = false;
   const [sessionRecoveredNotice, setSessionRecoveredNotice] = useState(false);
   const [guestMigrationNotice, setGuestMigrationNotice] = useState(null); // Stage 4A.4: { draftKept, cleanup } after a migration
+  // Stage 4A.4 F-5 (Etap 6): the last server view of migration attempts (sync gate) → a banner while sync is paused
+  const [migrationGateView, setMigrationGateView] = useState(null);
+  const [migrationBannerHidden, setMigrationBannerHidden] = useState(null);
+  useEffect(() => onMigrationGateChange((g) => setMigrationGateView(g)), []);
   const dataNamespaceLoaded = dataNs !== null && dataNs === workspaceNs;
   // Stage 4A.2: an account namespace is usable only once its data source is decided.
   // accountInit = { ns, status: "checking"|"choice"|"error_check"|"loading_cloud"|"error_load"|"ready", local, cloud, error, transient }
@@ -16988,6 +17926,8 @@ function App() {
     }
     if (!isCurrentOp(op)) return; // superseded — the newer flow owns the screen
     if (u.discarded) u = { ok: false, error: ACCOUNT_CHECK_FAILED_TEXT }; // never leave the spinner up
+    // Stage 4A.4 F-5 (Etap 6): partial upload / attempt closed elsewhere / another attempt holds the account
+    if (!u.ok && (await showMigrationOutcome(u, "device"))) return;
     if (!u.ok && !u.cloudChanged && !u.alreadyReady) {
       // an unfinished upload stays recognisable: show its own retry screen, otherwise the previous one
       const m = getAccountInitMarker(initUserId);
@@ -17015,12 +17955,90 @@ function App() {
   };
   // Stage 4A.3: give up an unfinished upload — the device data stays as it is; rows this device
   // already sent now count as cloud data in the normal check (nothing is deleted or merged).
+  // Stage 4A.4 F-5 (Etap 6): the server attempt ends FIRST — cancelled only when the server confirms zero
+  // writes; with writes it stays `abandoned` (the account is locked) and the partial screen explains it.
   const abandonDeviceUpload = async () => {
     if (!sameInit()) return;
-    const m = getAccountInitMarker(initUserId);
-    if (m && m.status === "uploading_device") clearAccountInitMarker(initUserId);
+    const op = beginInitOp();
+    const prev = accountInit;
+    let r;
+    try {
+      r = await abandonInterruptedDeviceUpload(initUserId, refFor(op));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return;
+    if (!r.ok && r.completed) {
+      await runDeviceUpload(); // the server already holds the verified, completed upload → finish (no re-upload)
+      return;
+    }
+    if (!r.ok && r.partial) {
+      setAccountInit({ ns: initNs, status: "upload_partial", error: null });
+      return;
+    }
+    if (!r.ok && !r.discarded) {
+      setAccountInit({ ...prev, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
+      return;
+    }
     setAccountInit({ ns: initNs, status: "checking" });
     runAccountInitCheck(initUserId, initNs);
+  };
+  const acceptDeviceIncomplete = async () => {
+    if (!sameInit()) return;
+    const op = beginInitOp();
+    const prev = accountInit;
+    let r;
+    try {
+      r = await acceptIncompleteDeviceUpload(initUserId, refFor(op));
+    } catch (e) {
+      r = { ok: false, error: failText(e) };
+    }
+    if (!isCurrentOp(op)) return;
+    if (!r.ok) {
+      setAccountInit({ ...prev, confirmAccept: false, error: r.discarded ? ACCOUNT_CHECK_FAILED_TEXT : r.error });
+      return;
+    }
+    if (r.recheck) {
+      setAccountInit({ ns: initNs, status: "checking" });
+      runAccountInitCheck(initUserId, initNs);
+      return;
+    }
+    await finishInit();
+  };
+  // F-5 outcomes shared by the device and guest flows. → true when the screen was set here.
+  const showMigrationOutcome = async (u, flow) => {
+    if (u.partial && flow === "device") {
+      setAccountInit({ ns: initNs, status: "upload_partial", error: null });
+      return true;
+    }
+    if (u.closed && u.row && u.row.status !== "completed") {
+      setAccountInit({ ns: initNs, status: "migration_closed", flow, error: u.error });
+      return true;
+    }
+    if (u.migration === "other_attempt" || u.error === MIGRATION_TEXTS.locked || migrationErrorKind({ message: u.error || "" }) === "in_progress") {
+      const gate = await readMigrationGate(initUserId);
+      if (!sameInit()) return true;
+      setAccountInit({ ns: initNs, status: "migration_blocked", local: hasLocalAccountData(initUserId), gate, error: u.error });
+      return true;
+    }
+    return false;
+  };
+  // back to the right screen: an unfinished flow of this device keeps its own screen, otherwise the normal check
+  const routeInit = () => {
+    if (!sameInit()) return;
+    const m = getAccountInitMarker(initUserId);
+    if (m && m.status === "uploading_device") setAccountInit({ ns: initNs, status: "upload_interrupted" });
+    else if (m && m.status === "migrating_guest") setAccountInit({ ns: initNs, status: "guest_migration_interrupted" });
+    else if (m && m.status === "loading_cloud") setAccountInit({ ns: initNs, status: "cloud_interrupted" });
+    else runAccountInitCheck(initUserId, initNs);
+  };
+  const onGateChanged = (gate) => {
+    if (!sameInit()) return;
+    if (gate && gate.ok && !gate.blocking) {
+      routeInit();
+      return;
+    }
+    setAccountInit((cur) => ({ ...cur, gate }));
   };
   const chooseEmpty = async () => {
     if (!sameInit()) return;
@@ -17060,6 +18078,14 @@ function App() {
     }
     if (!r.ok) {
       const m = getAccountInitMarker(initUserId);
+      // F-5: the load hit a migration lock (NR001) — nothing was applied; explain the lock (a resumed load
+      // keeps its "loading_cloud" marker and comes back to its own screen after the lock is gone)
+      if (!r.discarded && (r.blocked === "migration" || migrationErrorKind({ message: r.error || "" }) === "in_progress")) {
+        const gate = await readMigrationGate(initUserId);
+        if (!sameInit()) return;
+        setAccountInit({ ns: initNs, status: "migration_blocked", local: hasLocalAccountData(initUserId), gate, error: null });
+        return;
+      }
       if (m && m.status === "loading_cloud") setAccountInit({ ns: initNs, status: "cloud_interrupted", error: r.discarded ? ACCOUNT_CHECK_FAILED_TEXT : r.error }); // interrupted load stays recognisable
       else if (r.blocked || r.discarded) setAccountInit({ ...prev, error: r.discarded ? ACCOUNT_CHECK_FAILED_TEXT : r.error }); // nothing changed — back to the screen it came from
       else setAccountInit({ ...prev, status: "error_load", error: r.error });
@@ -17122,6 +18148,12 @@ function App() {
       return;
     }
     if (r.discarded) r = { ...r, error: ACCOUNT_CHECK_FAILED_TEXT };
+    // Stage 4A.4 F-5 (Etap 6): partial upload → the partial screen; closed elsewhere / another attempt → explained
+    if (r.partial) {
+      setAccountInit({ ns: initNs, status: "guest_partial", partialUnknown: r.partial === "unknown", error: r.error });
+      return;
+    }
+    if (await showMigrationOutcome(r, "guest")) return;
     const m = getAccountInitMarker(initUserId);
     if (m && m.status === "migrating_guest") {
       // the attempt exists (markers written): its own retry / abandon screen
@@ -17153,6 +18185,10 @@ function App() {
       r = { ok: false, error: failText(e) };
     }
     if (!isCurrentOp(op)) return;
+    if (!r.ok && r.completed) {
+      await runGuestMigration(); // already completed on the server → finish locally (no re-upload)
+      return;
+    }
     if (!r.ok && r.partial) {
       // F-5: part of this transfer is already in the cloud — it cannot be undone silently
       setAccountInit({ ns: initNs, status: "guest_partial", partialUnknown: r.partial === "unknown", error: r.error });
@@ -17192,7 +18228,7 @@ function App() {
     }
     if (!isCurrentOp(op)) return;
     if (!r.ok) {
-      setAccountInit({ ...prev, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
+      setAccountInit({ ...prev, confirmAccept: false, error: r.error || ACCOUNT_CHECK_FAILED_TEXT });
       return;
     }
     await finishInit();
@@ -17221,7 +18257,11 @@ function App() {
         onGuestStartWithout={startWithoutGuestPartial}
         onGuestRelease={() => setAccountInit({ ...accountInit, confirmRelease: true, error: null })}
         onGuestReleaseConfirm={releaseGuestBinding}
-        onRetry={() => runAccountInitCheck(initUserId, initNs)}
+        onRetry={routeInit}
+        userId={initUserId}
+        onGateChanged={onGateChanged}
+        onConfirmStep={(patch) => setAccountInit({ ...accountInit, ...patch, error: null })}
+        onUploadAcceptIncomplete={acceptDeviceIncomplete}
         onWorkOffline={workOffline}
         onBack={() => setAccountInit({ ...accountInit, status: "choice", error: null })}
       />
@@ -17604,6 +18644,9 @@ function App() {
           onRechooseDataSource={async () => {
             if (!authUserId) return;
             const uid = authUserId;
+            // Stage 4A.4 F-5 (Etap 6): never while this device's manual upload runs or its attempt is still open —
+            // the marker is what lets the owner device finish that attempt with the same id
+            if (_manualMigrationRunning || getOpenManualAttempt(uid)) return;
             const ns = dataNs;
             const op = beginInitOp();
             // Stage 4A.3: removing the marker first refuses every NEW sync / bootstrap run; a pass that
@@ -17656,6 +18699,28 @@ function App() {
   return (
     <>
       <React.Fragment key={`${screen}:${navResetKey}`}>{screenContent}</React.Fragment>
+      {(() => {
+        const g = migrationGateView && authUserId && migrationGateView.userId === authUserId && dataReady ? migrationGateView : null;
+        const d = migrationGateDescription(g);
+        const key = d ? `${d.kind}:${(d.row && d.row.attempt_id) || ""}` : null;
+        if (!d || key === migrationBannerHidden || screen === "account") return null;
+        return (
+          <div className="fixed inset-x-0 top-0 z-50 px-4 pt-2 flex justify-center" data-testid="migration-banner" data-kind={d.kind}>
+            <div className="w-full max-w-sm bg-neutral-900 border border-amber-500/60 rounded-2xl p-3 shadow-lg">
+              <p className="text-amber-400 text-xs leading-relaxed">{d.text}</p>
+              {d.lastText && <p className="text-neutral-400 text-xs mt-1">{d.lastText}</p>}
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => goToScreen("account")} className="flex-1 py-1.5 rounded-xl bg-orange-500 text-neutral-950 font-bold text-xs" data-testid="migration-banner-details">
+                  Szczegóły
+                </button>
+                <button onClick={() => setMigrationBannerHidden(key)} className="flex-1 py-1.5 rounded-xl bg-neutral-800 text-neutral-100 font-semibold text-xs" data-testid="migration-banner-hide">
+                  Ukryj
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {sessionRecoveredNotice && (
         <div className="fixed inset-x-0 bottom-24 z-50 px-4 flex justify-center" data-testid="session-recovered-notice">
           <div className="w-full max-w-sm bg-neutral-900 border border-orange-500/60 rounded-2xl p-4 shadow-lg">

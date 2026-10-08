@@ -20,6 +20,18 @@
 // Filters eq/neq/is/match/in/gte/lte/gt/lt are applied; order (one column) and range (offset
 // window) are applied to reads; select(cols, { count: "exact" }) returns the total before range.
 // `not(col, "is", null)` is applied; other `not` forms are recorded only.
+//
+// Stage 4A.4 F-5 (Etap 6): a faithful in-memory model of the server side of SQL v3 + read guard C v2:
+//   __nrSupabase.tables.nextrep_migration_attempts — attempt rows (readable through .from() like any table)
+//   rpc nextrep_migration_attempt_{start,resume,complete,abandon,cancel,accept_incomplete,touch} — v3 rules
+//   write lock on the 10 data tables (NR001 / NR002, writes_count) and read guard C (NR001 on SELECT)
+//   — both driven by the request header x-nextrep-migration-attempt (setHeader on the builder)
+//   __nrSupabase.headerLog      — [{ table|fn, op, token }] every executed request with its migration token
+//   __nrSupabase.rpcFail[fn]    — queue of errors returned (and consumed) before the handler runs (e.g. 57014)
+//   __nrSupabase.f5Missing      — true → attempts table / RPCs do not exist (PGRST205 / PGRST202), like a
+//                                 database without SQL v3
+//   __nrSupabase.f5Server=false — turns the whole F-5 model off
+// With no attempt rows the model changes nothing (accounts without markers behave exactly as before).
 
 function state() {
   if (!globalThis.__nrSupabase) {
@@ -35,6 +47,10 @@ function state() {
       queryHook: null,
       queryGate: null,
       maxRows: null,
+      headerLog: [],
+      rpcFail: {},
+      f5Missing: false,
+      f5Server: true,
       releaseGetSession(session = null) {
         const waiting = s.pendingGetSession;
         s.pendingGetSession = [];
@@ -52,6 +68,10 @@ function state() {
         s.queryHook = null;
         s.queryGate = null;
         s.maxRows = null;
+        s.headerLog = [];
+        s.rpcFail = {};
+        s.f5Missing = false;
+        s.f5Server = true;
       },
       emitAuth(event, session) {
         s.session = session;
@@ -73,6 +93,132 @@ function dbDefaults(table) {
 
 const netError = () => Object.assign(new TypeError("Failed to fetch"), { name: "TypeError" });
 
+// ---------------- Stage 4A.4 F-5: server model (SQL v3 + read guard C v2) ----------------
+const F5_HEADER = "x-nextrep-migration-attempt";
+const F5_LOCKED_TABLES = new Set(["nextrep_exercises", "nextrep_plans", "nextrep_plan_items", "nextrep_plan_item_sets", "nextrep_workouts", "nextrep_workout_exercises", "nextrep_workout_sets", "nextrep_measurements", "nextrep_custom_fields", "nextrep_profiles"]);
+const F5_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const f5Err = (code, message, details = null, hint = null) => ({ code, message, details, hint });
+const f5Attempts = (s) => (s.tables.nextrep_migration_attempts = s.tables.nextrep_migration_attempts || []);
+const f5Uid = (s) => (s.session && s.session.user && s.session.user.id) || null;
+const f5Token = (headers) => {
+  const v = headers && headers[F5_HEADER];
+  return typeof v === "string" && F5_UUID.test(v) ? v.toLowerCase() : null;
+};
+const f5Blocking = (s, userId) => f5Attempts(s).find((a) => a.user_id === userId && (a.status === "uploading" || a.status === "abandoned")) || null;
+const nowIso = () => new Date().toISOString();
+// the guard trigger: every status change sets its own timestamp, updated_at always moves
+function f5Transition(a, status, extra = {}) {
+  Object.assign(a, extra, { status, updated_at: nowIso() });
+  if (status === "completed") a.completed_at = nowIso();
+  if (status === "abandoned") a.abandoned_at = nowIso();
+  if (status === "cancelled") a.cancelled_at = nowIso();
+  if (status === "accepted_incomplete") a.resolved_at = nowIso();
+  if (status === "uploading") a.last_resumed_at = nowIso();
+}
+// write lock trigger: { error } → the statement fails; otherwise count `rows` authorised writes
+function f5WriteLock(s, table, targetUser, headers, rows) {
+  if (s.f5Server === false || s.f5Missing || !F5_LOCKED_TABLES.has(table) || !targetUser) return null;
+  const caller = f5Uid(s);
+  if (caller && targetUser !== caller) return null; // RLS rejects it; the trigger reveals nothing
+  const token = f5Token(headers);
+  if (token) {
+    const t = f5Attempts(s).find((a) => a.attempt_id === token);
+    if (t && t.user_id === targetUser && t.status !== "uploading") return f5Err("NR002", "migration_attempt_closed", null, "This upload attempt is no longer active; stop uploading and re-read its status.");
+  }
+  const b = f5Blocking(s, targetUser);
+  if (!b) return null;
+  if (b.status === "abandoned") return f5Err("NR001", "migration_in_progress", "state=abandoned", "An interrupted upload of this account is not resolved yet; writes are paused until it is.");
+  if (token !== b.attempt_id) return f5Err("NR001", "migration_in_progress", "state=uploading", "Another device of this account is uploading data; writes are paused until it ends.");
+  if (rows > 0) {
+    b.writes_count += rows;
+    b.last_write_at = nowIso();
+    b.updated_at = nowIso();
+  }
+  return null;
+}
+// read guard C v2 (pre-request): GET/HEAD on the 10 tables of an account with a blocking attempt
+function f5ReadGuard(s, table, headers) {
+  if (s.f5Server === false || s.f5Missing || !F5_LOCKED_TABLES.has(table)) return null;
+  const caller = f5Uid(s);
+  if (!caller) return null;
+  const b = f5Blocking(s, caller);
+  if (!b) return null;
+  if (b.status === "uploading" && f5Token(headers) === b.attempt_id) return null;
+  return f5Err("NR001", "migration_in_progress", `state=${b.status}`, "Data of this account is being uploaded by another device (or an interrupted upload is unresolved); reads are paused.");
+}
+const F5_RPC = {
+  nextrep_migration_attempt_start(s, a) {
+    const uid = f5Uid(s);
+    if (!uid) return { data: null, error: f5Err("28000", "not authenticated") };
+    if (!a.p_attempt_id || !a.p_device_id) return { data: null, error: f5Err("22004", "attempt and device required") };
+    if (!["guest_to_account", "device_upload"].includes(a.p_kind)) return { data: null, error: f5Err("22023", "invalid kind") };
+    const list = f5Attempts(s);
+    const found = list.find((r) => r.attempt_id === a.p_attempt_id);
+    if (found) {
+      if (found.user_id !== uid || found.device_id !== a.p_device_id || found.kind !== a.p_kind) return { data: null, error: f5Err("P0001", "attempt_not_yours") };
+      return { data: { ...found }, error: null };
+    }
+    const blocking = f5Blocking(s, uid);
+    if (blocking) return { data: null, error: f5Err("P0001", "active_attempt_exists", `state=${blocking.status}`) };
+    if (list.some((r) => r.user_id === uid && r.status === "accepted_incomplete")) return { data: null, error: f5Err("P0001", "incomplete_data_accepted") };
+    const row = {
+      attempt_id: a.p_attempt_id, user_id: uid, device_id: a.p_device_id, kind: a.p_kind, status: "uploading", started_at: nowIso(), updated_at: nowIso(),
+      completed_at: null, abandoned_at: null, cancelled_at: null, resolved_at: null, resolved_by_device: null, resume_count: 0, last_resumed_at: null,
+      writes_count: 0, last_write_at: null, verified_counts: null, app_version: a.p_app_version ? String(a.p_app_version).slice(0, 40) : null,
+    };
+    list.push(row);
+    return { data: { ...row }, error: null };
+  },
+  nextrep_migration_attempt_resume(s, a) {
+    const uid = f5Uid(s);
+    if (!uid) return { data: null, error: f5Err("28000", "not authenticated") };
+    const r = f5Attempts(s).find((x) => x.attempt_id === a.p_attempt_id && x.user_id === uid);
+    if (r && r.device_id === a.p_device_id && r.status === "abandoned") {
+      r.resume_count += 1;
+      f5Transition(r, "uploading");
+    }
+    return { data: r ? { ...r } : null, error: null };
+  },
+  nextrep_migration_attempt_complete(s, a) {
+    const uid = f5Uid(s);
+    if (!uid) return { data: null, error: f5Err("28000", "not authenticated") };
+    if (!a.p_verified_counts || typeof a.p_verified_counts !== "object" || Array.isArray(a.p_verified_counts)) return { data: null, error: f5Err("22004", "verified counts required") };
+    const r = f5Attempts(s).find((x) => x.attempt_id === a.p_attempt_id && x.user_id === uid);
+    if (r && r.device_id === a.p_device_id && r.status === "uploading") f5Transition(r, "completed", { verified_counts: a.p_verified_counts });
+    return { data: r ? { ...r } : null, error: null };
+  },
+  nextrep_migration_attempt_abandon(s, a) {
+    const uid = f5Uid(s);
+    if (!uid) return { data: null, error: f5Err("28000", "not authenticated") };
+    const r = f5Attempts(s).find((x) => x.attempt_id === a.p_attempt_id && x.user_id === uid);
+    if (r && r.device_id === a.p_device_id && r.status === "uploading") f5Transition(r, "abandoned");
+    return { data: r ? { ...r } : null, error: null };
+  },
+  nextrep_migration_attempt_cancel(s, a) {
+    const uid = f5Uid(s);
+    if (!uid) return { data: null, error: f5Err("28000", "not authenticated") };
+    if (!a.p_device_id) return { data: null, error: f5Err("22004", "device required") };
+    const r = f5Attempts(s).find((x) => x.attempt_id === a.p_attempt_id && x.user_id === uid);
+    if (r && r.writes_count === 0 && ((r.status === "uploading" && r.device_id === a.p_device_id) || r.status === "abandoned")) f5Transition(r, "cancelled");
+    return { data: r ? { ...r } : null, error: null };
+  },
+  nextrep_migration_attempt_accept_incomplete(s, a) {
+    const uid = f5Uid(s);
+    if (!uid) return { data: null, error: f5Err("28000", "not authenticated") };
+    if (!a.p_device_id) return { data: null, error: f5Err("22004", "device required") };
+    const r = f5Attempts(s).find((x) => x.attempt_id === a.p_attempt_id && x.user_id === uid);
+    if (r && (r.status === "uploading" || r.status === "abandoned")) f5Transition(r, "accepted_incomplete", { resolved_by_device: a.p_device_id });
+    return { data: r ? { ...r } : null, error: null };
+  },
+  nextrep_migration_attempt_touch(s, a) {
+    const uid = f5Uid(s);
+    if (!uid) return { data: null, error: f5Err("28000", "not authenticated") };
+    const r = f5Attempts(s).find((x) => x.attempt_id === a.p_attempt_id && x.user_id === uid);
+    if (r && r.device_id === a.p_device_id && r.status === "uploading") r.updated_at = nowIso();
+    return { data: r ? { ...r } : null, error: null };
+  },
+};
+
 class Query {
   constructor(table) {
     this.table = table;
@@ -84,6 +230,12 @@ class Query {
     this.orderBy = null;
     this.rangeWin = null;
     this.countMode = null;
+    this.headers = {};
+  }
+  // postgrest-js PostgrestBuilder.setHeader (per request; never shared with other queries)
+  setHeader(name, value) {
+    this.headers[String(name).toLowerCase()] = value;
+    return this;
   }
   _log(op, args) {
     state().calls.push({ kind: "table", table: this.table, op, args });
@@ -120,8 +272,27 @@ class Query {
       const hookError = s.queryHook(this);
       if (hookError) return { data: null, error: hookError };
     }
+    s.headerLog.push({ table: this.table, op: this.op, token: this.headers[F5_HEADER] ?? null });
+    if (this.table === "nextrep_migration_attempts") {
+      if (s.f5Missing) return { data: null, error: f5Err("PGRST205", "Could not find the table 'public.nextrep_migration_attempts' in the schema cache"), status: 404 };
+      if (this.op !== "select") return { data: null, error: f5Err("42501", "permission denied for table nextrep_migration_attempts"), status: 403 };
+    }
+    // Stage 4A.4 F-5: read guard C (selects) and the v3 write lock (inserts / updates / upserts / deletes)
+    if (this.op === "select") {
+      const rg = f5ReadGuard(s, this.table, this.headers);
+      if (rg) return { data: null, error: rg, status: 400 };
+    } else {
+      const existing = s.tables[this.table] || [];
+      const list = this.op === "insert" || this.op === "upsert" ? (Array.isArray(this.payload) ? this.payload : [this.payload]) : null;
+      const affected = list ? list.length : existing.filter((r) => this.filters.every((f) => f(r))).length;
+      const target = list ? list[0] && list[0].user_id : f5Uid(s);
+      if (affected > 0 || list) {
+        const wl = f5WriteLock(s, this.table, target, this.headers, affected);
+        if (wl) return { data: null, error: wl, status: 400 };
+      }
+    }
     const rows = (s.tables[this.table] = s.tables[this.table] || []);
-    const match = (r) => this.filters.every((f) => f(r));
+    const match = this.table === "nextrep_migration_attempts" ? (r) => r.user_id === f5Uid(s) && this.filters.every((f) => f(r)) : (r) => this.filters.every((f) => f(r)); // RLS: own attempts only
     let data = null;
     if (this.op === "insert" || this.op === "upsert") {
       const list = Array.isArray(this.payload) ? this.payload : [this.payload];
@@ -193,9 +364,17 @@ export function createClient(url, key) {
     },
     async rpc(fn, args) {
       s.calls.push({ kind: "rpc", fn, args });
+      s.headerLog.push({ fn, op: "rpc", token: null });
       if (s.failNetwork) return { data: null, error: netError() };
+      const queued = s.rpcFail && Array.isArray(s.rpcFail[fn]) && s.rpcFail[fn].length ? s.rpcFail[fn].shift() : null;
+      if (queued) return typeof queued === "function" ? queued(args) : { data: null, error: queued };
       const h = s.rpc[fn];
-      return h ? h(args) : { data: null, error: { message: `rpc ${fn} not stubbed` } };
+      if (h) return h(args);
+      if (F5_RPC[fn] && s.f5Server !== false) {
+        if (s.f5Missing) return { data: null, error: f5Err("PGRST202", `Could not find the function public.${fn} in the schema cache`) };
+        return F5_RPC[fn](s, args || {});
+      }
+      return { data: null, error: { message: `rpc ${fn} not stubbed` } };
     },
   };
 }

@@ -224,10 +224,13 @@ describe("abandon after a partial upload of built-in exercises only", () => {
     S.queryHook = null;
     assert.equal((S.tables.nextrep_exercises || []).length, 2, "2 built-in rows reached the cloud");
     await press("init-guest-abandon");
-    assert.ok(byTestId("init-guest-migrate"), "offer again");
-    assert.equal(read(key(UA, "account_init")), null, "no source decided for the user");
-    await press("init-guest-migrate");
-    assert.ok(appShown(), "a new attempt completes");
+    // Stage 4A.4 F-5 (Etap 6): the SERVER counted 2 writes of this attempt → it can't be cancelled (decision 5:
+    // only server-confirmed zero writes) — the partial screen explains it; nothing is decided for the user
+    assert.ok(byTestId("init-guest-partial"), "partial-transfer screen (server-counted writes)");
+    assert.notEqual(read(key(UA, "account_init")).status, "ready", "no source decided for the user");
+    assert.equal(S.tables.nextrep_migration_attempts[0].status, "abandoned");
+    await press("init-guest-retry");
+    assert.ok(appShown(), "finishing the same attempt completes");
     assert.equal(read(key(UA, "account_init")).source, "guest");
   });
 });

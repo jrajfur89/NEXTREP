@@ -159,7 +159,11 @@ describe("F-5 — a partial upload is never left behind as normal account data",
     const cloudBefore = clone(S.tables);
     const r = await quiet(() => A.abandonGuestMigration(UA, ref));
     assert.equal(r.partial, true);
-    assert.deepEqual(S.tables, cloudBefore, "no cloud delete / write");
+    // Stage 4A.4 F-5 (Etap 6): no data row is deleted or written; only the SERVER attempt changed — it wrote
+    // rows, so it can't be cancelled and becomes `abandoned` (account locked until finished / accepted)
+    const dataOnly = (t) => Object.fromEntries(Object.entries(t).filter(([k]) => k !== "nextrep_migration_attempts"));
+    assert.deepEqual(dataOnly(S.tables), dataOnly(cloudBefore), "no cloud delete / write");
+    assert.deepEqual(S.tables.nextrep_migration_attempts.map((a) => a.status), ["abandoned"]);
     restart();
     assert.equal(marker().status, "migrating_guest");
     assert.equal(A.isAccountSyncAllowed(UA), false);
@@ -170,7 +174,9 @@ describe("F-5 — a partial upload is never left behind as normal account data",
     seedGuest();
     failOnce("nextrep_workout_sets");
     await migrate();
+    // Stage 4A.4 F-5 (Etap 6): the decision comes from the server attempt — unreachable server = unknown
     S.queryHook = (q) => (q.op === "select" ? { message: "Failed to fetch" } : null); // cloud unreachable, session known
+    S.rpcFail.nextrep_migration_attempt_cancel = [{ message: "Failed to fetch" }];
     const r = await quiet(() => A.abandonGuestMigration(UA, ref));
     S.queryHook = null;
     assert.equal(r.partial, "unknown");
@@ -178,22 +184,47 @@ describe("F-5 — a partial upload is never left behind as normal account data",
     assert.ok(localStorage.getItem(key(UA, "history")), "copy kept");
   });
 
-  test("partial → 'start without' → ready/empty with sync PAUSED + note; the incomplete rows are never pulled; the account can't be offered the guest data again", async () => {
+  test("partial → 'start without' (server accepts as incomplete) → sync resumes per server policy; the data is flagged incomplete, never completed; no new V1", async () => {
+    seedGuest();
+    const guestBefore = guestDump();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    await quiet(() => A.abandonGuestMigration(UA, ref));
+    const id = marker().serverAttemptId;
+    const r = await quiet(() => A.startAccountWithoutGuestPartial(UA, ref));
+    assert.equal(r.ok, true);
+    // Stage 4A.4 F-5 (Etap 6): server-confirmed acceptance → normal sync (server policy), permanent flag
+    assert.deepEqual({ ...marker(), at: undefined }, { status: "ready", source: "cloud", syncPaused: false, incompleteAccepted: id, at: undefined });
+    assert.equal(S.tables.nextrep_migration_attempts[0].status, "accepted_incomplete", "never `completed`");
+    assert.equal(A.isAccountSyncAllowed(UA), true);
+    const note = A.getGuestPartialNote(UA);
+    assert.ok(note && note.deviceId && note.attemptId);
+    assert.deepEqual(Object.keys(note).sort(), ["at", "attemptId", "backupId", "deviceId"], "no user data in the note");
+    const cloudWorkouts = S.tables.nextrep_workouts.length;
+    const sync = await quiet(() => A.runSync());
+    assert.equal(sync.started, true, sync.message);
+    assert.equal(sync.pullSuccess, true);
+    assert.equal((readJson(key(UA, "history")) || []).length, cloudWorkouts, "the accepted (incomplete) cloud data is what the account uses");
+    assert.equal(A.accountLocalBlocksGuestMigration(UA), true, "no new guest migration into this account");
+    const v1 = await quiet(() => A.runManualMigrationV1());
+    assert.equal(v1.success, false);
+    assert.equal(v1.migration, "incomplete_accepted", "no new V1 after the acceptance");
+    assert.equal(readJson(GM_KEY).status, "abandoned_partial", "guest data stays bound to this account's attempt");
+    assert.deepEqual(guestDump(), guestBefore, "guest data and its backup untouched");
+  });
+
+  test("legacy partial transfer without a server attempt → 'start without' keeps sync PAUSED (nothing the server could allow)", async () => {
     seedGuest();
     failOnce("nextrep_workout_sets");
     await migrate();
     await quiet(() => A.abandonGuestMigration(UA, ref));
+    const m = marker();
+    delete m.serverAttemptId;
+    A.setAccountInitMarker(UA, m);
     const r = await quiet(() => A.startAccountWithoutGuestPartial(UA, ref));
     assert.equal(r.ok, true);
-    assert.deepEqual({ ...marker(), at: undefined }, { status: "ready", source: "empty", syncPaused: true, at: undefined });
-    assert.equal(A.isAccountSyncAllowed(UA), false, "sync paused: nothing of the partial cloud comes in");
-    const note = A.getGuestPartialNote(UA);
-    assert.ok(note && note.deviceId && note.attemptId);
-    assert.deepEqual(Object.keys(note).sort(), ["at", "attemptId", "backupId", "deviceId"], "no user data in the note");
-    const sync = await quiet(() => A.runSync());
-    assert.equal(localStorage.getItem(key(UA, "history")), null, `nothing pulled (${JSON.stringify(sync && sync.skipped)})`);
-    assert.equal(A.accountLocalBlocksGuestMigration(UA), true, "no new guest migration into this account");
-    assert.equal(readJson(GM_KEY).status, "abandoned_partial", "guest data stays bound to this account's attempt");
+    assert.deepEqual([marker().status, marker().source, marker().syncPaused], ["ready", "empty", true]);
+    assert.equal(A.isAccountSyncAllowed(UA), false);
   });
 
   test("partial → retry → success; repeated failing retries keep the cloud row counts stable", async () => {

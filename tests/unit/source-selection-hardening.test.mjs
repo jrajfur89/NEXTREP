@@ -256,9 +256,9 @@ describe("P2-2 — resumable cloud load", () => {
     setup({ tables: cloud });
     ls().setItem(key(UA, "history"), JSON.stringify([historySession("hD", "DEVICE")]));
     let seen = null;
-    S.queryGate = async () => {
-      if (seen) return;
-      // first cloud read of the load = right after clearAccountNamespace
+    S.queryGate = async (q) => {
+      if (seen || q.table === "nextrep_migration_attempts") return; // F-5: the lock check reads first (nothing changed yet)
+      // first cloud DATA read of the load = right after clearAccountNamespace
       seen = { marker: A.getAccountInitMarker(UA), pointer: readJson(key(UA, "last_cloud_restore")), history: ls().getItem(key(UA, "history")), backups: A.loadBackupList() };
     };
     const r = await quiet(() => A.loadAccountFromCloud(UA, ref));
@@ -387,8 +387,11 @@ describe("P1-1 — device data → confirmed-empty cloud is uploaded", () => {
     assert.deepEqual(dataKeys(), before);
     assert.equal(A.getAccountInitMarker(UA).status, "uploading_device");
     assert.ok((S.tables.nextrep_workouts || []).length > 0, "a partial upload reached the cloud");
-    // a plain check sees "data" (our own partial rows)…
-    assert.equal((await A.checkCloudAccountData(UA)).hasData, true);
+    // Stage 4A.4 F-5 (Etap 6): while the attempt is open a plain check (no attempt id) is refused by the server
+    // read guard — the partial rows are never read as account data…
+    await assert.rejects(() => A.checkCloudAccountData(UA), /migration_in_progress/);
+    // …with the attempt's own id the check sees "data" (our own partial rows)
+    assert.equal((await A.checkCloudAccountData(UA, { migrationToken: A.getAccountInitMarker(UA).serverAttemptId })).hasData, true);
     // …the retry (marker present) doesn't count them and finishes the upload
     S.queryHook = null;
     const r2 = await quiet(() => A.uploadAccountDataToEmptyCloud(UA, ref));
