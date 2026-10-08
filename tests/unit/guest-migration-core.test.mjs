@@ -61,6 +61,16 @@ function guestDump() {
   }
   return out;
 }
+
+// Stage 4A.4 Part 2 (D1): after a SUCCESSFUL migration the migrated, finished guest data is cleaned up
+// (history, plans, measurements, custom fields; exercises only without a draft). Everything else stays
+// byte for byte: draft, PRO, name, technical keys.
+function afterCleanup(dump) {
+  const out = { ...dump };
+  const hasDraft = Object.keys(out).some((k) => k === "nextrep_guest_active_workout_draft_v1");
+  for (const n of ["history", "plans", "measurements", "custom_fields", ...(hasDraft ? [] : ["exercises"])]) delete out[`nextrep_guest_${n}_v1`];
+  return out;
+}
 const accountDataKeys = () => {
   const out = {};
   for (const n of ["exercises", "plans", "history", "measurements", "custom_fields", "user_name", "active_workout_draft", "pro_status", "pro_hints", "sync_queue", "sync_meta"]) {
@@ -110,7 +120,7 @@ describe("success path — guest → empty account", () => {
     const guestBefore = guestDump();
     const r = await migrate();
     assert.equal(r.ok, true, r.error);
-    assert.deepEqual(guestDump(), guestBefore, "guest workspace unchanged (only the technical marker added)");
+    assert.deepEqual(guestDump(), afterCleanup(guestBefore), "guest workspace: only the migrated finished data removed (D1); draft, PRO, name byte-for-byte");
     assert.deepEqual(marker(), { ...marker(), status: "ready", source: "guest", syncPaused: false });
     const h = readJson(key(UA, "history"));
     assert.deepEqual(h.map((s) => [s.id, s.date, s.planId]), GUEST.history.map((s) => [s.id, s.date, s.planId]));
@@ -130,8 +140,10 @@ describe("success path — guest → empty account", () => {
     assert.ok(rows("nextrep_workouts").every((x) => x.user_id === UA));
     const gm = readJson(GM_KEY);
     assert.equal(gm.targetUserId, UA);
-    assert.ok(gm.accountReadyAt);
-    assert.deepEqual(Object.keys(gm).sort(), ["accountReadyAt", "attemptId", "backupId", "fingerprint", "startedAt", "status", "targetUserId"], "no user data in the marker");
+    // Stage 4A.4 Part 2: the completed marker (replaces Part 1's accountReadyAt) — still no user data
+    assert.equal(gm.status, "completed");
+    assert.ok(gm.completedAt);
+    assert.deepEqual(Object.keys(gm).sort(), ["attemptId", "backupId", "cleaned", "cleanup", "cleanupAt", "completedAt", "fingerprint", "keptExercises", "startedAt", "status", "targetUserId"], "no user data in the marker");
     assert.equal(A.getMigrationStatus().status, "completed");
     assert.equal(r.ok && A.getMigrationStatus().verification.results.workoutSets.allFound, true, "child verification ran");
   });
@@ -321,7 +333,7 @@ describe("failure, retry, restart, abandon", () => {
     // a further repair run of V1 creates nothing new
     await quiet(() => A.runMigrationV1());
     assert.deepEqual(counts(), once);
-    assert.deepEqual(guestDump(), guestBefore);
+    assert.deepEqual(guestDump(), afterCleanup(guestBefore));
     assert.equal(gmBackups().length, 1, "the retry reuses the attempt's backup");
   });
 
@@ -337,7 +349,7 @@ describe("failure, retry, restart, abandon", () => {
     S.queryHook = null;
     const r = await migrate();
     assert.equal(r.ok, true, r.error);
-    assert.deepEqual(guestDump(), guestBefore);
+    assert.deepEqual(guestDump(), afterCleanup(guestBefore));
   });
 
   test("restart while COPYING (copy unconfirmed, nothing uploaded) → the copy is rebuilt from the unchanged guest → ready/guest", async () => {
@@ -353,7 +365,7 @@ describe("failure, retry, restart, abandon", () => {
     assert.equal(readJson(key(UA, "history")).length, 2, "complete copy");
     assert.equal(readJson(key(UA, "measurements")).length, 1);
     assert.equal(gmBackups().length, 1, "no second backup");
-    assert.deepEqual(guestDump(), guestBefore);
+    assert.deepEqual(guestDump(), afterCleanup(guestBefore));
   });
 
   test("restart while copying, but the guest changed meanwhile → refused, nothing written", async () => {

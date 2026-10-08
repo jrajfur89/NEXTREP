@@ -41,6 +41,16 @@ function guestDump() {
   }
   return out;
 }
+
+// Stage 4A.4 Part 2 (D1): after a SUCCESSFUL migration the migrated, finished guest data is cleaned up
+// (history, plans, measurements, custom fields; exercises only without a draft). Everything else stays
+// byte for byte: draft, PRO, name, technical keys.
+function afterCleanup(dump) {
+  const out = { ...dump };
+  const hasDraft = Object.keys(out).some((k) => k === "nextrep_guest_active_workout_draft_v1");
+  for (const n of ["history", "plans", "measurements", "custom_fields", ...(hasDraft ? [] : ["exercises"])]) delete out[`nextrep_guest_${n}_v1`];
+  return out;
+}
 const st = (id, weight, reps) => ({ id, weight: String(weight), reps: String(reps), rir: "" });
 const SD = [{ id: "sd1", target: "8-10", rir: "" }, { id: "sd2", target: "8-10", rir: "" }];
 const GUEST_HISTORY = [
@@ -75,7 +85,7 @@ describe("offer → migrate → ready/guest", () => {
     await press("init-guest-migrate");
     assert.ok(appShown(), "account opened after the verified upload");
     assert.equal(read(key(UA, "account_init")).source, "guest");
-    assert.deepEqual(guestDump(), guestBefore, "guest workspace byte-for-byte unchanged");
+    assert.deepEqual(guestDump(), afterCleanup(guestBefore), "guest workspace: only the migrated finished data removed (D1)");
     assert.equal(read(key(UA, "user_name")), "Gosia");
     assert.deepEqual((S.tables.nextrep_workouts || []).map((r) => r.legacy_id).sort(), ["g1", "g2"]);
     assert.equal((S.tables.nextrep_workout_exercises || []).filter((r) => /-pos\d+/.test(r.legacy_id)).length, 0);
@@ -185,7 +195,7 @@ describe("interrupted attempt after a restart", () => {
     assert.ok(appShown());
     assert.equal(read(key(UA, "account_init")).source, "guest");
     assert.equal((S.tables.nextrep_workout_sets || []).length, 4);
-    assert.deepEqual(guestDump(), guestBefore);
+    assert.deepEqual(guestDump(), afterCleanup(guestBefore));
   });
   test("failure before any data row → 'Wróć bez przenoszenia' → account copy removed, guest intact, offer again", async () => {
     const { S } = await bootApp({ session: sessA, storage: guestStorage() });

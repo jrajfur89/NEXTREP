@@ -1921,6 +1921,86 @@ function guestMigrationCloudOptions(resuming, deviceId, userId) {
   return resuming ? { ignoreDeviceId: deviceId, localUserName: readAccountUserName(userId), editedBuiltIns: true } : { editedBuiltIns: true };
 }
 
+// Foreign data appeared in the cloud: the attempt ends (no merge, no overwrite). If it had already reached
+// the upload phase on an earlier run, rows of this attempt may be in the cloud next to the foreign data —
+// F-5: the account keeps a note so they are never presented as normal data, and the guest data stays bound.
+function endAttemptAfterForeignData(userId, m, mayHaveUploaded) {
+  const uploaded = !!(mayHaveUploaded && m && m.status === "migrating_guest");
+  clearGuestMigrationCopy(userId);
+  clearAccountInitMarker(userId);
+  const gm = getGuestMigrationMarker();
+  if (uploaded) {
+    localStorage.setItem(getStorageKey(GUEST_PARTIAL_NOTE, userId), JSON.stringify({ deviceId: m.deviceId || null, attemptId: m.attemptId || null, backupId: m.backupId || null, at: new Date().toISOString() }));
+    if (gm && gm.targetUserId === userId && gm.attemptId === m.attemptId) setGuestMigrationMarker({ ...gm, status: "abandoned_partial", abandonedAt: new Date().toISOString() });
+  } else if (gm && gm.targetUserId === userId && (!m || gm.attemptId === m.attemptId)) {
+    clearGuestMigrationMarker();
+  }
+}
+
+// =====================================================================================
+// Stage 4A.4 Part 2 — SAFE GUEST CLEANUP (decision D1)
+// After a verified migration the moved, FINISHED guest data (history, plans, measurements, custom fields,
+// exercises) may be removed from the guest workspace — only when everything is certain:
+//   account ready/guest (verified upload) · completed marker of THIS account · current guest fingerprint
+//   = the migrated one (nothing new since) · the attempt's BEFORE_GUEST_MIGRATION backup exists, belongs to
+//   it and holds exactly the values being removed.
+// Never removed: the unfinished workout (draft), guest PRO, the guest name, the backup, technical keys.
+// With a draft the exercise list stays (the draft may use a custom exercise). Any doubt → no cleanup; the
+// account stays correctly migrated. A failed cleanup is retried later as cleanup only — never a re-upload.
+//   marker.cleanup: "pending" | "done" | "skipped_changed" | "skipped_unverified" | "failed"
+// =====================================================================================
+const GUEST_CLEANUP_NAMES = [["history", "history"], ["plans", "plans"], ["measurements", "measurements"], ["custom_fields", "customFields"], ["exercises", "exercises"]];
+// Retry of a pending / failed cleanup when the migrated account opens — cleanup only, never an upload.
+async function retryPendingGuestCleanup(userId, currentRefUserId) {
+  if (_guestMigrationRunning) return { status: "busy" };
+  const gm = getGuestMigrationMarker();
+  if (!gm || gm.status !== "completed" || gm.targetUserId !== userId || !(gm.cleanup === "pending" || gm.cleanup === "failed")) return { status: "not_applicable" };
+  _guestMigrationRunning = true;
+  try {
+    return await cleanupMigratedGuestData(userId, currentRefUserId);
+  } finally {
+    _guestMigrationRunning = false;
+  }
+}
+async function cleanupMigratedGuestData(userId, currentRefUserId) {
+  const gm = getGuestMigrationMarker();
+  if (!gm || gm.status !== "completed" || gm.targetUserId !== userId) return { status: "not_applicable" };
+  if (gm.cleanup === "done" || gm.cleanup === "skipped_changed") return { status: gm.cleanup };
+  const setCleanup = (cleanup, extra = {}) => {
+    const now = getGuestMigrationMarker();
+    if (now && now.status === "completed" && now.attemptId === gm.attemptId && now.targetUserId === userId) setGuestMigrationMarker({ ...now, cleanup, cleanupAt: new Date().toISOString(), ...extra });
+    return { status: cleanup };
+  };
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { status: "not_now" }; // retried later
+  const acc = getAccountInitMarker(userId);
+  if (!acc || acc.status !== "ready" || acc.source !== "guest") return setCleanup("skipped_unverified");
+  if (migratableDataFingerprint(null) !== gm.fingerprint) return setCleanup("skipped_changed"); // new / changed guest data: keep everything
+  const b = findGuestMigrationBackup(gm.backupId);
+  if (!b || b.attemptId !== gm.attemptId || b.targetUserId !== userId || b.fingerprint !== gm.fingerprint || !b.data || typeof b.data !== "object") return setCleanup("skipped_unverified");
+  const keepExercises = readNamespaceEntry("active_workout_draft", null).state !== "missing";
+  const plan = [];
+  for (const [name, field] of GUEST_CLEANUP_NAMES) {
+    if (name === "exercises" && keepExercises) continue;
+    const raw = localStorage.getItem(getStorageKey(name, null));
+    if (raw == null) continue;
+    // the backup must hold exactly what is removed — otherwise this category stays
+    if (b.data[field] == null || JSON.stringify(b.data[field]) !== raw) return setCleanup("skipped_unverified");
+    plan.push([getStorageKey(name, null), raw, name]);
+  }
+  try {
+    for (const [k] of plan) localStorage.removeItem(k);
+    for (const [k] of plan) if (localStorage.getItem(k) != null) throw new Error("usunięcie nie zostało potwierdzone");
+  } catch (e) {
+    for (const [k, raw] of plan) {
+      try {
+        if (localStorage.getItem(k) == null) localStorage.setItem(k, raw);
+      } catch {}
+    }
+    return setCleanup("failed", { cleanupError: String((e && e.message) || e) });
+  }
+  return setCleanup("done", { cleaned: plan.map((p) => p[2]), keptExercises: keepExercises });
+}
+
 let _guestMigrationRunning = false; // one guest migration at a time in this tab (double tap, two starts)
 function isGuestMigrationRunning() {
   return _guestMigrationRunning;
@@ -1973,9 +2053,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
       if (cloud.hasData) {
         // resuming, and data of ANOTHER device appeared meanwhile: never overwrite / merge — drop our local
         // copy (the account had nothing before it), end the attempt, decide the source again.
-        clearGuestMigrationCopy(userId);
-        clearAccountInitMarker(userId);
-        clearGuestMigrationMarker();
+        endAttemptAfterForeignData(userId, markerNow, markerNow.phase === "uploading");
         return { ok: false, blocked: "cloud_changed", cloud, error: GUEST_MIGRATION_TEXTS.cloudChanged };
       }
       const phase = resuming ? markerNow.phase : null;
@@ -2028,18 +2106,22 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
       }
       if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
       if (recheck.hasData) {
-        clearGuestMigrationCopy(userId);
-        clearAccountInitMarker(userId);
-        clearGuestMigrationMarker();
+        endAttemptAfterForeignData(userId, getAccountInitMarker(userId), resuming && phase === "uploading");
         return { ok: false, blocked: "cloud_changed", cloud: recheck, error: GUEST_MIGRATION_TEXTS.cloudChanged };
       }
       const result = await runMigrationV1();
       if (!result || !result.success) return { ok: false, error: result && result.error ? authErrorText(result.error) : "Nie udało się wysłać danych do chmury." };
       if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
       setAccountInitMarker(userId, { status: "ready", source: "guest", syncPaused: false });
+      // Stage 4A.4 Part 2: the completed marker — this guest data (fingerprint) is now in this account.
+      // It keeps the guest data bound to it (F-4) and protects the backup; no user data in it.
       const gmNow = getGuestMigrationMarker();
-      if (gmNow && gmNow.attemptId === attemptId) setGuestMigrationMarker({ ...gmNow, accountReadyAt: new Date().toISOString() });
-      return { ok: true };
+      if (gmNow && gmNow.attemptId === attemptId && gmNow.targetUserId === userId) {
+        setGuestMigrationMarker({ status: "completed", targetUserId: userId, fingerprint, backupId, attemptId, startedAt: gmNow.startedAt || null, completedAt: new Date().toISOString(), cleanup: "pending" });
+      }
+      // D1: cleanup of the moved guest data — never a condition of the account's success
+      const cleanup = await cleanupMigratedGuestData(userId, currentRefUserId);
+      return { ok: true, cleanup: cleanup.status, draftKept: readNamespaceEntry("active_workout_draft", null).state !== "missing" };
     } finally {
       _accountInitBusy = false;
     }
@@ -6228,11 +6310,19 @@ function createBackupSnapshot(reason, options = {}) {
     list.push(snapshot);
     // Stage 4A.3: before-cloud-load snapshots are outside BACKUP_LIMIT, but bounded per namespace.
     if (snapshot.kind === BEFORE_CLOUD_RESTORE_KIND) list = pruneBeforeCloudRestoreBackups(list, snapshot.namespace, snapshot.userId, snapshot.backupId);
+    // Stage 4A.4 Part 2: the copy of the ORIGINAL data taken before an upload re-identified it ("before-migration")
+    // is outside BACKUP_LIMIT too — bounded to the 2 newest per namespace instead.
+    if (snapshot.reason === "before-migration") {
+      const isBm = (b) => b && b.reason === "before-migration" && backupOwnerNamespace(b) === snapshot.namespace;
+      const keepBm = new Set(list.filter(isBm).sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)).slice(0, 2).map((b) => b.backupId));
+      keepBm.add(snapshot.backupId);
+      list = list.filter((b) => !isBm(b) || keepBm.has(b.backupId));
+    }
     // keep BACKUP_LIMIT per namespace (one account's backups never push out another's)
     const owner = (b) => backupOwnerNamespace(b);
     // the device snapshot taken before "Wczytaj z chmury" is never trimmed away by later backups
     // Stage 4A.4: nor the guest snapshot taken before a guest → account migration (own retention)
-    const trimmable = (b) => owner(b) === snapshot.namespace && b.kind !== BEFORE_CLOUD_RESTORE_KIND && b.kind !== BEFORE_GUEST_MIGRATION_KIND;
+    const trimmable = (b) => owner(b) === snapshot.namespace && b.kind !== BEFORE_CLOUD_RESTORE_KIND && b.kind !== BEFORE_GUEST_MIGRATION_KIND && b.reason !== "before-migration";
     while (list.filter(trimmable).length > BACKUP_LIMIT) {
       list.splice(list.findIndex(trimmable), 1);
     }
@@ -16377,6 +16467,7 @@ function App() {
   if (holdForGuestWorkout) heldSwitchRef.current = true;
   else if (expectedNs === "guest") heldSwitchRef.current = false;
   const [sessionRecoveredNotice, setSessionRecoveredNotice] = useState(false);
+  const [guestMigrationNotice, setGuestMigrationNotice] = useState(null); // Stage 4A.4: { draftKept, cleanup } after a migration
   const dataNamespaceLoaded = dataNs !== null && dataNs === workspaceNs;
   // Stage 4A.2: an account namespace is usable only once its data source is decided.
   // accountInit = { ns, status: "checking"|"choice"|"error_check"|"loading_cloud"|"error_load"|"ready", local, cloud, error, transient }
@@ -16453,6 +16544,12 @@ function App() {
         // Stage 4A.3: no marker — or one with an unknown / damaged status (never "ready", never synced,
         // nothing cleared) — means the source is decided again by the normal safe check.
         if (targetUserId && !isKnownAccountInitStatus((getAccountInitMarker(targetUserId) || {}).status)) runAccountInitCheck(targetUserId, targetNs);
+        // Stage 4A.4 Part 2: a guest cleanup that failed / was interrupted after a verified migration is
+        // retried here — cleanup only (all D1 checks again), never another upload.
+        if (targetUserId) {
+          const m = getAccountInitMarker(targetUserId);
+          if (m && m.status === "ready" && m.source === "guest") retryPendingGuestCleanup(targetUserId, () => (authUserRef.current ? authUserRef.current.id : null)).catch(() => {});
+        }
       })
       .catch((e) => console.error("[namespace] switch failed", e));
   }, [workspaceNs]);
@@ -16938,6 +17035,7 @@ function App() {
     if (!isCurrentOp(op)) return; // superseded — the newer flow owns the screen
     if (r.ok || r.alreadyReady) {
       await finishInit();
+      if (r.ok && sameInit()) setGuestMigrationNotice({ draftKept: !!r.draftKept, cleanup: r.cleanup || null });
       return;
     }
     if (r.discarded) r = { ...r, error: ACCOUNT_CHECK_FAILED_TEXT };
@@ -17480,6 +17578,26 @@ function App() {
             <p className="text-neutral-50 text-sm font-semibold mb-1">Sesja konta została odzyskana</p>
             <p className="text-neutral-400 text-xs leading-relaxed mb-3">Aplikacja przełączyła się na dane Twojego konta. Trening wykonany bez logowania pozostał w danych gościa.</p>
             <button onClick={() => setSessionRecoveredNotice(false)} className="w-full py-2 rounded-xl bg-orange-500 text-neutral-950 font-bold text-sm">OK</button>
+          </div>
+        </div>
+      )}
+      {guestMigrationNotice && (
+        <div className="fixed inset-x-0 bottom-24 z-50 px-4 flex justify-center" data-testid="guest-migration-done">
+          <div className="w-full max-w-sm bg-neutral-900 border border-orange-500/60 rounded-2xl p-4 shadow-lg">
+            <p className="text-neutral-50 text-sm font-semibold mb-1">Zakończone dane zostały przeniesione na konto</p>
+            {guestMigrationNotice.draftKept && (
+              <p className="text-neutral-300 text-xs leading-relaxed mb-1" data-testid="guest-migration-draft-kept">Niedokończony trening pozostał w trybie bez logowania.</p>
+            )}
+            <p className="text-neutral-400 text-xs leading-relaxed mb-3" data-testid="guest-migration-cleanup">
+              {guestMigrationNotice.cleanup === "done"
+                ? "Przeniesione dane usunięto z trybu bez logowania — ich kopia zapasowa jest zachowana."
+                : guestMigrationNotice.cleanup === "skipped_changed"
+                ? "Dane w trybie bez logowania zmieniły się w trakcie przenoszenia, więc zostały tam bez zmian."
+                : guestMigrationNotice.cleanup === "failed"
+                ? "Nie udało się usunąć przeniesionych danych z trybu bez logowania — aplikacja spróbuje ponownie później. Konto jest w pełni gotowe."
+                : "Dane w trybie bez logowania pozostały bez zmian."}
+            </p>
+            <button onClick={() => setGuestMigrationNotice(null)} className="w-full py-2 rounded-xl bg-orange-500 text-neutral-950 font-bold text-sm">OK</button>
           </div>
         </div>
       )}

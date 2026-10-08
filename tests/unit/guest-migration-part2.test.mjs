@@ -364,3 +364,189 @@ describe("F-3 — a soft-deleted cloud row never verifies a live local record", 
     assert.equal(cloudWrites(S).length, 0);
   });
 });
+
+// ---- cleanup (D1) + completed marker --------------------------------------------------------------
+describe("safe guest cleanup after a verified migration (D1) + completed marker", () => {
+  const CLEANED = ["history", "plans", "measurements", "custom_fields"];
+  test("G/I: fingerprint unchanged → finished data removed; draft, PRO, name, backup stay; exercises kept while a draft exists", async () => {
+    seedGuest();
+    const before = guestDump();
+    const r = await migrate();
+    assert.equal(r.ok, true, r.error);
+    assert.equal(r.cleanup, "done");
+    assert.equal(r.draftKept, true);
+    for (const n of CLEANED) assert.equal(localStorage.getItem(key(null, n)), null, `${n} cleaned`);
+    for (const n of ["active_workout_draft", "pro_status", "user_name", "exercises"]) assert.equal(localStorage.getItem(key(null, n)), before[key(null, n)], `${n} byte-for-byte`);
+    const gm = readJson(GM_KEY);
+    assert.deepEqual([gm.status, gm.targetUserId, gm.cleanup], ["completed", UA, "done"]);
+    assert.ok(gm.fingerprint && gm.backupId && gm.completedAt && gm.attemptId);
+    const [b] = gmBackups();
+    assert.equal(b.backupId, gm.backupId, "backup kept and bound to the completed migration");
+    assert.deepEqual(b.data.history, GUEST.history, "the backup still holds the original guest data");
+  });
+  test("G: without a draft the exercise list is cleaned too", async () => {
+    seedGuest({ draft: false });
+    const r = await migrate();
+    assert.equal(r.cleanup, "done");
+    assert.equal(localStorage.getItem(key(null, "exercises")), null);
+    assert.equal(r.draftKept, false);
+  });
+  test("H: guest data changed after the start (fingerprint differs) → NO cleanup; account still migrated", async () => {
+    seedGuest();
+    let changed = false;
+    S.queryHook = (q) => {
+      if (!changed && q.table === "nextrep_workouts" && q.op === "insert") {
+        changed = true;
+        localStorage.setItem(key(null, "measurements"), JSON.stringify([...GUEST.measurements, { id: "gm-new", date: "2026-10-06", weight: 79 }]));
+      }
+      return null;
+    };
+    const r = await migrate();
+    assert.equal(r.ok, true, r.error);
+    assert.equal(r.cleanup, "skipped_changed");
+    assert.equal(marker().status, "ready");
+    for (const n of CLEANED) assert.ok(localStorage.getItem(key(null, n)), `${n} kept`);
+    assert.equal(readJson(key(null, "measurements")).length, 2, "the new guest data is there");
+    assert.equal(readJson(GM_KEY).cleanup, "skipped_changed");
+  });
+  test("backup that does not hold exactly the removed values → no cleanup (skipped_unverified)", async () => {
+    seedGuest();
+    const r0 = await migrate(); // completes + cleans; set up the doubt case by hand below
+    assert.equal(r0.cleanup, "done");
+    setup();
+    seedGuest();
+    const fp = A.migratableDataFingerprint(null);
+    const b = A.createGuestMigrationBackup({ targetUserId: UA, fingerprint: fp, attemptId: "att-x" });
+    const list = A.loadBackupList();
+    list.find((x) => x.backupId === b.backupId).data.history = [];
+    localStorage.setItem("nextrep_backup_list_v1", JSON.stringify(list));
+    localStorage.setItem(GM_KEY, JSON.stringify({ status: "completed", targetUserId: UA, fingerprint: fp, backupId: b.backupId, attemptId: "att-x", cleanup: "pending" }));
+    A.setAccountInitMarker(UA, { status: "ready", source: "guest", syncPaused: false });
+    const before = guestDump();
+    const c = await quiet(() => A.cleanupMigratedGuestData(UA, ref));
+    assert.equal(c.status, "skipped_unverified");
+    assert.deepEqual(guestDump(), before);
+  });
+  test("J: cleanup fails → account stays ready/guest, guest data restored; retry = cleanup only (no upload)", async () => {
+    seedGuest();
+    const proto = Object.getPrototypeOf(localStorage);
+    const orig = proto.removeItem;
+    proto.removeItem = function (k) {
+      if (k === key(null, "plans")) throw new Error("storage locked");
+      return orig.call(this, k);
+    };
+    let r;
+    try {
+      r = await migrate();
+    } finally {
+      proto.removeItem = orig;
+    }
+    assert.equal(r.ok, true, "the migration is a success");
+    assert.equal(r.cleanup, "failed");
+    assert.equal(marker().status, "ready");
+    assert.equal(marker().source, "guest");
+    for (const n of CLEANED) assert.ok(localStorage.getItem(key(null, n)), `${n} restored`);
+    assert.equal(readJson(GM_KEY).cleanup, "failed");
+    S.calls = [];
+    const again = await quiet(() => A.retryPendingGuestCleanup(UA, ref));
+    assert.equal(again.status, "done");
+    assert.equal(cloudWrites(S).length, 0, "retry never uploads again");
+    assert.equal(S.calls.filter((c) => c.kind === "table").length, 0, "not even a cloud read");
+    for (const n of CLEANED) assert.equal(localStorage.getItem(key(null, n)), null);
+  });
+  test("K: after success → logout (guest workspace) → the BEFORE_GUEST_MIGRATION backup is listed for the guest", async () => {
+    seedGuest();
+    await migrate();
+    A.activateDataNamespace(null);
+    const list = A.loadBackupListForActiveNamespace();
+    assert.ok(list.some((b) => b.kind === "BEFORE_GUEST_MIGRATION" && b.reason === "before-guest-migration"));
+  });
+  test("L: A logs in again → no repeated migration, no writes", async () => {
+    seedGuest();
+    await migrate();
+    restart(UA);
+    S.calls = [];
+    const r = await migrate();
+    assert.equal(r.alreadyReady, true);
+    assert.equal(cloudWrites(S).length, 0);
+  });
+  test("M: B logs in → no automatic second migration (cleaned: nothing to offer; not cleaned: bound to A)", async () => {
+    seedGuest();
+    let changed = false;
+    S.queryHook = (q) => {
+      if (!changed && q.table === "nextrep_workouts" && q.op === "insert") {
+        changed = true;
+        localStorage.setItem(key(null, "measurements"), JSON.stringify([]));
+      }
+      return null;
+    };
+    await migrate(); // cleanup skipped (changed) → the guest data is still there
+    restart(UB);
+    S.calls = [];
+    const r = await migrate(UB);
+    assert.equal(r.blocked, "guest_other_account");
+    assert.equal(cloudWrites(S).length, 0);
+    assert.equal(A.guestMarkerBinding(UB).status, "completed");
+  });
+  test("4A.3 backup of the original data ('before-migration') is not pushed out by ordinary backups", async () => {
+    localStorage.setItem(key(UA, "history"), JSON.stringify([{ ...GUEST.history[0] }, { ...GUEST.history[1] }]));
+    const r = await quiet(() => A.uploadAccountDataToEmptyCloud(UA, ref));
+    assert.equal(r.ok, true, r.error);
+    const bm = A.loadBackupList().find((b) => b.reason === "before-migration");
+    assert.ok(bm);
+    for (let i = 0; i < 15; i++) A.createBackupSnapshot("manual", { force: true });
+    assert.ok(A.loadBackupList().some((b) => b.backupId === bm.backupId));
+  });
+});
+
+// ---- retry / restart / abandon audit of the persistent phases --------------------------------------
+describe("phase audit — deterministic behaviour of every persistent state", () => {
+  test("phase 'copying' (nothing can have been uploaded) → abandon is a full reset without even asking the cloud", async () => {
+    seedGuest();
+    const fp = A.migratableDataFingerprint(null);
+    const b = A.createGuestMigrationBackup({ targetUserId: UA, fingerprint: fp, attemptId: "c1" });
+    localStorage.setItem(GM_KEY, JSON.stringify({ status: "migrating", targetUserId: UA, fingerprint: fp, backupId: b.backupId, attemptId: "c1" }));
+    A.setAccountInitMarker(UA, { status: "migrating_guest", source: "guest", syncPaused: true, userId: UA, namespace: `user_${UA}`, deviceId: A.getOrCreateDeviceId(), backupId: b.backupId, fingerprint: fp, attemptId: "c1", phase: "copying" });
+    localStorage.setItem(key(UA, "history"), JSON.stringify([GUEST.history[0]]));
+    S.calls = [];
+    const r = await quiet(() => A.abandonGuestMigration(UA, ref));
+    assert.equal(r.ok, true);
+    assert.equal(S.calls.filter((c) => c.kind === "table").length, 0);
+    assert.equal(marker(), null);
+    assert.equal(localStorage.getItem(GM_KEY), null);
+    assert.equal(localStorage.getItem(key(UA, "history")), null);
+  });
+  test("session expires during the upload → stops (no further phase), attempt kept; after a new login the resume completes with stable rows", async () => {
+    seedGuest();
+    S.queryHook = (q) => {
+      if (q.table === "nextrep_plans" && q.op === "insert") S.session = null; // token expired / signed out
+      return null;
+    };
+    const r = await migrate();
+    assert.equal(r.ok, false);
+    assert.equal(marker().status, "migrating_guest");
+    assert.equal(rows("nextrep_workouts").length, 0, "the workouts phase never started");
+    S.queryHook = null;
+    S.session = { user: { id: UA } };
+    const ok = await migrate();
+    assert.equal(ok.ok, true, ok.error);
+    assert.equal(rows("nextrep_workouts").length, 2);
+    assert.equal(rows("nextrep_workout_sets").length, 4);
+  });
+  test("retry tapped while a retry runs → busy, one logical attempt", async () => {
+    seedGuest();
+    failOnce("nextrep_workout_sets");
+    await migrate();
+    let release;
+    S.queryGate = (q) => (q.table === "nextrep_workout_sets" && !release ? new Promise((res) => (release = res)) : null);
+    const first = migrate();
+    while (!release) await new Promise((res) => setTimeout(res, 5));
+    const second = await migrate();
+    assert.equal(second.busy, true);
+    S.queryGate = null;
+    release();
+    assert.equal((await first).ok, true);
+    assert.equal(gmBackups().length, 1);
+    assert.equal(rows("nextrep_workout_sets").length, 4);
+  });
+});
