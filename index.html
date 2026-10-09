@@ -1939,7 +1939,7 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
     // purely local refusals (F-1 / F-2 / I-2) come BEFORE the server attempt — a resume that cannot happen
     // never locks the account
     const localCheck = prepareAccountDatasetForUpload(userId, { resuming: true });
-    if (!localCheck.ok) return { ok: false, resumeUnsafe: !!localCheck.resumeUnsafe, integrityIssues: localCheck.integrityIssues, error: localCheck.error };
+    if (!localCheck.ok) return { ok: false, resumeUnsafe: !!localCheck.resumeUnsafe, integrityIssues: localCheck.integrityIssues, dataBlockers: localCheck.dataBlockers, error: localCheck.error };
     const acq = await acquireFlowAttempt({ userId, deviceId, kind: "device_upload", flow: "device", attemptId: migrationAttemptIdFrom(markerNow.serverAttemptId), persistId });
     if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
     if (isOwnCompletedAttempt(acq, deviceId)) return { ok: true, alreadyCompleted: true };
@@ -1983,7 +1983,7 @@ async function uploadAccountDataToEmptyCloud(userId, currentRefUserId) {
       if (collisions.length) return { ok: false, deletedCollisions: collisions, error: DELETED_COLLISION_TEXT };
     }
     const prep = prepareAccountDatasetForUpload(userId, { resuming });
-    if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
+    if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, dataBlockers: prep.dataBlockers, error: prep.error };
     if (!resuming) {
       const attemptId = newUuid();
       setAccountInitMarker(userId, { status: "uploading_device", source: "device", syncPaused: true, userId, namespace: ns, deviceId, serverAttemptId: attemptId, startedAt: new Date().toISOString() });
@@ -2249,6 +2249,9 @@ function prepareAccountDatasetForUpload(userId, { resuming = false } = {}) {
   const prep = prepareV1UploadDataset(ds);
   const integrityIssues = v1DatasetIntegrityIssues(prep.dataset);
   if (integrityIssues.length) return { ok: false, integrityIssues, error: v1IntegrityIssuesText(integrityIssues) };
+  // Etap 11: data the cloud would refuse and that cannot be repaired without inventing it → no start / resume
+  const dataBlockers = cloudUploadBlockers(prep.dataset);
+  if (dataBlockers.length) return { ok: false, dataBlockers, error: cloudUploadBlockersText(dataBlockers, { resuming }) };
   if (!prep.changed) return { ok: true, changed: false };
   if (resuming) {
     return {
@@ -2634,9 +2637,12 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         const guest = readMigratableDataset(null);
         if (guest.damage.length) return { ok: false, blocked: "damaged", damage: guest.damage, error: `${GUEST_MIGRATION_TEXTS.damaged} Uszkodzone: ${damageText(guest.damage)}.` };
         if (migratableDataFingerprint(null) !== markerNow.fingerprint) return { ok: false, resumeUnsafe: true, error: GUEST_MIGRATION_TEXTS.guestChanged };
+        // Etap 11: an upload bound to fail is not resumed either (the attempt is not taken)
+        const dataBlockers = cloudUploadBlockers(prepareV1UploadDataset(guest).dataset);
+        if (dataBlockers.length) return { ok: false, blocked: "invalid_data", dataBlockers, error: cloudUploadBlockersText(dataBlockers, { resuming: true }) };
       } else {
         const localCheck = prepareAccountDatasetForUpload(userId, { resuming: true });
-        if (!localCheck.ok) return { ok: false, resumeUnsafe: !!localCheck.resumeUnsafe, integrityIssues: localCheck.integrityIssues, error: localCheck.error };
+        if (!localCheck.ok) return { ok: false, resumeUnsafe: !!localCheck.resumeUnsafe, integrityIssues: localCheck.integrityIssues, dataBlockers: localCheck.dataBlockers, error: localCheck.error };
       }
       const acq = await acquireFlowAttempt({ userId, deviceId, kind: "guest_to_account", flow: "guest", attemptId: migrationAttemptIdFrom(markerNow.serverAttemptId, markerNow.attemptId), persistId });
       if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
@@ -2693,6 +2699,9 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         const prepared = { ...prepareV1UploadDataset(guest), present: guest.present };
         const integrityIssues = v1DatasetIntegrityIssues(prepared.dataset);
         if (integrityIssues.length) return { ok: false, blocked: "integrity", integrityIssues, error: v1IntegrityIssuesText(integrityIssues) };
+        // Etap 11: unrepairable values stop here — before the backup, the markers and the server attempt
+        const dataBlockers = cloudUploadBlockers(prepared.dataset);
+        if (dataBlockers.length) return { ok: false, blocked: "invalid_data", dataBlockers, error: cloudUploadBlockersText(dataBlockers) };
         // F-3 (review P1): soft-deleted cloud rows with the same identities → stop before the backup / any write
         let collisions;
         try {
@@ -2745,7 +2754,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         // The confirmed copy is uploaded as it is. It was prepared before the first upload; if it would
         // still change, rows already sent could be orphaned (F-1) → refuse.
         const prep = prepareAccountDatasetForUpload(userId, { resuming: true });
-        if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, error: prep.error };
+        if (!prep.ok) return { ok: false, resumeUnsafe: !!prep.resumeUnsafe, integrityIssues: prep.integrityIssues, dataBlockers: prep.dataBlockers, error: prep.error };
         let collisions;
         try {
           collisions = await v1DeletedRowCollisions(userId, readMigratableDataset(userId), { migrationToken: token });
@@ -3364,7 +3373,9 @@ async function runWorkoutIdentityMigration(history, plans) {
 // that carries a legacy_id. Never relies on a guessed unique-constraint name for upsert/
 // onConflict; does an explicit select first so it works regardless of the exact constraints
 // defined on the table, and is safe to call repeatedly (re-running finds the same row again).
-async function upsertByLegacyId(table, userId, legacyId, rowData, deviceId) {
+async function upsertByLegacyId(table, userId, legacyId, rowData0, deviceId) {
+  // Etap 11: never send null into a NOT NULL column that has a server default (idempotent with the builders)
+  const rowData = sanitizeCloudRow(table, rowData0);
   // TEMPORARY DIAGNOSTIC ONLY — logs the lookup request and its outcome. Does not change control
   // flow, does not retry, does not alter the query itself in any way. The Supabase JS client does
   // not expose the raw fetch URL on its response object, so "request target" below is the LOGICAL
@@ -3774,12 +3785,8 @@ async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId, before
       if (beforeEachRow) await beforeEachRow(); // Stage 4A.4: periodic session re-check (V1 upload)
       const itemLegacyId = String(item.id);
       const mappedExerciseId = item.exerciseId != null ? exerciseIdMap[String(item.exerciseId)] || null : null;
-      const itemRow = {
-        plan_id: planId,
-        exercise_id: mappedExerciseId,
-        rest_seconds: item.restSeconds != null ? Number(item.restSeconds) : null,
-        superset_group: item.supersetGroup || null,
-      };
+      // Etap 11: the same row the sync engine writes (rest_seconds left out when the item has none)
+      const itemRow = buildPlanItemPayload(item, planId, mappedExerciseId);
       const planItemId = await upsertByLegacyId("nextrep_plan_items", userId, itemLegacyId, itemRow, deviceId);
       planItemIdMap[itemLegacyId] = planItemId;
 
@@ -3841,19 +3848,8 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
     if (beforeEachWorkout) await beforeEachWorkout(); // Stage 4A.4: session re-check per workout (V1 upload)
     const workoutLegacyId = String(session.id);
     const mappedPlanId = session.planId != null ? planIdMap[String(session.planId)] || null : null;
-    const workoutRow = {
-      workout_date: session.date || null,
-      plan_id: mappedPlanId,
-      plan_name: session.planName || null,
-      plan_label: session.planLabel || null,
-      exercises_count: session.exercisesCount != null ? Number(session.exercisesCount) : null,
-      total_sets: session.totalSets != null ? Number(session.totalSets) : null,
-      total_reps: session.totalReps != null ? Number(session.totalReps) : null,
-      total_weight: session.totalWeight != null ? Number(session.totalWeight) : null,
-      volume: session.volume != null ? Number(session.volume) : null,
-      duration_sec: session.durationSec != null ? Number(session.durationSec) : null,
-      analysis: session.analysis && typeof session.analysis === "object" ? session.analysis : {},
-    };
+    // Etap 11: the same row the sync engine writes (summaries without a value left out)
+    const workoutRow = buildWorkoutPayload(session, mappedPlanId);
     const workoutId = await upsertByLegacyId("nextrep_workouts", userId, workoutLegacyId, workoutRow, deviceId);
     workoutIdMap[workoutLegacyId] = workoutId;
 
@@ -3883,32 +3879,11 @@ async function migrateWorkoutsV1(userId, historyList, exerciseIdMap, planIdMap, 
         const s = sets[si];
         if (!s) continue;
         const setLegacyId = legacyIds.set(wexPosLegacyId, s, si);
-        await upsertByLegacyId(
-          "nextrep_workout_sets",
-          userId,
-          setLegacyId,
-          {
-            workout_exercise_id: workoutExerciseId,
-            position: si,
-            weight: s.weight != null && s.weight !== "" ? Number(s.weight) : null,
-            reps: s.reps != null && s.reps !== "" ? Number(s.reps) : null,
-            duration: s.duration != null && s.duration !== "" ? Number(s.duration) : null,
-            speed: s.speed != null && s.speed !== "" ? Number(s.speed) : null,
-            incline: s.incline != null && s.incline !== "" ? Number(s.incline) : null,
-            distance: s.distance != null && s.distance !== "" ? Number(s.distance) : null,
-            kcal: s.kcal != null && s.kcal !== "" ? Number(s.kcal) : null,
-            resistance: s.resistance != null && s.resistance !== "" ? Number(s.resistance) : null,
-            pace: s.pace != null && s.pace !== "" ? Number(s.pace) : null,
-            level: s.level != null && s.level !== "" ? Number(s.level) : null,
-            floors: s.floors != null && s.floors !== "" ? Number(s.floors) : null,
-            heart_rate: s.heartRate != null && s.heartRate !== "" ? Number(s.heartRate) : null,
-            rir: s.rir || "",
-            note: s.note || "",
-            set_type: s.setType || "normal",
-            done: !!s.done,
-          },
-          deviceId
-        );
+        // Etap 11: the same row the sync engine writes. The TEXT columns (reps, duration, speed, incline,
+        // distance, kcal, resistance, pace, level, floors, heart_rate) keep the text as entered — the old
+        // Number(...) here turned e.g. a pace "5:30" into null (lost in the cloud, and the sync comparison then
+        // saw the cloud as different from the device).
+        await upsertByLegacyId("nextrep_workout_sets", userId, setLegacyId, buildWorkoutSetPayload(s, workoutExerciseId, si), deviceId);
       }
     }
   }
@@ -4234,6 +4209,13 @@ async function runMigrationV1(onProgress) {
     setMigrationStatus("failed", { error: msg, integrityIssues }, statusUserId);
     return { success: false, error: msg, integrityIssues };
   }
+  // Etap 11: values the cloud would refuse and that cannot be repaired → refused before ANY cloud write
+  const dataBlockers = cloudUploadBlockers(local);
+  if (dataBlockers.length) {
+    const msg = cloudUploadBlockersText(dataBlockers);
+    setMigrationStatus("failed", { error: msg, dataBlockers }, statusUserId);
+    return { success: false, error: msg, dataBlockers };
+  }
 
   const deviceId = getOrCreateDeviceId();
   if (!isActiveNamespaceFor(statusUserId)) {
@@ -4365,8 +4347,14 @@ async function runManualMigrationV1(onProgress) {
     const userId = await currentSessionUserId();
     const deviceId = getOrCreateDeviceId();
     if (!userId || !deviceId || !isActiveNamespaceFor(userId)) return { success: false, blocked: true, error: "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę." };
+    // Etap 11: unrepairable local values stop the tool BEFORE its server attempt (nothing locked, nothing sent)
     const prev = getMigrationAttemptRecord(userId);
     const resumeOwn = !!(prev && prev.flow === "manual" && prev.deviceId === deviceId && prev.userId === userId && (prev.status === "uploading" || prev.status === "abandoned" || prev.status === "starting"));
+    // (damaged local data is refused here too — before, the attempt was taken and V1 then failed with zero writes)
+    const { errors: localErrors, data: localData } = await validateLocalDataForMigration();
+    if (localErrors.length) return { success: false, blocked: true, error: `Dane lokalne są uszkodzone: ${localErrors.join(" ")}` };
+    const dataBlockers = cloudUploadBlockers(localData);
+    if (dataBlockers.length) return { success: false, blocked: true, dataBlockers, error: cloudUploadBlockersText(dataBlockers, { resuming: resumeOwn }) };
     const acq = await acquireFlowAttempt({ userId, deviceId, kind: "device_upload", flow: "manual", attemptId: resumeOwn ? migrationAttemptIdFrom(prev.attemptId) : newUuid() });
     if (isOwnCompletedAttempt(acq, deviceId)) return { success: true, alreadyCompleted: true };
     if (!acq.ok) return { success: false, blocked: acq.reason !== "closed", migration: acq.reason, closed: acq.reason === "closed", error: acq.error };
@@ -4766,6 +4754,94 @@ function findLocalRecordForQueueItem(item, snap) {
   }
 }
 
+// =====================================================================================
+// Stage 4A.4 (Etap 11) — cloud-safe values for NOT NULL number columns (every cloud write path).
+// These cloud columns are NOT NULL with a server default whose meaning the app already gives to a
+// missing local value (confirmed against the production schema):
+//   nextrep_plan_items.rest_seconds (default 0) — a plan item without its own rest: the workout timer
+//     uses 90 s for a missing value and for 0 alike (old plans, imported files);
+//   nextrep_workouts.exercises_count / total_sets / total_reps / duration_sec / total_weight / volume
+//     (default 0) — summaries the app writes when a workout is saved; the statistics already count a
+//     missing one as 0 (old / imported sessions).
+// Sending `null` there made the server refuse the row (23502) — an upload stopped half way. Now a
+// missing / empty / non-numeric value is OMITTED from the row:
+//   INSERT → the server default applies;   UPDATE → the cloud value stays (never overwritten by "unknown").
+// (Both writers — V1 upsertByLegacyId and sync pushUpsertByLegacyId — choose INSERT or UPDATE explicitly
+// after a lookup; there is no merge-upsert on these tables.) A decimal comma is read as a decimal point and
+// an integer column gets a rounded value (90.5 would be refused by an integer column). Any value the server
+// accepts is sent unchanged (also negative ones). Local data is never rewritten. The comparison used by sync
+// (syncPayloadMatches) builds the same rows, so an omitted column is not compared — no false "remote newer".
+// Values that cannot be repaired without inventing data (a missing / invalid date, a number outside the
+// integer range) are reported by cloudUploadBlockers BEFORE an upload attempt starts.
+// =====================================================================================
+const CLOUD_INT_MAX = 2147483647;
+const CLOUD_DEFAULTED_NUMBER_COLUMNS = {
+  nextrep_plan_items: { rest_seconds: "int" },
+  nextrep_workouts: { exercises_count: "int", total_sets: "int", total_reps: "int", duration_sec: "int", total_weight: "num", volume: "num" },
+};
+// → a finite number for the column, or undefined (= leave the column out)
+function cloudNumberValue(v, kind) {
+  if (v === null || v === undefined || typeof v === "boolean" || typeof v === "object") return undefined;
+  if (typeof v === "string" && v.trim() === "") return undefined;
+  const n = toNumber(typeof v === "string" ? v.trim() : v);
+  if (n == null) return undefined;
+  return kind === "int" ? Math.round(n) : n;
+}
+function sanitizeCloudRow(table, row) {
+  const rules = CLOUD_DEFAULTED_NUMBER_COLUMNS[table];
+  if (!rules || !row || typeof row !== "object") return row;
+  const out = { ...row };
+  for (const [col, kind] of Object.entries(rules)) {
+    if (!Object.prototype.hasOwnProperty.call(out, col)) continue;
+    const v = cloudNumberValue(out[col], kind);
+    if (v === undefined) delete out[col];
+    else out[col] = v;
+  }
+  return out;
+}
+// timestamptz columns without a default (workout_date, measurement_date): an ISO-like date string that
+// parses. Never invented — a record without one cannot be uploaded.
+function isCloudTimestamp(v) {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v.trim()) && Number.isFinite(Date.parse(v.trim()));
+}
+// Local records the cloud would refuse and that cannot be repaired without inventing data. Checked before a
+// migration attempt starts (device upload, guest → account, manual tool, and their resumes), so an upload
+// that is bound to fail never locks the account. → [{ kind, label, count, sample }] (empty = ok)
+function cloudUploadBlockers(ds) {
+  const src = ds || {};
+  const out = [];
+  const report = (kind, label, ids) => {
+    if (ids.length) out.push({ kind, label, count: ids.length, sample: ids.slice(0, 5) });
+  };
+  const list = (v) => (Array.isArray(v) ? v : []);
+  const outOfRange = (v) => {
+    const n = cloudNumberValue(v, "int");
+    return n !== undefined && (n > CLOUD_INT_MAX || n < -CLOUD_INT_MAX - 1);
+  };
+  report("measurement_date", "pomiary bez prawidłowej daty", list(src.measurements).filter((m) => m && typeof m === "object" && m.id != null && !isCloudTimestamp(m.date)).map((m) => String(m.id)));
+  report("workout_date", "treningi bez prawidłowej daty", list(src.history).filter((s) => s && typeof s === "object" && s.id != null && !isCloudTimestamp(s.date)).map((s) => String(s.id)));
+  const bigNumbers = [];
+  for (const s of list(src.history)) {
+    if (!s || typeof s !== "object" || s.id == null) continue;
+    if ([s.exercisesCount, s.totalSets, s.totalReps, s.durationSec].some(outOfRange)) bigNumbers.push(String(s.id));
+  }
+  for (const plan of list(src.plans)) {
+    for (const item of plan && Array.isArray(plan.exercises) ? plan.exercises : []) {
+      if (item && typeof item === "object" && item.id != null && outOfRange(item.restSeconds)) bigNumbers.push(String(item.id));
+    }
+  }
+  report("number_range", "liczby poza dopuszczalnym zakresem", bigNumbers);
+  return out;
+}
+function cloudUploadBlockersText(blockers, { resuming = false } = {}) {
+  const what = blockers.map((b) => `${b.label} (${b.count})`).join(", ");
+  if (resuming) {
+    // the interrupted attempt already wrote part of the data — the text must not claim "nothing was sent"
+    return `Części danych nie można wysłać do chmury: ${what}. NEXTREP nie uzupełnia takich danych sam (np. nie wymyśla dat), więc przerwanego przenoszenia nie można teraz dokończyć. Nic więcej nie zostało wysłane — dane w chmurze i na tym urządzeniu pozostają bez zmian.`;
+  }
+  return `Części danych nie można wysłać do chmury: ${what}. NEXTREP nie uzupełnia takich danych sam (np. nie wymyśla dat), więc przenoszenie nie zostało rozpoczęte. Nic nie zostało wysłane ani zmienione — dane na tym urządzeniu są nietknięte.`;
+}
+
 // --- Payload builders: local record -> exact Supabase column shape (per the confirmed schema). ---
 
 function buildExercisePayload(ex) {
@@ -4785,12 +4861,13 @@ function buildPlanPayload(plan) {
   return { name: plan.name || "" };
 }
 function buildPlanItemPayload(item, resolvedPlanId, resolvedExerciseId) {
-  return {
+  // Etap 11: rest_seconds is left out when the item has no usable value (see sanitizeCloudRow)
+  return sanitizeCloudRow("nextrep_plan_items", {
     plan_id: resolvedPlanId,
     exercise_id: resolvedExerciseId,
-    rest_seconds: item.restSeconds != null ? Number(item.restSeconds) : null,
+    rest_seconds: item.restSeconds,
     superset_group: item.supersetGroup || null,
-  };
+  });
 }
 // nextrep_plan_item_sets has NO `position` column (confirmed against the real schema) — never add one.
 function buildPlanItemSetPayload(set, resolvedPlanItemId) {
@@ -4801,19 +4878,20 @@ function buildPlanItemSetPayload(set, resolvedPlanItemId) {
   };
 }
 function buildWorkoutPayload(session, resolvedPlanId) {
-  return {
+  // Etap 11: summaries without a usable value are left out (see sanitizeCloudRow); the date is never invented
+  return sanitizeCloudRow("nextrep_workouts", {
     workout_date: session.date || null,
     plan_id: resolvedPlanId,
     plan_name: session.planName || null,
     plan_label: session.planLabel || null,
-    exercises_count: session.exercisesCount != null ? Number(session.exercisesCount) : null,
-    total_sets: session.totalSets != null ? Number(session.totalSets) : null,
-    total_reps: session.totalReps != null ? Number(session.totalReps) : null,
-    total_weight: session.totalWeight != null ? Number(session.totalWeight) : null,
-    volume: session.volume != null ? Number(session.volume) : null,
-    duration_sec: session.durationSec != null ? Number(session.durationSec) : null,
+    exercises_count: session.exercisesCount,
+    total_sets: session.totalSets,
+    total_reps: session.totalReps,
+    total_weight: session.totalWeight,
+    volume: session.volume,
+    duration_sec: session.durationSec,
     analysis: session.analysis && typeof session.analysis === "object" ? session.analysis : {},
-  };
+  });
 }
 function buildWorkoutExercisePayload(ex, resolvedWorkoutId, resolvedExerciseId, position) {
   return {
@@ -13042,7 +13120,7 @@ function PlansScreen({ plans, exercises, updatePlans, updateExercises, onNavigat
                               <p className="text-neutral-100 text-sm font-medium">{ex?.name || "Ćwiczenie"}</p>
                               <p className="text-neutral-500 text-xs mt-0.5">
                                 {it.setsDetail.length} {plWord(it.setsDetail.length, "seria", "serie", "serii")} · {firstSet?.target} {ex?.isTimeBased ? "s" : "powt."}
-                                {formatRir(firstSet?.rir) ? ` · RIR ${formatRir(firstSet.rir)}` : ""} · przerwa {it.restSeconds}s
+                                {formatRir(firstSet?.rir) ? ` · RIR ${formatRir(firstSet.rir)}` : ""} · przerwa {it.restSeconds || 90}s
                               </p>
                             </div>
                           );
