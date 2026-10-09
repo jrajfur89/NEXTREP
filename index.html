@@ -1143,8 +1143,27 @@ function setMigrationAttemptRecord(userId, rec) {
 }
 // the record is only ever updated for the SAME attempt (a status write never revives / swaps another one)
 function noteMigrationAttemptStatus(userId, attemptId, status) {
+  if (status === "accepted_incomplete") noteIncompleteAccepted(userId, attemptId);
   const r = getMigrationAttemptRecord(userId);
   if (r && r.attemptId === attemptId && status && r.status !== status) setMigrationAttemptRecord(userId, { ...r, status });
+}
+// Stage 4A.4 F-5 (Etap 8, M2): a durable local note that the cloud data of this account was accepted as
+// INCOMPLETE (no user data in it). Separate from the attempt record, which a later attempt may replace — so
+// the permanent warning survives offline and is never swapped for another status. Written whenever the
+// server shows an accepted_incomplete attempt; never removed by the app (only with the whole account).
+const INCOMPLETE_ACCEPTED_KEY = "incomplete_accepted";
+function getIncompleteAcceptedNote(userId) {
+  if (!userId) return null;
+  const n = readNamespaceJson(INCOMPLETE_ACCEPTED_KEY, userId);
+  return n && typeof n === "object" && !Array.isArray(n) && n.attemptId ? n : null;
+}
+function noteIncompleteAccepted(userId, attemptId) {
+  if (!userId || !attemptId) return;
+  try {
+    const cur = getIncompleteAcceptedNote(userId);
+    if (cur && cur.attemptId === attemptId) return;
+    localStorage.setItem(getStorageKey(INCOMPLETE_ACCEPTED_KEY, userId), JSON.stringify({ attemptId, at: new Date().toISOString() }));
+  } catch {}
 }
 
 // NR001 / NR002 / 57014 / missing SQL / network, from a PostgREST error OR from an Error whose message
@@ -1304,6 +1323,7 @@ async function readMigrationGate(userId) {
   } catch {}
   const top = rows[0] || null;
   const stamp = `${rows.length}|${top ? `${top.attempt_id}:${top.status}:${top.updated_at}` : ""}`;
+  if (acceptedIncomplete) noteIncompleteAccepted(userId, acceptedIncomplete.attempt_id);
   const gate = { ok: true, userId, blocking, acceptedIncomplete, own: !!(blocking && deviceId && blocking.device_id === deviceId), stamp, checkedAt: Date.now() };
   noteMigrationGate(gate);
   return gate;
@@ -1345,7 +1365,26 @@ async function withV1MigrationToken(token, fn) {
 // cloud) is replaced by a NEW id once; the flow's cloud checks run again after this anyway.
 async function acquireFlowAttempt({ userId, deviceId, kind, flow, attemptId, persistId = () => true }) {
   let id = attemptId;
+  // Etap 8 (M2): the record as it was before this call — a start the server definitely refused created
+  // nothing, so the record goes back exactly to it (an accepted_incomplete record is never turned into "starting")
+  // taken at the start of EACH round (after a cancelled attempt was noted), and put back only while the record
+  // is still the "starting" one this call wrote — never over a newer record of another tab / flow
+  let recordBefore = null;
+  const restoreRecord = (writtenId) => {
+    try {
+      const k = getStorageKey(MIGRATION_ATTEMPT_KEY, userId);
+      const cur = getMigrationAttemptRecord(userId);
+      if (!cur || cur.attemptId !== writtenId || cur.status !== "starting") return;
+      if (recordBefore == null) localStorage.removeItem(k);
+      else localStorage.setItem(k, recordBefore);
+    } catch {}
+  };
   for (let round = 0; round < 2; round++) {
+    try {
+      recordBefore = localStorage.getItem(getStorageKey(MIGRATION_ATTEMPT_KEY, userId));
+    } catch {
+      recordBefore = null;
+    }
     const prev = getMigrationAttemptRecord(userId);
     const startedAt = prev && prev.attemptId === id ? prev.startedAt : new Date().toISOString();
     if (!persistId(id) || !setMigrationAttemptRecord(userId, { attemptId: id, userId, deviceId, kind, flow, status: prev && prev.attemptId === id ? prev.status || "starting" : "starting", startedAt })) {
@@ -1361,6 +1400,7 @@ async function acquireFlowAttempt({ userId, deviceId, kind, flow, attemptId, per
       id = newUuid();
       continue;
     }
+    if (MIGRATION_START_REFUSED.has(acq.reason)) restoreRecord(id);
     return { ...acq, attemptId: id };
   }
   return { ok: false, reason: "error", attemptId: id, error: MIGRATION_TEXTS.error };
@@ -1547,7 +1587,7 @@ function purgeDeletedAccountData(userId) {
   clearAccountNamespace(userId);
   clearAccountInitMarker(userId);
   clearLastCloudRestorePointer(userId);
-  for (const name of ["device_id", "migration_v1_status", "migration_workout_identity", "guest_partial_upload"]) {
+  for (const name of ["device_id", "migration_v1_status", "migration_workout_identity", "guest_partial_upload", "migration_attempt", "incomplete_accepted"]) {
     try {
       localStorage.removeItem(getStorageKey(name, userId));
     } catch {}
@@ -1730,7 +1770,8 @@ async function startAccountEmpty(userId, currentRefUserId, cloudHasData) {
     if (hasLocalAccountData(userId).hasData) createBackupSnapshot("before-reset", { force: true });
     clearAccountNamespace(userId);
     clearLastCloudRestorePointer(userId);
-    setAccountInitMarker(userId, { status: "ready", source: "empty", syncPaused: !!cloudHasData });
+    const incompleteNote = getIncompleteAcceptedNote(userId);
+    setAccountInitMarker(userId, { status: "ready", source: "empty", syncPaused: !!cloudHasData, ...(cloudHasData && incompleteNote ? { pausedReason: "incomplete_accepted", incompleteAccepted: incompleteNote.attemptId } : {}) });
     return { ok: true };
   } finally {
     _accountInitBusy = false;
@@ -2036,6 +2077,28 @@ async function acceptIncompleteDeviceUpload(userId, currentRefUserId) {
   // the server accepted the incomplete cloud data (terminal; no new V1): normal sync resumes as its policy allows.
   // The device keeps ALL its data; rows that never reached the cloud stay here (nothing is deleted).
   setAccountInitMarker(userId, { status: "ready", source: "device", syncPaused: false, incompleteAccepted: m.serverAttemptId });
+  return { ok: true };
+}
+// Stage 4A.4 F-5 (Etap 8, M1): the account's cloud data was accepted as INCOMPLETE (no new upload may ever
+// start — 4A.5 merges later). "Używaj danych z urządzenia": this device keeps working with ITS data — ready /
+// device with sync PAUSED, so nothing is sent or pulled and nothing local or in the cloud changes; the server
+// status stays accepted_incomplete. Checked against the server first (fail closed: no marker on any doubt).
+async function useDeviceDataAfterIncompleteAccepted(userId, currentRefUserId) {
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (!(await waitForSyncIdle())) return { ok: false, error: SYNC_STILL_RUNNING_TEXT };
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  const m = getAccountInitMarker(userId);
+  if (m && m.status === "ready") return { ok: false, alreadyReady: true };
+  if (m && isKnownAccountInitStatus(m.status)) return { ok: false, error: "Na tym urządzeniu trwa inna operacja na danych tego konta — najpierw ją dokończ albo zamknij." };
+  if (!hasLocalAccountData(userId).hasData) return { ok: false, error: "Na tym urządzeniu nie ma danych tego konta." };
+  const gate = await readMigrationGate(userId);
+  if (!(await stillSameAccount(userId, currentRefUserId))) return { ok: false, discarded: true };
+  if (!gate.ok) return { ok: false, error: MIGRATION_TEXTS.checkFailed };
+  if (gate.blocking) return { ok: false, migration: "in_progress", error: MIGRATION_TEXTS.locked };
+  if (!gate.acceptedIncomplete) return { ok: false, notAccepted: true };
+  const now = getAccountInitMarker(userId);
+  if (now && isKnownAccountInitStatus(now.status)) return { ok: false, discarded: true }; // changed meanwhile
+  setAccountInitMarker(userId, { status: "ready", source: "device", syncPaused: true, pausedReason: "incomplete_accepted", incompleteAccepted: gate.acceptedIncomplete.attempt_id });
   return { ok: true };
 }
 function readAccountUserName(userId) {
@@ -2985,6 +3048,10 @@ async function saveDataToCloud() {
   if (!user) return { error: "Musisz być zalogowany, aby zapisać dane w chmurze." };
   // Stage 4A.2: only this account's own workspace may ever be uploaded as its data.
   if (!isActiveNamespaceFor(user.id)) return { error: "Trwa wczytywanie danych konta — spróbuj ponownie za chwilę." };
+  // Stage 4A.4 F-5 (Etap 8): a paused account sends NOTHING — also not this whole-data copy (e.g. device data
+  // kept after the cloud data was accepted as incomplete, or device data next to other cloud data)
+  const pausedMarker = getAccountInitMarker(user.id);
+  if (pausedMarker && pausedMarker.syncPaused) return { error: "Synchronizacja tego konta jest wstrzymana, więc dane nie zostały wysłane do chmury. Nic nie zostało zmienione." };
 
   const payload = {};
   for (const [field, localKey] of CLOUD_SYNC_FIELDS) {
@@ -5395,8 +5462,10 @@ async function runSyncUnlocked() {
 }
 
 // --- UI status derivation (point 7) — pure function, no side effects. ---
-function computeSyncStatus({ authUser, isOnline, queue }) {
+function computeSyncStatus({ authUser, isOnline, queue, paused = null }) {
   if (!authUser) return { kind: "loggedOut" };
+  // Stage 4A.4 F-5 (Etap 8, M3): a paused sync is never reported as up to date
+  if (paused) return { kind: "paused", reason: paused, pendingCount: queue.filter((it) => SYNC_ACTIVE_STATUSES.has(it.status)).length };
   if (!isOnline) {
     const pendingCount = queue.filter((it) => SYNC_ACTIVE_STATUSES.has(it.status)).length;
     return { kind: "offline", pendingCount };
@@ -9661,23 +9730,33 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
     return shell(
       <>
         <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">DANE Z TRYBU BEZ LOGOWANIA</p>
-        <p className="text-neutral-300 text-sm mb-2">To konto jest jeszcze puste. Na tym urządzeniu są dane zapisane w trybie bez logowania — możesz przenieść je na to konto.</p>
+        {init.incompleteAccepted ? (
+          <p className="text-amber-400 text-sm mb-2" data-testid="init-guest-incomplete">
+            {ACCEPTED_INCOMPLETE_NOTE} Dlatego danych z trybu bez logowania nie można teraz przenieść na to konto — zostaną na tym urządzeniu bez zmian.
+          </p>
+        ) : (
+          <p className="text-neutral-300 text-sm mb-2">To konto jest jeszcze puste. Na tym urządzeniu są dane zapisane w trybie bez logowania — możesz przenieść je na to konto.</p>
+        )}
         {parts.length > 0 && <p className="text-neutral-500 text-xs mb-2" data-testid="init-guest-summary">W trybie bez logowania: {parts.join(", ")}</p>}
-        <p className="text-neutral-500 text-xs mb-3">Przed przeniesieniem zostanie zapisana kopia zapasowa tych danych.</p>
+        {!init.incompleteAccepted && <p className="text-neutral-500 text-xs mb-3">Przed przeniesieniem zostanie zapisana kopia zapasowa tych danych.</p>}
         {init.guestDraft && <p className="text-neutral-400 text-xs mb-3" data-testid="init-guest-draft-note">Niedokończony trening nie zostanie przeniesiony — pozostanie w trybie bez logowania.</p>}
         {init.guestDamaged && (
           <p className="text-red-400 text-sm mb-3" data-testid="init-guest-damaged">
             Przenoszenie danych zostało zatrzymane, bo część danych w trybie bez logowania jest uszkodzona ({init.guestDamaged}). Nic nie zostało przeniesione ani wysłane, a dane na tym urządzeniu pozostają bez zmian (także uszkodzone — do późniejszej diagnozy).
           </p>
         )}
-        {init.migrationBlocked && !init.guestDamaged && (
+        {init.migrationBlocked && !init.guestDamaged && !init.incompleteAccepted && (
           <p className="text-amber-400 text-sm mb-3" data-testid="init-guest-blocked">
             Na tym koncie są już zmiany (np. edytowane ćwiczenia wbudowane, niewysłane zmiany albo dane z przerwanego przenoszenia), więc danych z trybu bez logowania nie można teraz bezpiecznie przenieść — łączenie danych to osobny, kolejny etap. Konto może zacząć bez nich; dane z trybu bez logowania zostaną na tym urządzeniu bez zmian.
           </p>
         )}
         {!init.migrationBlocked && btn("Przenieś dane na konto", onGuestMigrate, true, "init-guest-migrate")}
         {btn("Nie teraz", onGuestLater, !!init.migrationBlocked, "init-guest-later")}
-        <p className="text-neutral-600 text-xs mt-2">„Nie teraz” — konto zacznie od pustych danych, a dane z trybu bez logowania zostaną na tym urządzeniu bez zmian.</p>
+        <p className="text-neutral-600 text-xs mt-2">
+          {init.incompleteAccepted
+            ? "„Nie teraz” — konto będzie używać danych z chmury (oznaczonych jako niekompletne), a dane z trybu bez logowania zostaną na tym urządzeniu bez zmian."
+            : "„Nie teraz” — konto zacznie od pustych danych, a dane z trybu bez logowania zostaną na tym urządzeniu bez zmian."}
+        </p>
         {errorLine}
       </>
     );
@@ -9774,16 +9853,28 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
   // choice
   const { local, cloud } = init;
   const both = local.hasData && cloud.hasData;
+  // F-5 (Etap 8, M1): data accepted as incomplete — never "an empty cloud", never a new upload
+  const incomplete = !!init.incompleteAccepted;
   const snap = init.deviceSnapshot; // the device version from before the last "Wczytaj z chmury"
   const d = (snap && snap.details) || local.details || {};
   return shell(
     <>
       <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">
-        {both ? "ZNALEŹLIŚMY DANE NA URZĄDZENIU I W CHMURZE" : local.hasData ? "ZNALEŹLIŚMY DANE NA TYM URZĄDZENIU" : "ZNALEŹLIŚMY TWOJE DANE W CHMURZE"}
+        {incomplete ? "W CHMURZE SĄ NIEKOMPLETNE DANE TEGO KONTA" : both ? "ZNALEŹLIŚMY DANE NA URZĄDZENIU I W CHMURZE" : local.hasData ? "ZNALEŹLIŚMY DANE NA TYM URZĄDZENIU" : "ZNALEŹLIŚMY TWOJE DANE W CHMURZE"}
       </p>
-      {both && <p className="text-neutral-300 text-sm mb-3">Wybierz, których danych chcesz używać:</p>}
-      {!both && local.hasData && <p className="text-neutral-300 text-sm mb-3">Na tym urządzeniu znajdują się dane, których nie ma jeszcze na koncie w chmurze. Co chcesz zrobić?</p>}
-      {!both && cloud.hasData && <p className="text-neutral-300 text-sm mb-3">Na tym urządzeniu nie ma jeszcze lokalnych danych tego konta. Czy chcesz pobrać dane z chmury?</p>}
+      {incomplete && (
+        <p className="text-amber-400 text-sm mb-3" data-testid="init-incomplete-accepted">
+          {ACCEPTED_INCOMPLETE_NOTE}
+        </p>
+      )}
+      {incomplete && local.hasData && (
+        <p className="text-neutral-300 text-sm mb-3" data-testid="init-incomplete-device">
+          Dane z tego urządzenia nie mogą być teraz wysłane na konto. Możesz dalej z nich korzystać na tym urządzeniu — synchronizacja tego konta będzie wtedy wstrzymana, a nic nie zostanie wysłane, pobrane ani usunięte.
+        </p>
+      )}
+      {!incomplete && both && <p className="text-neutral-300 text-sm mb-3">Wybierz, których danych chcesz używać:</p>}
+      {!incomplete && !both && local.hasData && <p className="text-neutral-300 text-sm mb-3">Na tym urządzeniu znajdują się dane, których nie ma jeszcze na koncie w chmurze. Co chcesz zrobić?</p>}
+      {!incomplete && !both && cloud.hasData && <p className="text-neutral-300 text-sm mb-3">Na tym urządzeniu nie ma jeszcze lokalnych danych tego konta. Czy chcesz pobrać dane z chmury?</p>}
       {snap && (
         <p className="text-neutral-400 text-xs mb-1">Dane z urządzenia: wersja sprzed wczytania z chmury ({fmtDMYHM(snap.createdAt)}).</p>
       )}
@@ -9793,18 +9884,14 @@ function AccountInitScreen({ init, email, onChooseLocal, onChooseCloud, onChoose
           {d.measurements ? `, ${d.measurements} ${plWord(d.measurements, "pomiar", "pomiary", "pomiarów")}` : ""}
         </p>
       )}
-      {local.hasData && btn("Wczytaj dane z urządzenia", onChooseLocal, !cloud.hasData, "init-local")}
-      {cloud.hasData && init.incompleteAccepted && (
-        <p className="text-amber-400 text-sm mb-3" data-testid="init-incomplete-accepted">
-          {ACCEPTED_INCOMPLETE_NOTE}
-        </p>
-      )}
+      {local.hasData && !incomplete && btn("Wczytaj dane z urządzenia", onChooseLocal, !cloud.hasData, "init-local")}
+      {local.hasData && incomplete && btn("Używaj danych z urządzenia", onChooseLocal, true, "init-use-device")}
       {cloud.hasData && init.partialGuestUpload && (
         <p className="text-amber-400 text-sm mb-3" data-testid="init-partial-warning">
           Uwaga: w chmurze tego konta jest niedokończone przeniesienie danych z trybu bez logowania. Dane z chmury mogą być niekompletne.
         </p>
       )}
-      {cloud.hasData && btn(init.partialGuestUpload ? "Wczytaj niekompletne dane z chmury" : "Wczytaj dane z chmury", onChooseCloud, !init.partialGuestUpload, "init-cloud")}
+      {(cloud.hasData || incomplete) && btn(init.partialGuestUpload || incomplete ? "Wczytaj niekompletne dane z chmury" : "Wczytaj dane z chmury", onChooseCloud, !init.partialGuestUpload && !incomplete, "init-cloud")}
       {btn("Zacznij od pustych danych", onChooseEmpty, false, "init-empty")}
       {both && (
         <p className="text-neutral-500 text-xs leading-relaxed mt-2">
@@ -9934,7 +10021,27 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
     });
   };
 
-  const syncStatus = computeSyncStatus({ authUser, isOnline, queue: syncQueueState || [] });
+  // F-5 (Etap 8, M3): why sync is not running — the account's own choice (marker) or the server migration lock
+  const syncPausedReason = (() => {
+    if (!authUser) return null;
+    const m = getAccountInitMarker(authUser.id);
+    if (!m || m.status !== "ready") return "not_initialized";
+    if (m.syncPaused) return m.pausedReason === "incomplete_accepted" || m.incompleteAccepted ? "incomplete_accepted" : m.source === "empty" && getGuestPartialNote(authUser.id) ? "guest_partial" : "other_data";
+    if (!isOnline) return null; // offline: the offline status says it better than a stale server check
+    if (migGate && !migGate.ok) return "check_failed";
+    if (migGate && migGate.blocking) return migGate.blocking.status === "abandoned" ? "migration_abandoned" : "migration_in_progress";
+    return null;
+  })();
+  const syncStatus = computeSyncStatus({ authUser, isOnline, queue: syncQueueState || [], paused: syncPausedReason });
+  const SYNC_PAUSED_TEXTS = {
+    not_initialized: "Synchronizacja wstrzymana — najpierw wybierz źródło danych tego konta.",
+    incomplete_accepted: "Synchronizacja wstrzymana — dane w chmurze przyjęto jako niekompletne, a to urządzenie używa innych danych niż chmura. Nic nie jest wysyłane ani pobierane do czasu łączenia danych (kolejny etap).",
+    guest_partial: "Synchronizacja wstrzymana — w chmurze jest niedokończone przeniesienie danych z trybu bez logowania.",
+    other_data: "Synchronizacja wstrzymana — w chmurze są inne dane niż te, których używasz na tym urządzeniu.",
+    check_failed: "Synchronizacja wstrzymana — nie udało się sprawdzić, czy jest bezpieczna. Spróbuj ponownie później.",
+    migration_in_progress: "Synchronizacja wstrzymana — trwa przenoszenie danych na to konto.",
+    migration_abandoned: "Synchronizacja wstrzymana — przenoszenie danych na to konto zostało przerwane i czeka na rozstrzygnięcie.",
+  };
 
   const SYNC_STATUS_LABELS = {
     upToDate: { icon: "✓", text: "Synchronizacja aktualna", className: "text-lime-400" },
@@ -9943,9 +10050,11 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
     pending: { icon: "↻", text: null, className: "text-orange-400" }, // text built below (needs count)
     willRetry: { icon: "⚠", text: "Synchronizacja zostanie ponowiona", className: "text-orange-400" },
     conflicts: { icon: "⚠", text: null, className: "text-red-400" }, // text built below (needs count)
+    paused: { icon: "⏸", text: null, className: "text-amber-400" }, // F-5 (Etap 8, M3): text built below (reason)
   };
 
   const renderSyncStatusText = () => {
+    if (syncStatus.kind === "paused") return `${SYNC_PAUSED_TEXTS[syncStatus.reason] || "Synchronizacja wstrzymana."}${syncStatus.pendingCount ? ` (${syncStatus.pendingCount} zmian czeka na urządzeniu)` : ""}`;
     if (syncStatus.kind === "pending") return `Oczekuje na synchronizację: ${syncStatus.count}`;
     if (syncStatus.kind === "offline" && syncStatus.pendingCount > 0) return `Offline — zmiany zapisane na urządzeniu (${syncStatus.pendingCount} oczekuje)`;
     if (syncStatus.kind === "conflicts") return `${syncStatus.count} konflikty wymagają decyzji`;
@@ -10023,14 +10132,16 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
             {(() => {
               // Stage 4A.2 — which data this account started with on this device
               const m = getAccountInitMarker(authUser.id);
-              const label = !m ? "Nie wybrano (synchronizacja wyłączona do czasu wyboru)" : { new: "Nowe konto", device: "Dane z tego urządzenia", cloud: "Dane z chmury", empty: "Puste dane" }[m.source] || m.source;
+              const label = !m ? "Nie wybrano (synchronizacja wyłączona do czasu wyboru)" : { new: "Nowe konto", device: "Dane z tego urządzenia", cloud: "Dane z chmury", empty: "Puste dane", guest: "Dane z trybu bez logowania" }[m.source] || m.source;
               return (
                 <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 mb-2" data-testid="data-source-card">
                   <p className="text-neutral-100 font-semibold text-sm mb-1">Źródło danych</p>
                   <p className="text-neutral-400 text-xs">{label}</p>
                   {m && m.syncPaused && (
-                    <p className="text-amber-400 text-xs mt-2 leading-relaxed">
-                      Synchronizacja tego konta jest wstrzymana: w chmurze są inne dane niż te, których używasz na tym urządzeniu. Nic nie zostało usunięte ani nadpisane.
+                    <p className="text-amber-400 text-xs mt-2 leading-relaxed" data-testid="data-source-paused">
+                      {m.pausedReason === "incomplete_accepted" || m.incompleteAccepted
+                        ? "Synchronizacja tego konta jest wstrzymana: dane w chmurze przyjęto jako niekompletne, a to urządzenie używa innych danych niż chmura. Nic nie zostało usunięte ani nadpisane; łączenie danych to kolejny etap."
+                        : "Synchronizacja tego konta jest wstrzymana: w chmurze są inne dane niż te, których używasz na tym urządzeniu. Nic nie zostało usunięte ani nadpisane."}
                     </p>
                   )}
                   {onRechooseDataSource && (
@@ -10054,7 +10165,7 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
                 {isOnline ? <RefreshCw size={16} className="text-sky-400 flex-shrink-0" /> : <WifiOff size={16} className="text-neutral-500 flex-shrink-0" />}
                 Synchronizacja
               </p>
-              <p className={`text-xs mb-3 ${SYNC_STATUS_LABELS[syncStatus.kind]?.className || "text-neutral-400"}`}>
+              <p className={`text-xs mb-3 ${SYNC_STATUS_LABELS[syncStatus.kind]?.className || "text-neutral-400"}`} data-testid="sync-status" data-kind={syncStatus.kind}>
                 {SYNC_STATUS_LABELS[syncStatus.kind]?.icon} {renderSyncStatusText()}
               </p>
               <button
@@ -10110,7 +10221,7 @@ function AccountScreen({ onNavigate, authUser, authLoaded, reloadLocalData, isOn
                 // device's own record of it — also offline); locks and this device's open run are explained
                 const m = getAccountInitMarker(authUser.id);
                 const rec = getMigrationAttemptRecord(authUser.id);
-                const incomplete = !!((migGate && migGate.ok && migGate.acceptedIncomplete) || (m && m.incompleteAccepted) || getGuestPartialNote(authUser.id) || (rec && rec.status === "accepted_incomplete"));
+                const incomplete = !!((migGate && migGate.ok && migGate.acceptedIncomplete) || (m && m.incompleteAccepted) || getIncompleteAcceptedNote(authUser.id) || getGuestPartialNote(authUser.id) || (rec && rec.status === "accepted_incomplete"));
                 const lockShown = !!(migGate && (!migGate.ok || migGate.blocking));
                 return (
                   <>
@@ -17397,6 +17508,12 @@ function App() {
       return;
     }
     if (!same()) return;
+    // F-5 (Etap 8, M1): cloud data consciously accepted as INCOMPLETE is never presented as complete nor as an
+    // empty cloud — even when only built-in exercises reached it (then the data check alone says "empty").
+    // The server view decides; when it cannot be read, this device's own durable note does.
+    const gateNow = await readMigrationGate(userId);
+    if (!same()) return;
+    const incompleteAccepted = !!((gateNow.ok && gateNow.acceptedIncomplete) || (!gateNow.ok && getIncompleteAcceptedNote(userId)));
     if (!local.hasData && !cloud.hasData) {
       // Stage 4A.4: a genuinely empty account + guest data on this device → offer to move it (nothing is
       // written until the user agrees). Not offered while the guest data is bound to another account's migration.
@@ -17411,6 +17528,11 @@ function App() {
       if (guest.damage.length) {
         // F-2: damaged guest data is never treated as "no data" — say so; nothing can be moved, nothing decided
         setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: true, guestDamaged: damageText(guest.damage), error: notice });
+        return;
+      }
+      if (guest.hasData && incompleteAccepted) {
+        // a guest → account transfer would be refused by the server (incomplete_data_accepted): say why
+        setAccountInit({ ns, status: "guest_offer", local, cloud, guest: guest.details, guestDraft: guest.draft, migrationBlocked: true, incompleteAccepted: true, error: notice });
         return;
       }
       if (guest.hasData && !accountLocalBlocksGuestMigration(userId)) {
@@ -17442,13 +17564,6 @@ function App() {
     const deviceSnapshotInfo = snap
       ? { createdAt: snap.createdAt, details: { history: (snap.data.history || []).length, plans: (snap.data.plans || []).length, measurements: (snap.data.measurements || []).length } }
       : null;
-    // F-5: cloud data that was consciously accepted as incomplete is never presented as complete
-    let incompleteAccepted = false;
-    if (cloud.hasData) {
-      const gate = await readMigrationGate(userId);
-      if (!same()) return;
-      incompleteAccepted = !!(gate.ok && gate.acceptedIncomplete);
-    }
     setAccountInit({ ns, status: "choice", local, cloud, deviceSnapshot: deviceSnapshotInfo, partialGuestUpload: !!getGuestPartialNote(userId), incompleteAccepted, error: notice });
   }, []);
   const loadedOnceRef = useRef(false);
@@ -17900,6 +18015,33 @@ function App() {
     } else if (afterCloudLoad) {
       setAccountInit({ ...accountInit, error: DEVICE_SNAPSHOT_ERRORS[r.status] || DEVICE_SNAPSHOT_ERRORS.invalid });
       return; // nothing restored, nothing cleared, not a success
+    } else if (accountInit.incompleteAccepted) {
+      // F-5 (Etap 8, M1): no upload can ever start on this account — use the device data with sync PAUSED
+      const op = beginInitOp();
+      const prev = accountInit;
+      let u;
+      try {
+        u = await useDeviceDataAfterIncompleteAccepted(initUserId, refFor(op));
+      } catch (e) {
+        u = { ok: false, error: failText(e) };
+      }
+      if (!isCurrentOp(op)) return;
+      if (u.ok || u.alreadyReady) {
+        await finishInit();
+        return;
+      }
+      if (u.notAccepted) {
+        runAccountInitCheck(initUserId, initNs); // the situation changed on the server — decide again
+        return;
+      }
+      if (u.migration === "in_progress") {
+        const gate = await readMigrationGate(initUserId);
+        if (!sameInit()) return;
+        setAccountInit({ ns: initNs, status: "migration_blocked", local: hasLocalAccountData(initUserId), gate, error: null });
+        return;
+      }
+      setAccountInit({ ...prev, error: u.discarded ? ACCOUNT_CHECK_FAILED_TEXT : u.error });
+      return;
     } else if (accountInit.local && accountInit.local.hasData && accountInit.cloud && accountInit.cloud.hasData === false) {
       // Stage 4A.3: device data + a cloud confirmed EMPTY → the device data becomes this account's
       // data and is uploaded first; the account is "ready" only after a successful upload.
@@ -17908,7 +18050,8 @@ function App() {
     }
     // the cloud just loaded (or checked) has data → device data stays paused against it
     const cloudHasData = afterCloudLoad ? true : !!(accountInit.cloud && accountInit.cloud.hasData);
-    setAccountInitMarker(initUserId, { status: "ready", source: "device", syncPaused: cloudHasData });
+    const incompleteNote = getIncompleteAcceptedNote(initUserId);
+    setAccountInitMarker(initUserId, { status: "ready", source: "device", syncPaused: cloudHasData, ...(cloudHasData && incompleteNote ? { pausedReason: "incomplete_accepted", incompleteAccepted: incompleteNote.attemptId } : {}) });
     await finishInit();
   };
   // Stage 4A.3: upload of the device data to a confirmed-empty cloud (first attempt, retry after an
@@ -18007,6 +18150,11 @@ function App() {
   };
   // F-5 outcomes shared by the device and guest flows. → true when the screen was set here.
   const showMigrationOutcome = async (u, flow) => {
+    if (u.migration === "incomplete_accepted") {
+      // Etap 8: the account's data was accepted as incomplete meanwhile — show the source choice that explains it
+      runAccountInitCheck(initUserId, initNs, u.error);
+      return true;
+    }
     if (u.partial && flow === "device") {
       setAccountInit({ ns: initNs, status: "upload_partial", error: null });
       return true;

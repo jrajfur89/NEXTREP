@@ -710,3 +710,135 @@ describe("Independent review fixes", () => {
     assert.equal(marker(), null);
   });
 });
+
+describe("Etap 8 — M1 / M2 / M3", () => {
+  // the account's cloud holds only what an interrupted upload wrote, accepted as incomplete on device B
+  async function acceptedIncompleteOnServer({ withRow = false } = {}) {
+    await B.start(B_ID);
+    if (withRow) await B.write(B_ID, "b-partial");
+    const r = await B.rpc("accept_incomplete", B_ID);
+    assert.equal(r.data.status, "accepted_incomplete");
+  }
+  const localDump = () => JSON.stringify(Object.keys(localStorage).filter((k) => !k.endsWith("_account_init_v1") && !k.endsWith("_incomplete_accepted_v1")).sort().map((k) => [k, localStorage.getItem(k)]));
+
+  test("M1: 'use device data' → ready/device with sync PAUSED; no cloud write, local data and server status unchanged — also after a restart", async () => {
+    await acceptedIncompleteOnServer();
+    const cloud = await quiet(() => A.checkCloudAccountData(UA));
+    assert.equal(cloud.hasData, false, "the data check alone would call this cloud empty");
+    const before = localDump();
+    const writes0 = cloudWrites(S).length;
+    const r = await quiet(() => A.useDeviceDataAfterIncompleteAccepted(UA, ref));
+    assert.equal(r.ok, true, r.error);
+    const m = marker();
+    assert.deepEqual([m.status, m.source, m.syncPaused, m.pausedReason, m.incompleteAccepted], ["ready", "device", true, "incomplete_accepted", B_ID]);
+    assert.equal(localDump(), before, "no local data changed");
+    assert.equal(cloudWrites(S).length, writes0, "nothing written to the cloud");
+    assert.equal(attempts()[0].status, "accepted_incomplete", "server status unchanged");
+    assert.equal(A.isAccountSyncAllowed(UA), false);
+    const s1 = await quiet(() => A.runSync());
+    assert.equal(s1.skipped, true);
+    assert.equal(s1.reason, "account_sync_paused");
+    // restart
+    A.__testState.resetAccountInitBusy();
+    A.__testState.resetActiveDataNamespace();
+    A.activateDataNamespace(UA);
+    const s2 = await quiet(() => A.runSync());
+    assert.equal(s2.reason, "account_sync_paused");
+    const v1 = await quiet(() => A.runManualMigrationV1());
+    assert.equal(v1.success, false);
+    assert.equal(v1.blocked, true, "the repair tool refuses a paused account");
+    assert.equal(cloudWrites(S).length, writes0, "still nothing written after the restart");
+    assert.equal(localDump(), before);
+    assert.equal(A.getIncompleteAcceptedNote(UA).attemptId, B_ID);
+  });
+  test("M1: refused (no marker) when the server does not confirm the acceptance, when it is unreadable, or while an attempt blocks", async () => {
+    const r0 = await quiet(() => A.useDeviceDataAfterIncompleteAccepted(UA, ref));
+    assert.equal(r0.notAccepted, true);
+    assert.equal(marker(), null);
+    await acceptedIncompleteOnServer();
+    S.queryHook = (q) => (q.table === "nextrep_migration_attempts" ? { message: "Failed to fetch" } : null);
+    const r1 = await quiet(() => A.useDeviceDataAfterIncompleteAccepted(UA, ref));
+    assert.equal(r1.ok, false);
+    assert.equal(marker(), null, "fail closed");
+    S.queryHook = null;
+    A.setAccountInitMarker(UA, { status: "uploading_device", source: "device", syncPaused: true, userId: UA, namespace: A.getLocalDataNamespace(UA), deviceId: DEV_A });
+    const r2 = await quiet(() => A.useDeviceDataAfterIncompleteAccepted(UA, ref));
+    assert.equal(r2.ok, false, "another operation of this account is never taken over");
+    assert.equal(marker().status, "uploading_device");
+  });
+  test("M2: a refused new start never turns the record into 'starting'; the durable note survives offline", async () => {
+    await acceptedIncompleteOnServer({ withRow: true });
+    await A.readMigrationGate(UA);
+    // this device's record of the accepted attempt (e.g. accepted on this device)
+    A.setMigrationAttemptRecord(UA, { attemptId: B_ID, userId: UA, deviceId: DEV_A, kind: "device_upload", flow: "device", status: "accepted_incomplete", startedAt: "2026-10-08T22:00:00.000Z" });
+    const raw = localStorage.getItem(key(UA, "migration_attempt"));
+    A.setAccountInitMarker(UA, { status: "ready", source: "device", syncPaused: false });
+    const m = await quiet(() => A.runManualMigrationV1());
+    assert.equal(m.success, false);
+    assert.equal(m.migration, "incomplete_accepted");
+    assert.equal(localStorage.getItem(key(UA, "migration_attempt")), raw, "record restored byte for byte");
+    A.clearAccountInitMarker(UA);
+    const u = await upload();
+    assert.equal(u.ok, false);
+    assert.equal(localStorage.getItem(key(UA, "migration_attempt")), raw);
+    assert.equal(marker(), null);
+    // offline: the gate cannot be read, the note still says what happened
+    S.failNetwork = true;
+    const g = await A.readMigrationGate(UA);
+    assert.equal(g.ok, false);
+    assert.equal(A.getIncompleteAcceptedNote(UA).attemptId, B_ID);
+    S.failNetwork = false;
+  });
+  test("M2: with no previous record a refused start leaves no record at all", async () => {
+    await acceptedIncompleteOnServer();
+    const u = await upload();
+    assert.equal(u.ok, false);
+    assert.equal(u.migration, "incomplete_accepted");
+    assert.equal(localStorage.getItem(key(UA, "migration_attempt")), null);
+  });
+  test("M3: computeSyncStatus never reports a paused sync as up to date", () => {
+    const user = { id: UA };
+    assert.equal(A.computeSyncStatus({ authUser: user, isOnline: true, queue: [] }).kind, "upToDate");
+    const p = A.computeSyncStatus({ authUser: user, isOnline: true, queue: [{ status: "pending" }], paused: "incomplete_accepted" });
+    assert.deepEqual([p.kind, p.reason, p.pendingCount], ["paused", "incomplete_accepted", 1]);
+    assert.equal(A.computeSyncStatus({ authUser: user, isOnline: false, queue: [], paused: "other_data" }).kind, "paused");
+  });
+});
+
+describe("Etap 8 — review follow-ups", () => {
+  test("a paused account never sends the whole-data copy ('Zapisz dane w chmurze')", async () => {
+    A.setAccountInitMarker(UA, { status: "ready", source: "device", syncPaused: true, pausedReason: "incomplete_accepted", incompleteAccepted: B_ID });
+    const r = await quiet(() => A.saveDataToCloud());
+    assert.ok(r.error && /wstrzymana/.test(r.error));
+    assert.equal(cloudWrites(S).length, 0);
+  });
+  test("M2: cancelled → new id → refused: the record is not rolled back over the noted 'cancelled'", async () => {
+    const OLD = "e0000000-0000-4000-8000-0000000000a1";
+    A.setMigrationAttemptRecord(UA, { attemptId: OLD, userId: UA, deviceId: DEV_A, kind: "device_upload", flow: "manual", status: "uploading", startedAt: "2026-10-08T22:00:00.000Z" });
+    S.tables.nextrep_migration_attempts = [{ attempt_id: OLD, user_id: UA, device_id: DEV_A, kind: "device_upload", status: "cancelled", started_at: new Date().toISOString(), updated_at: new Date().toISOString(), writes_count: 0, resume_count: 0 }];
+    await B.start(B_ID); // another device holds the account → the new id is refused (other_attempt)
+    const acq = await quiet(() => A.acquireFlowAttempt({ userId: UA, deviceId: DEV_A, kind: "device_upload", flow: "manual", attemptId: OLD }));
+    assert.equal(acq.ok, false);
+    assert.equal(acq.reason, "other_attempt");
+    const rec = record();
+    assert.equal(rec.attemptId, OLD);
+    assert.equal(rec.status, "cancelled", "the server-confirmed status stays");
+    assert.equal(A.getOpenManualAttempt(UA), null);
+  });
+  test("M2: a refused start never overwrites a newer record written meanwhile (another tab)", async () => {
+    await B.start(B_ID);
+    const NEWER = { attemptId: "e0000000-0000-4000-8000-0000000000c1", userId: UA, deviceId: DEV_A, kind: "device_upload", flow: "device", status: "uploading", startedAt: "2026-10-08T22:00:00.000Z" };
+    let fired = false;
+    S.rpcFail.nextrep_migration_attempt_start = [
+      (args) => {
+        fired = true;
+        A.setMigrationAttemptRecord(UA, NEWER); // the other tab wins the record before this answer arrives
+        return { data: null, error: { code: "P0001", message: "active_attempt_exists" } };
+      },
+    ];
+    const acq = await quiet(() => A.acquireFlowAttempt({ userId: UA, deviceId: DEV_A, kind: "device_upload", flow: "device", attemptId: "e0000000-0000-4000-8000-0000000000d1" }));
+    assert.ok(fired);
+    assert.equal(acq.ok, false);
+    assert.equal(record().attemptId, NEWER.attemptId, "the newer record stays");
+  });
+});

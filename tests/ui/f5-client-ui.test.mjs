@@ -4,7 +4,7 @@
 // account section, an attempt closed on another device, and the "sync safety check failed" banner.
 import { test, describe, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { unmount, byTestId, click, flush, buttonByText } from "../harness/ui.mjs";
+import { unmount, byTestId, click, flush, buttonByText, act } from "../harness/ui.mjs";
 import { bootApp, restoreOnline } from "../harness/app-boot.mjs";
 import { UA, key, historySession, cloudTablesFor, storageDump } from "../harness/account-fixtures.mjs";
 
@@ -249,5 +249,66 @@ describe("Independent review fixes (UI)", () => {
     assert.equal(byTestId("init-lock").getAttribute("data-kind"), "uploading_other");
     assert.ok(byTestId("init-lock-nothing-sent"), "nothing sent yet → finish/close on the owner device is suggested");
     assert.equal(read(key(UA, "account_init")), null, "nothing started on this device");
+  });
+});
+
+describe("Etap 8 — M1 / M3 in the real app", () => {
+  const acceptedRow = () => attemptRow({ status: "accepted_incomplete", writes_count: 4, resolved_at: iso(5000), resolved_by_device: DEV_B });
+  const writes = (S) => S.calls.filter((c) => c.kind === "table" && ["insert", "update", "upsert", "delete"].includes(c.op)).length;
+  test("M1: accepted incomplete + cloud with no user data → warning, 'Używaj danych z urządzenia' → app, sync paused, zero cloud writes; restart and re-login stay safe", async () => {
+    const { S } = await bootApp({ session: sessA, storage: localA(), tables: { nextrep_migration_attempts: [acceptedRow()] } });
+    await settle();
+    assert.ok(byTestId("init-incomplete-accepted"), "permanent warning on the source choice");
+    assert.ok(byTestId("init-incomplete-device"));
+    assert.doesNotMatch(byTestId("account-init").textContent, /których nie ma jeszcze na koncie w chmurze/, "never 'the cloud is empty'");
+    assert.ok(!byTestId("init-local"), "no upload offered");
+    await press("init-use-device");
+    assert.ok(appShown());
+    const m = read(key(UA, "account_init"));
+    assert.deepEqual([m.status, m.source, m.syncPaused, m.pausedReason], ["ready", "device", true, "incomplete_accepted"]);
+    assert.deepEqual(read(key(UA, "history")).map((h) => h.id), ["hA"], "device data kept");
+    assert.equal(writes(S), 0, "nothing written to the cloud");
+    assert.equal(attempts(S)[0].status, "accepted_incomplete");
+    await openAccount();
+    assert.equal(byTestId("sync-status").getAttribute("data-kind"), "paused");
+    assert.match(byTestId("sync-status").textContent, /wstrzymana.*niekompletne/);
+    assert.doesNotMatch(byTestId("sync-status").textContent, /aktualna/);
+    assert.ok(byTestId("data-source-paused"));
+    assert.ok(byTestId("account-incomplete-accepted"));
+    // restart
+    const { S: S2 } = await bootApp({ session: sessA, storage: storageDump(), tables: JSON.parse(JSON.stringify(S.tables)) });
+    await settle();
+    assert.ok(appShown(), "straight into the app after a restart");
+    assert.equal(writes(S2), 0);
+    // sign out + sign in again
+    await act(async () => S2.emitAuth("SIGNED_OUT", null));
+    await settle();
+    await act(async () => S2.emitAuth("SIGNED_IN", sessA));
+    await settle();
+    assert.ok(appShown());
+    assert.equal(read(key(UA, "account_init")).syncPaused, true);
+    assert.equal(writes(S2), 0, "still nothing written");
+  });
+  test("M1: second device without data — the account opens on the accepted cloud data and the account section warns", async () => {
+    const { S } = await bootApp({ session: sessA, storage: { [key(UA, "device_id")]: DEV_B }, tables: { nextrep_migration_attempts: [acceptedRow()] } });
+    await settle();
+    assert.ok(appShown());
+    await openAccount();
+    assert.ok(byTestId("account-incomplete-accepted"));
+    assert.equal(attempts(S)[0].status, "accepted_incomplete");
+  });
+  test("M1: guest data on an account accepted as incomplete — explained, no transfer offered", async () => {
+    await bootApp({ session: sessA, storage: { [key(null, "history")]: [historySession("g1", "GUEST")] }, tables: { nextrep_migration_attempts: [acceptedRow()] } });
+    await settle();
+    assert.ok(byTestId("init-guest-incomplete"));
+    assert.ok(!byTestId("init-guest-migrate"));
+  });
+  test("M3: 'guest' source label is Polish; an active sync shows up to date only when nothing pauses it", async () => {
+    await bootApp({ session: sessA, storage: { ...localA(), [key(UA, "account_init")]: { status: "ready", source: "guest", syncPaused: false } } });
+    await settle();
+    await openAccount();
+    assert.match(byTestId("data-source-card").textContent, /Dane z trybu bez logowania/);
+    assert.doesNotMatch(byTestId("data-source-card").textContent, /\bguest\b/);
+    assert.equal(byTestId("sync-status").getAttribute("data-kind"), "upToDate");
   });
 });
