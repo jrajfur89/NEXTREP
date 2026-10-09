@@ -15,6 +15,11 @@
 Sprawdzenie na Windows (PowerShell): `Get-FileHash .\docs\sql\<plik> -Algorithm SHA256`
 Linux / macOS: `sha256sum docs/sql/*.sql`
 
+Sumy dotyczą plików z końcami linii LF (tak jak są w repozytorium). Jeśli Git na Windows ma `core.autocrlf=true`,
+plik w katalogu roboczym dostanie CRLF i hash będzie inny — wtedy sprawdź wersję z repozytorium:
+`git show HEAD:docs/sql/<plik> > $env:TEMP\f.sql; Get-FileHash $env:TEMP\f.sql -Algorithm SHA256`
+(do edytora SQL wklejaj treść z tej wersji; różnica CRLF/LF nie zmienia działania SQL).
+
 **Zgodność z testem.** Po usunięciu komentarzy, białych znaków oraz `begin;`/`commit;` treść plików jest identyczna
 z migracjami zastosowanymi na `nextrep-f5-test` (md5 po normalizacji):
 
@@ -122,6 +127,17 @@ próba `uploading` / `abandoned` bez wyjaśnienia.
 
 ## 8. Otwarte sprawy przed wdrożeniem (stan: Etap 10)
 
-* Pozycje planów bez `restSeconds` → `rest_seconds NOT NULL` przerywa przenoszenie (propozycja poprawki klienta — osobna zgoda).
-* Odczyt przez osadzone relacje z tabel spoza listy (np. `nextrep_devices?select=*,nextrep_workouts(*)`) omija pre-request
-  (rekomendacja domknięcia — osobny plik SQL po zatwierdzeniu).
+* Pozycje planów bez `restSeconds` (oraz inne `null` w kolumnach NOT NULL z wartością domyślną, np. sumy treningu) →
+  błąd 23502 przerywa przenoszenie i zostawia próbę `abandoned`. Propozycja: poprawka klienta (pomijanie `null` dla
+  kolumn z wartością domyślną, zaokrąglanie liczb całkowitych, kontrola przed `start`) — osobna zgoda.
+* Odczyt przez osadzone relacje z tabel spoza listy (`nextrep_devices?select=*,nextrep_workouts(*)`, także PATCH/POST
+  `nextrep_devices` z `Prefer: return=representation`) omija pre-request — potwierdzone na `nextrep-f5-test`.
+  Rekomendacja: dodać wariant A (restrykcyjne polityki RLS SELECT) jako trzecią warstwę — osobna zgoda.
+
+## 9. Test parzystości z produkcją (Etap 10 / B2)
+
+Na `nextrep-f5-test` odtworzono obiekty istniejące tylko na produkcji (`delete_user`, `nextrep_user_roles` + trigger na
+`auth.users`, funkcje roli / PRO / admina, `nextrep_pro_grants`, `nextrep_pro_events` z triggerami, `user_data`) — migracja
+`e10_prod_parity_deps`. Definicje odczytane z katalogów produkcji; po zastosowaniu treść 16 funkcji (md5 bez białych znaków),
+właściciel, ACL i `search_path` oraz kolumny, ograniczenia, indeksy, polityki, uprawnienia i triggery 4 tabel są identyczne
+z produkcją. Bez kopiowania danych. Wyniki testów: raport Etapu 10.
