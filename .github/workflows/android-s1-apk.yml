@@ -73,7 +73,12 @@ jobs:
           NEXTREP_VERSION_CODE: ${{ github.run_number }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          set -o pipefail
+          if ! ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee gradle.log; then
+            # surface the failure as public annotations (readable without downloading logs)
+            grep -nE "What went wrong|error:|FAILURE|Exception|> " gradle.log | head -40 | while IFS= read -r l; do echo "::error title=gradle::$l"; done
+            exit 1
+          fi
       - name: Name the APK
         run: |
           mkdir -p out

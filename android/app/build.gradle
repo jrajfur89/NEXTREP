@@ -8,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI passes the GitHub Actions run number, so each new APK installs as an update.
-        versionCode((System.getenv("NEXTREP_VERSION_CODE") ?: "1") as int)
+        versionCode Integer.parseInt(System.getenv("NEXTREP_VERSION_CODE") ?: "1")
         versionName "0.1.0-s1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
