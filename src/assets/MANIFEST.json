@@ -1,0 +1,197 @@
+{
+  "note": "F1.4: images formerly inlined as base64 in the app code. id = identifier used in src/app/.",
+  "assets": [
+    {
+      "id": "__asset_welcome_bg",
+      "file": "welcome-bg.jpg",
+      "mime": "image/jpeg",
+      "bytes": 108224,
+      "sha256": "69827bc7f955205c09a22a559ddc8afe53358d419d0b6376a5aeacea7c669269",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_klatka",
+      "file": "muscle-klatka.jpg",
+      "mime": "image/jpeg",
+      "bytes": 18837,
+      "sha256": "253518a8d1c8932aa3e05b5adc54e81966c06d3ff272a1140193bfa1f62a2361",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_plecy",
+      "file": "muscle-plecy.jpg",
+      "mime": "image/jpeg",
+      "bytes": 19022,
+      "sha256": "039a350a174a520676d307c98512e8abc16e4c7f4bcbbd69b0d50eb1f2c52b74",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_nogi",
+      "file": "muscle-nogi.jpg",
+      "mime": "image/jpeg",
+      "bytes": 17623,
+      "sha256": "26ea73684dca51caa4d1f55bcdc8de9d11f42bac9e6baabee84f38f549136175",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_lydki",
+      "file": "muscle-lydki.jpg",
+      "mime": "image/jpeg",
+      "bytes": 18348,
+      "sha256": "bfcfa8d04c7b749e373b78d3ef071389c0466e2f06d5d5654b8881e95d3183b9",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_barki",
+      "file": "muscle-barki.jpg",
+      "mime": "image/jpeg",
+      "bytes": 18455,
+      "sha256": "bd3b71174f22b8f73d80330f9570da9dc891952449f6128d11278d22927c1cd8",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_biceps",
+      "file": "muscle-biceps.jpg",
+      "mime": "image/jpeg",
+      "bytes": 20188,
+      "sha256": "5fee9947c6a02dcbce73a373903e1ac467e4ce917bbe3c79fa9895f650a9ac32",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_triceps",
+      "file": "muscle-triceps.jpg",
+      "mime": "image/jpeg",
+      "bytes": 20347,
+      "sha256": "c0daa016c4e54cff97e066da5cc46472b0c9b8c1c168673a501f3c20a207b226",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_brzuch",
+      "file": "muscle-brzuch.jpg",
+      "mime": "image/jpeg",
+      "bytes": 20319,
+      "sha256": "40071af4dfb256a2e1c87fd2821050b673d7ba778e254f466a50596460fcad75",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_posladki",
+      "file": "muscle-posladki.jpg",
+      "mime": "image/jpeg",
+      "bytes": 18762,
+      "sha256": "4cee2a0b64401b2a45568948d4762abacd1483346fbde282e4069e8a87c8bbba",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_przedramiona",
+      "file": "muscle-przedramiona.jpg",
+      "mime": "image/jpeg",
+      "bytes": 20193,
+      "sha256": "7b19c5b32360bd7f22398b37f9daef79ebda68ff8ab17f12ce998aac497305c6",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_cale_cialo",
+      "file": "muscle-cale-cialo.jpg",
+      "mime": "image/jpeg",
+      "bytes": 19552,
+      "sha256": "9cedd901d419b7af8a37c6c03904d0ae5ab08736c0b06fb7cb945154153b7e16",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_muscle_cardio",
+      "file": "muscle-cardio.jpg",
+      "mime": "image/jpeg",
+      "bytes": 20785,
+      "sha256": "26f7d5813534e379d8339c378f15bedea6987bbb18ef55141f74f5fff3fd38da",
+      "from": "01-config-utils.jsx"
+    },
+    {
+      "id": "__asset_plan_fbw",
+      "file": "plan-fbw.jpg",
+      "mime": "image/jpeg",
+      "bytes": 21658,
+      "sha256": "8b26ce98f5b89e89b251f9aba1a49e62b274ebf7bf63d5c83bc1293add0b88f7",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_plan_split",
+      "file": "plan-split.jpg",
+      "mime": "image/jpeg",
+      "bytes": 22862,
+      "sha256": "2a2212252217186731b4bd72016f424049bc9e3dd189a26c4d4d6eb1fb8238fb",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_plan_5x5",
+      "file": "plan-5x5.jpg",
+      "mime": "image/jpeg",
+      "bytes": 22727,
+      "sha256": "f469dd6076a68f8165a0eabc52ea77b2f5efce3edae62d9ed420642085328896",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_plan_ppl",
+      "file": "plan-ppl.jpg",
+      "mime": "image/jpeg",
+      "bytes": 23482,
+      "sha256": "436ae8a4f547fdf8aeb8467507853e96ab019a9c78ed2002e3df827090f7ddb1",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_plan_home",
+      "file": "plan-home.jpg",
+      "mime": "image/jpeg",
+      "bytes": 20944,
+      "sha256": "f6fe439f3c3e1efe4c7f87ca8e41727e2f044606b226d0464b11b511adab90ac",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_plan_glutes",
+      "file": "plan-glutes.jpg",
+      "mime": "image/jpeg",
+      "bytes": 23494,
+      "sha256": "1dab971877637d8f9735278a74020022db112b674bd83e556773f2edf3baf324",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_plan_bands",
+      "file": "plan-bands.jpg",
+      "mime": "image/jpeg",
+      "bytes": 24881,
+      "sha256": "b0d7ac5b97604656e6163b8d3cf96f5da901507fb1656dcd3f4ca6c37ae4906c",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_plan_abs",
+      "file": "plan-abs.jpg",
+      "mime": "image/jpeg",
+      "bytes": 23151,
+      "sha256": "bcf2fbc3de501da064e34b2bfdcada09361d1bee6d39a5a26e9a15d317654d2b",
+      "from": "10-atlas-templates.jsx"
+    },
+    {
+      "id": "__asset_nextrep_symbol",
+      "file": "nextrep-symbol.png",
+      "mime": "image/png",
+      "bytes": 632665,
+      "sha256": "590069cb4812a17459daa29013743434a35b6d18b059d90e5c8f02f915a0d5ee",
+      "from": "11-ui-shared.jsx"
+    },
+    {
+      "id": "__asset_nextrep_logo",
+      "file": "nextrep-logo.png",
+      "mime": "image/png",
+      "bytes": 470183,
+      "sha256": "8af2564d477bef5baa8b08aceb99fe6f087d2a345b2885de817e78015a1b2f8f",
+      "from": "11-ui-shared.jsx"
+    },
+    {
+      "id": "__asset_nextrep_logo_stacked",
+      "file": "nextrep-logo-stacked.png",
+      "mime": "image/png",
+      "bytes": 681199,
+      "sha256": "138f5be842fe004de73b9d9ffe3068c32b4ae12d1703f947caff7dcecdde713a",
+      "from": "11-ui-shared.jsx"
+    }
+  ]
+}

@@ -83,9 +83,12 @@ await build({
   platform: "node",
   target: "node20",
   jsx: "transform",
-  loader: { ".jsx": "jsx" },
   external: ["react", "react-dom", "react-dom/*"],
+  // F1.4: images from src/assets/ are inlined back as data: URIs — exactly the strings the app
+  // carried before (the tile-asset tests pin their hashes)
+  loader: { ".jsx": "jsx", ".jpg": "dataurl", ".png": "dataurl" },
   alias: {
+    "@nextrep-assets": resolve(here, "../../src/assets"),
     "lucide-react": resolve(here, "stubs/lucide-react.mjs"),
     "@supabase/supabase-js": resolve(here, "stubs/supabase-js.mjs"),
   },

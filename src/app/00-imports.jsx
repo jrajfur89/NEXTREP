@@ -1,3 +1,29 @@
+// F1.4 assets (begin) — images moved out of the code into src/assets/ (see MANIFEST.json)
+import __asset_welcome_bg from "@nextrep-assets/welcome-bg.jpg";
+import __asset_muscle_klatka from "@nextrep-assets/muscle-klatka.jpg";
+import __asset_muscle_plecy from "@nextrep-assets/muscle-plecy.jpg";
+import __asset_muscle_nogi from "@nextrep-assets/muscle-nogi.jpg";
+import __asset_muscle_lydki from "@nextrep-assets/muscle-lydki.jpg";
+import __asset_muscle_barki from "@nextrep-assets/muscle-barki.jpg";
+import __asset_muscle_biceps from "@nextrep-assets/muscle-biceps.jpg";
+import __asset_muscle_triceps from "@nextrep-assets/muscle-triceps.jpg";
+import __asset_muscle_brzuch from "@nextrep-assets/muscle-brzuch.jpg";
+import __asset_muscle_posladki from "@nextrep-assets/muscle-posladki.jpg";
+import __asset_muscle_przedramiona from "@nextrep-assets/muscle-przedramiona.jpg";
+import __asset_muscle_cale_cialo from "@nextrep-assets/muscle-cale-cialo.jpg";
+import __asset_muscle_cardio from "@nextrep-assets/muscle-cardio.jpg";
+import __asset_plan_fbw from "@nextrep-assets/plan-fbw.jpg";
+import __asset_plan_split from "@nextrep-assets/plan-split.jpg";
+import __asset_plan_5x5 from "@nextrep-assets/plan-5x5.jpg";
+import __asset_plan_ppl from "@nextrep-assets/plan-ppl.jpg";
+import __asset_plan_home from "@nextrep-assets/plan-home.jpg";
+import __asset_plan_glutes from "@nextrep-assets/plan-glutes.jpg";
+import __asset_plan_bands from "@nextrep-assets/plan-bands.jpg";
+import __asset_plan_abs from "@nextrep-assets/plan-abs.jpg";
+import __asset_nextrep_symbol from "@nextrep-assets/nextrep-symbol.png";
+import __asset_nextrep_logo from "@nextrep-assets/nextrep-logo.png";
+import __asset_nextrep_logo_stacked from "@nextrep-assets/nextrep-logo-stacked.png";
+// F1.4 assets (end)
 
 
 
