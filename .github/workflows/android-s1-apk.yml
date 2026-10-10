@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      - name: F1 split identity (src/app/ = baseline app script, byte for byte)
+        run: node tools/check-split.mjs
       - name: Install test dependencies
         working-directory: tests
         run: npm ci
