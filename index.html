@@ -3773,20 +3773,21 @@ async function migrateExercisesV1(userId, exercisesList, deviceId, beforeEachRow
 async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId, beforeEachRow = null) {
   const planIdMap = {};
   const planItemIdMap = {};
-  for (const plan of plansList) {
+  for (const [planPos, plan] of plansList.entries()) {
     if (!plan || plan.id == null) continue;
     const planLegacyId = String(plan.id);
-    const planId = await upsertByLegacyId("nextrep_plans", userId, planLegacyId, { name: plan.name || "" }, deviceId);
+    // Etap 13: the order of the plan list, of the items and of their series is written with the rows
+    const planId = await upsertByLegacyId("nextrep_plans", userId, planLegacyId, buildPlanPayload(plan, planPos), deviceId);
     planIdMap[planLegacyId] = planId;
 
     const items = Array.isArray(plan.exercises) ? plan.exercises : [];
-    for (const item of items) {
+    for (const [itemPos, item] of items.entries()) {
       if (!item || item.id == null) continue;
       if (beforeEachRow) await beforeEachRow(); // Stage 4A.4: periodic session re-check (V1 upload)
       const itemLegacyId = String(item.id);
       const mappedExerciseId = item.exerciseId != null ? exerciseIdMap[String(item.exerciseId)] || null : null;
       // Etap 11: the same row the sync engine writes (rest_seconds left out when the item has none)
-      const itemRow = buildPlanItemPayload(item, planId, mappedExerciseId);
+      const itemRow = buildPlanItemPayload(item, planId, mappedExerciseId, itemPos);
       const planItemId = await upsertByLegacyId("nextrep_plan_items", userId, itemLegacyId, itemRow, deviceId);
       planItemIdMap[itemLegacyId] = planItemId;
 
@@ -3799,17 +3800,7 @@ async function migratePlansV1(userId, plansList, exerciseIdMap, deviceId, before
       for (let i = 0; i < effectiveSets.length; i++) {
         const s = effectiveSets[i];
         const setLegacyId = v1PlanItemSetLegacyId(itemLegacyId, s, i);
-        await upsertByLegacyId(
-          "nextrep_plan_item_sets",
-          userId,
-          setLegacyId,
-          {
-            plan_item_id: planItemId,
-            target: s.target || "",
-            rir: s.rir || "",
-          },
-          deviceId
-        );
+        await upsertByLegacyId("nextrep_plan_item_sets", userId, setLegacyId, buildPlanItemSetPayload(s, planItemId, i), deviceId);
       }
     }
   }
@@ -4857,25 +4848,50 @@ function buildExercisePayload(ex) {
     notes: ex.notes || "",
   };
 }
-function buildPlanPayload(plan) {
-  return { name: plan.name || "" };
+// Stage 4A.4 (Etap 13): explicit order. `position` = the record's index in its local list (plans list, items of a
+// plan, series of an item — 0-based). It is added only when a valid index is given; callers that compare a local
+// record with the cloud (localRecordMatchesRemote) pass none, so order alone never decides "remote newer".
+// (Requires docs/sql/nextrep_order_positions_4a4_v1.sql on the server — the column did not exist before.)
+const withPosition = (row, position) => (Number.isInteger(position) && position >= 0 ? { ...row, position } : row);
+function buildPlanPayload(plan, position) {
+  return withPosition({ name: plan.name || "" }, position);
 }
-function buildPlanItemPayload(item, resolvedPlanId, resolvedExerciseId) {
+function buildPlanItemPayload(item, resolvedPlanId, resolvedExerciseId, position) {
   // Etap 11: rest_seconds is left out when the item has no usable value (see sanitizeCloudRow)
-  return sanitizeCloudRow("nextrep_plan_items", {
-    plan_id: resolvedPlanId,
-    exercise_id: resolvedExerciseId,
-    rest_seconds: item.restSeconds,
-    superset_group: item.supersetGroup || null,
-  });
+  return withPosition(
+    sanitizeCloudRow("nextrep_plan_items", {
+      plan_id: resolvedPlanId,
+      exercise_id: resolvedExerciseId,
+      rest_seconds: item.restSeconds,
+      superset_group: item.supersetGroup || null,
+    }),
+    position
+  );
 }
-// nextrep_plan_item_sets has NO `position` column (confirmed against the real schema) — never add one.
-function buildPlanItemSetPayload(set, resolvedPlanItemId) {
-  return {
-    plan_item_id: resolvedPlanItemId,
-    target: set.target || "",
-    rir: set.rir || "",
-  };
+function buildPlanItemSetPayload(set, resolvedPlanItemId, position) {
+  return withPosition(
+    {
+      plan_item_id: resolvedPlanItemId,
+      target: set.target || "",
+      rir: set.rir || "",
+    },
+    position
+  );
+}
+// index of a plan / plan item / plan item set in the local snapshot (-1 when not found → no position written)
+function localPlanPosition(snap, planId) {
+  return (snap.plans || []).findIndex((p) => p && p.id === planId);
+}
+function localPlanItemPosition(snap, planId, itemId) {
+  const plan = (snap.plans || []).find((p) => p && p.id === planId);
+  return plan ? (plan.exercises || []).findIndex((it) => it && it.id === itemId) : -1;
+}
+function localPlanItemSetPosition(snap, planItemId, setId) {
+  for (const plan of snap.plans || []) {
+    const item = (plan && plan.exercises ? plan.exercises : []).find((it) => it && it.id === planItemId);
+    if (item) return (item.setsDetail || []).findIndex((x) => x && x.id === setId);
+  }
+  return -1;
 }
 function buildWorkoutPayload(session, resolvedPlanId) {
   // Etap 11: summaries without a usable value are left out (see sanitizeCloudRow); the date is never invented
@@ -5166,14 +5182,14 @@ async function pushPlanItem(ctx, localItem, item) {
   const resolvedPlanId = await resolveSupabaseIdByLegacyId("nextrep_plans", ctx.userId, localItem.__parentPlanId);
   if (!resolvedPlanId) throw missingParentError("Nadrzędny plan nie istnieje jeszcze w Supabase.");
   const resolvedExerciseId = localItem.exerciseId != null ? await resolveSupabaseIdByLegacyId("nextrep_exercises", ctx.userId, localItem.exerciseId) : null;
-  const payload = buildPlanItemPayload(localItem, resolvedPlanId, resolvedExerciseId);
+  const payload = buildPlanItemPayload(localItem, resolvedPlanId, resolvedExerciseId, localPlanItemPosition(ctx.localSnapshot, localItem.__parentPlanId, item.recordId));
   return pushUpsertByLegacyId("nextrep_plan_items", ctx, item.recordId, payload, item, localItem, localItem.__parentPlanId);
 }
 
 async function pushPlanItemSet(ctx, localSet, item) {
   const resolvedPlanItemId = await resolveSupabaseIdByLegacyId("nextrep_plan_items", ctx.userId, localSet.__parentPlanItemId);
   if (!resolvedPlanItemId) throw missingParentError("Nadrzędny element planu nie istnieje jeszcze w Supabase.");
-  const payload = buildPlanItemSetPayload(localSet, resolvedPlanItemId);
+  const payload = buildPlanItemSetPayload(localSet, resolvedPlanItemId, localPlanItemSetPosition(ctx.localSnapshot, localSet.__parentPlanItemId, item.recordId));
   return pushUpsertByLegacyId("nextrep_plan_item_sets", ctx, item.recordId, payload, item, localSet, localSet.__parentPlanItemId);
 }
 
@@ -5253,7 +5269,7 @@ async function pushQueueItem(item, ctx) {
       result = await pushUpsertByLegacyId("nextrep_measurements", ctx, item.recordId, buildMeasurementPayload(localRecord), item, localRecord);
       break;
     case "plans":
-      result = await pushUpsertByLegacyId("nextrep_plans", ctx, item.recordId, buildPlanPayload(localRecord), item, localRecord);
+      result = await pushUpsertByLegacyId("nextrep_plans", ctx, item.recordId, buildPlanPayload(localRecord, localPlanPosition(ctx.localSnapshot, item.recordId)), item, localRecord);
       break;
     case "plan_items":
       result = await pushPlanItem(ctx, localRecord, item);
@@ -5734,12 +5750,13 @@ function localRecordMatchesRemote(pullTable, local, remote, localSnapshot, remot
     case "workout_exercises": {
       const parent = localSnapshot.history.find((h) => (h.exercises || []).includes(local));
       const position = parent ? parent.exercises.indexOf(local) : null;
-      return syncPayloadMatches(buildWorkoutExercisePayload(local, null, null, position), remote, ["workout_id", "exercise_id"]) && syncRefMatches(remoteByTable, "exercises", remote.exercise_id, local.exerciseId);
+      // Etap 13: order is never the reason for "remote newer" (a stale cloud position must not replace the device's order)
+      return syncPayloadMatches(buildWorkoutExercisePayload(local, null, null, position), remote, ["workout_id", "exercise_id", "position"]) && syncRefMatches(remoteByTable, "exercises", remote.exercise_id, local.exerciseId);
     }
     case "workout_sets": {
       let position = null;
       for (const h of localSnapshot.history) for (const ex of h.exercises || []) if ((ex.sets || []).includes(local)) position = ex.sets.indexOf(local);
-      return syncPayloadMatches(buildWorkoutSetPayload(local, null, position), remote, ["workout_exercise_id"]);
+      return syncPayloadMatches(buildWorkoutSetPayload(local, null, position), remote, ["workout_exercise_id", "position"]);
     }
     default:
       return false;
@@ -5784,8 +5801,47 @@ async function bootstrapSyncMetaForExistingData() {
     _syncBootstrapRuns--;
   }
 }
+// Stage 4A.4 (Etap 13) — values the cloud lacks. The first connection of a device to an account that already has
+// cloud rows (no sync meta yet) used to mark every record that differs from the cloud as "remote newer", so the next
+// PULL replaced the device's record with the cloud row — also when the cloud row was only EMPTY where the device has
+// a value (e.g. a text value an older V1 upload could not store and sent as null). That is never resolved silently
+// any more: such a record becomes a conflict the user decides (keep the device's value → it is pushed; take the
+// cloud's → the device's record is replaced). Deliberately cleared values are unaffected: a record whose cloud row
+// is newer by VERSION (a real edit on another device, including clearing a field) is applied by PULL as before —
+// this check only runs where there is no version history to tell an edit from a gap.
+const SYNC_EMPTY_CHECK_SKIP = new Set(["plan_id", "exercise_id", "workout_id", "workout_exercise_id", "plan_item_id", "position"]);
+const isEmptySyncValue = (c) => c === null || (Array.isArray(c) && c.length === 0) || (typeof c === "object" && c !== null && !Array.isArray(c) && Object.keys(c).length === 0);
+function localPayloadForCompare(pullTable, local, localSnapshot) {
+  switch (pullTable) {
+    case "exercises": return buildExercisePayload(local);
+    case "custom_fields": return buildCustomFieldPayload(local);
+    case "measurements": return buildMeasurementPayload(local);
+    case "plans": return buildPlanPayload(local);
+    case "plan_items": return buildPlanItemPayload(local, null, null);
+    case "plan_item_sets": return buildPlanItemSetPayload(local, null);
+    case "workouts": return buildWorkoutPayload(local, null);
+    case "workout_exercises": return buildWorkoutExercisePayload(local, null, null, null);
+    case "workout_sets": return buildWorkoutSetPayload(local, null, null);
+    default: return null;
+  }
+}
+// → the column names where the device has a value and the cloud row has none (empty list = no such column)
+function remoteEmptiedLocalColumns(pullTable, local, remote, localSnapshot) {
+  const payload = localPayloadForCompare(pullTable, local, localSnapshot);
+  if (!payload || !remote) return [];
+  return Object.keys(payload).filter((k) => !SYNC_EMPTY_CHECK_SKIP.has(k) && !isEmptySyncValue(syncCanonical(payload[k])) && isEmptySyncValue(syncCanonical(remote[k])));
+}
+function remoteParentLegacyId(remoteByTable, table, remote) {
+  const find = (t, id) => (remoteByTable[t] || []).find((r) => r.id === id);
+  if (table === "plan_items") return (find("plans", remote.plan_id) || {}).legacy_id ?? null;
+  if (table === "plan_item_sets") return (find("plan_items", remote.plan_item_id) || {}).legacy_id ?? null;
+  if (table === "workout_exercises") return (find("workouts", remote.workout_id) || {}).legacy_id ?? null;
+  if (table === "workout_sets") return (find("workout_exercises", remote.workout_exercise_id) || {}).legacy_id ?? null;
+  return null;
+}
+
 async function bootstrapSyncMetaForExistingDataUnlocked() {
-  const result = { success: true, skipped: null, created: 0, createdInSync: 0, createdRemoteNewer: 0, skippedExistingMeta: 0, skippedPendingLocal: 0, skippedRemoteDeleted: 0, localOnly: 0 };
+  const result = { success: true, skipped: null, created: 0, createdInSync: 0, createdRemoteNewer: 0, skippedExistingMeta: 0, skippedPendingLocal: 0, skippedRemoteDeleted: 0, localOnly: 0, conflictsRemoteEmpty: 0 };
   if (!supabase) return { ...result, skipped: "no_supabase" };
   if (typeof navigator !== "undefined" && navigator.onLine === false) return { ...result, skipped: "offline" };
   let user = null;
@@ -5822,6 +5878,7 @@ async function bootstrapSyncMetaForExistingDataUnlocked() {
 
   const queue = loadSyncQueue();
   const proposals = {};
+  const emptyConflicts = []; // Etap 13: created only after the context check below
   const matchedKeys = new Set();
   for (const table of syncMetaBootstrapTables()) {
     for (const remote of remoteByTable[table] || []) {
@@ -5841,6 +5898,19 @@ async function bootstrapSyncMetaForExistingDataUnlocked() {
       } catch (e) {
         same = false;
       }
+      if (!same) {
+        // Etap 13: the cloud is EMPTY where this device has a value → never "remote newer" — the user decides
+        let emptied = [];
+        try {
+          emptied = remoteEmptiedLocalColumns(table, local, remote, localSnapshot);
+        } catch (e) {
+          emptied = [];
+        }
+        if (emptied.length) {
+          emptyConflicts.push({ table, legacyId, key, local, remote, columns: emptied });
+          continue;
+        }
+      }
       proposals[key] = same
         ? { version: remote.version, updatedAt: remote.updated_at != null ? remote.updated_at : null, deviceId: remote.device_id != null ? remote.device_id : null }
         : { version: Math.max(0, Number(remote.version) - 1), updatedAt: null, deviceId: null };
@@ -5855,6 +5925,26 @@ async function bootstrapSyncMetaForExistingDataUnlocked() {
   // Write: re-read meta AND queue right now, so an edit made while we were fetching wins.
   const meta = loadSyncMeta();
   const queueNow = loadSyncQueue();
+  for (const c of emptyConflicts) {
+    if (meta[c.key] || isLocallyBusy(queueNow, c.table, c.legacyId)) continue;
+    const relatedExerciseLegacyId = (c.table === "plan_items" || c.table === "workout_exercises") && c.remote.exercise_id != null ? ((remoteByTable.exercises || []).find((e) => e.id === c.remote.exercise_id) || {}).legacy_id ?? null : null;
+    const relatedPlanLegacyId = c.table === "workouts" && c.remote.plan_id != null ? ((remoteByTable.plans || []).find((p) => p.id === c.remote.plan_id) || {}).legacy_id ?? null : null;
+    createSyncConflict({
+      table: c.table,
+      recordId: c.legacyId,
+      reason: "bootstrap_remote_missing_values",
+      localRecord: c.local,
+      remoteRecord: c.remote,
+      localVersionNumber: null,
+      remoteVersionNumber: c.remote.version,
+      localDeviceId: getOrCreateDeviceId(),
+      remoteDeviceId: c.remote.device_id,
+      parentLegacyId: remoteParentLegacyId(remoteByTable, c.table, c.remote),
+      relatedExerciseLegacyId,
+      relatedPlanLegacyId,
+    });
+    result.conflictsRemoteEmpty++;
+  }
   let written = 0;
   for (const key of Object.keys(proposals)) {
     const sep = key.indexOf(":");
