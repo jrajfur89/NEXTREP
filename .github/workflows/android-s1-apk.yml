@@ -1,11 +1,11 @@
-name: S1 Android debug APK
+name: Android debug APK (S1 / release 1.0)
 
 # STORE FIRST — S1 spike only. Builds the current app (index.html, unchanged logic) without CDNs,
 # wraps it in Capacitor 8 and publishes a DEBUG APK as a downloadable artifact.
 # Talks only to the TEST Supabase project (nextrep-f5-test). No deployment anywhere.
 on:
   push:
-    branches: [spike/capacitor-android]
+    branches: [spike/capacitor-android, release/1.0]
   workflow_dispatch:
 
 permissions:
