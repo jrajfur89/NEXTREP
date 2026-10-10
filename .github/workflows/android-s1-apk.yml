@@ -76,7 +76,8 @@ jobs:
           set -o pipefail
           if ! ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee gradle.log; then
             # surface the failure as public annotations (readable without downloading logs)
-            grep -nE "What went wrong|error:|FAILURE|Exception|> " gradle.log | head -40 | while IFS= read -r l; do echo "::error title=gradle::$l"; done
+            msg=$( { sed -n '/What went wrong/,/\* Try:/p' gradle.log | head -25; grep -E "^e: |error:|ERROR:" gradle.log | head -15; } | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=gradle::${msg}"
             exit 1
           fi
       - name: Name the APK
