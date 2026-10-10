@@ -1,8 +1,8 @@
 # NEXTREP — DESIGN SYSTEM
 
-Status: BASELINE / IN PROGRESS  
+Status: APPROVED VISUAL DIRECTION / COMPONENTS IN PROGRESS  
 Version: 1.0  
-Purpose: visual source of truth for NEXTREP design work in Google Stitch and later implementation by Claude.
+Purpose: visual source of truth for NEXTREP design work in Claude Design and later implementation in the existing application.
 
 ## 1. Design direction
 
@@ -25,26 +25,29 @@ Approximate visual balance:
 ## 2. Colors
 
 ### Brand
-- primary: #FF6A13
-- bright: #FF7A18
-- deep: #D94B00
+- primary: #FF6A00
+- light: #FF8A2A
+- bright: #FF9A3D
+- dark: #CC4F00
+- gradient-end: #D94F00
 
 ### Background
-- base: #0B0B0C
-- elevated: #0B0B0C
+- base: #090909
+- elevated: #0F0F10
 
 ### Surface
-- default: #151516
-- secondary: #1B1C1E
-- tertiary: #1B1C1E
+- default: #151515
+- secondary: #1B1B1D
+- tertiary: #222224
 
 ### Border
-- default: #28292D
+- default: #2A2A2A
 
 ### Text
-- primary: #FFFFFF
-- secondary: #A1A1A6
-- muted: #686868
+- primary: #F5F5F5
+- secondary: #B8B8B8
+- muted: #777777
+- disabled: #4A4A4A
 
 ### Status
 - success: #42C98A
@@ -53,16 +56,9 @@ Approximate visual balance:
 
 ## 3. Typography
 
-Primary typeface: Inter.
+Display: Barlow Condensed, bold, uppercase, short athletic headings; H1 32–36 px, H2 24–28 px, H3 18–22 px; tight letter spacing (H1 0 to -0.5%, H2/H3 0).
 
-- H1: Inter, 24 px, Bold / ExtraBold
-- H2: Inter, 18 px, Semi Bold
-- Body: Inter, 14 px, Regular
-- Body Medium: Inter, 14 px, Medium
-- Label: Inter, 11 px, Semi Bold, uppercase, letter spacing approximately +0.5 to +1 px
-- Timer: Inter, 40 px, Bold, stable/tabular figures
-
-No secondary display font is part of the baseline system.
+UI/body: Inter, weights 400/500/600/700; Body Large 17 px, Body 15–16 px, Body Small 13–14 px, Caption 11–12 px. Use Inter for buttons, forms, data, dates, weights, repetitions and RIR. Timer uses tabular numerals.
 
 ## 4. Spacing
 
@@ -93,11 +89,11 @@ Usage:
 ## 6. Effects
 
 ### Orange Glow
-- color: #FF6A13
-- blur: approximately 30 px
-- opacity: approximately 25%
+- color: #FF6A00
+- blur: 20–40 px
+- opacity: 15–30%
 - X: 0
-- Y: 0
+- Y: 4 for CTA glow; 0 for ambient glow
 
 Use selectively under:
 - timer
@@ -130,20 +126,20 @@ Baseline component families:
 - Training elements
 - Premium elements
 
-Component details are developed iteratively in Stitch and documented here before implementation.
+Component details are developed iteratively in Claude Design and documented here before implementation.
 
 ## 8. Buttons
 
 ### Primary
-- orange gradient: #FF7A18 → #E04000
-- radius: 12 px
-- height: approximately 48 px
-- Inter Semi Bold 14 px
-- white text in the current baseline
+- background: #FF6A00 (default); optional brand gradient #FF9A3D → #FF6A00 → #D94F00 at 135° for selected branded elements
+- radius: 10 px
+- height: 48–52 px
+- Inter Semi Bold/Bold
+- text: #090909
 
 ### Secondary
 - transparent or #18181A
-- 1 px border using #28292D or orange where appropriate
+- 1 px border using #2A2A2A or orange where appropriate
 
 ### Ghost
 - no visible background
@@ -157,8 +153,8 @@ Component details are developed iteratively in Stitch and documented here before
 ## 9. Cards
 
 - radius: 16 px
-- surface: #151516 or #1B1C1E according to hierarchy
-- border: #28292D
+- surface: #151515 or #1B1B1D according to hierarchy
+- border: #2A2A2A
 - subtle shadow
 
 Cards are used for workouts, exercises, history, stats, progress and PRO elements.
@@ -245,3 +241,26 @@ Prototype:
 
 Implementation handoff:
 - TODO
+
+## 15. Active workout — approved UI direction (2026-10-10)
+
+- Center workout timer in header; top-right overflow menu includes Add exercise / End workout / Abandon workout / Instructions.
+- Current exercise name is prominent white text; no redundant orange exercise-name pill.
+- Today's recommendations are descriptive and specific to the current exercise. They may suggest increasing load or repetitions but must NOT prescribe a mandatory numeric load.
+- Previous workout performance is a separate section below recommendations, with a prominent “Zobacz poprzednie wykonanie treningu” action and access to full history.
+- Sets allow manual weight, repetitions and RIR entry; RIR options: 0, 0–1, 1–2, 2 (dropdown, not slider). Bodyweight exercise omits kg; added-load variants display added load. Timed exercises provide start/stop and manual correction.
+- Supersets use compact labels and independently maintained values for each exercise.
+- Adding/canceling an exercise must return safely to the active workout without resetting or ending it.
+- Mobile-first: readable text, accessible controls, no clipping or bottom-navigation overlap.
+
+## 16. Workout photography — approved direction (2026-10-10)
+
+- Create a curated catalog of approximately five cinematic, realistic images per muscle group: chest, back, shoulders, biceps, triceps, legs, glutes and abs (40 images total as an initial target).
+- The image should match the active exercise's muscle group; chest exercises may use bench-press photography.
+- Rotate/select imagery when transitioning to another exercise, not while entering sets; keep an exercise's image stable within a workout session.
+- Dark high-contrast gym photography, restrained orange rim light, dark overlay ensuring white text legibility; no excessive gaming neon.
+- Images are decorative and must never compromise form readability or performance.
+
+## 17. Design workflow update (2026-10-10)
+
+Claude Design is the selected visual exploration environment with UI/UX Pro Max skill if actually available. Approved screenshots and this file provide visual guidance. The existing PWA and its training/progression/data architecture must not be modified during visual exploration. Start with shared foundations, then Dashboard and Active Workout, and review each screen before accepting it. Existing app icon remains unchanged. Prior Google Stitch workflow notes are historical, not a mandate to use Stitch.
