@@ -1,0 +1,7 @@
+{
+  "note": "F1 baseline: SHA-256 of the app script (the <script type=\"text/babel\"> body of index.html) at a2b9ca0. tools/check-split.mjs proves src/app/ joins back to exactly these bytes.",
+  "ref": "a2b9ca0",
+  "appScriptBytes": 4112025,
+  "appScriptSha256": "a2044e49d802c96fdd27a49012096d7607a82132f55d0ed82554225e81fb62a0",
+  "indexHtmlSha256": "565818f7255bf066a934914cebdc67a3910c398cd413b029d582dad9a33569ed"
+}

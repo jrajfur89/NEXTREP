@@ -7,11 +7,15 @@
     "build": "node harness/build.mjs",
     "test": "node harness/build.mjs && node --test --test-reporter=spec \"unit/**/*.test.mjs\" \"ui/**/*.test.mjs\"",
     "test:unit": "node harness/build.mjs && node --test --test-reporter=spec \"unit/**/*.test.mjs\"",
-    "test:ui": "node harness/build.mjs && node --test --test-reporter=spec \"ui/**/*.test.mjs\""
+    "test:ui": "node harness/build.mjs && node --test --test-reporter=spec \"ui/**/*.test.mjs\"",
+    "test:e2e": "node e2e/run.mjs"
   },
   "devDependencies": {
     "esbuild": "0.24.0",
     "jsdom": "25.0.1",
+    "pixelmatch": "7.1.0",
+    "playwright": "1.56.1",
+    "pngjs": "7.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   }

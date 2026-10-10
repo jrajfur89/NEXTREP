@@ -114,3 +114,27 @@ Szkic treningu, który przechodzi walidację `loadActiveWorkoutDraft` (`version:
 ale ma niekompletne pozycje (np. bez `setsDetail`), powoduje błąd renderu `ActiveWorkout` po
 „Wróć do treningu”. Szkice zapisuje wyłącznie aplikacja, więc ryzyko jest niskie. Zapisane jako
 kandydat do osobnego etapu.
+
+## E2E i porównanie wizualne (F1, od 2026-10-10)
+
+```bash
+cd tests
+npm install
+npx playwright install chromium   # jednorazowo (w CI: --with-deps)
+npm run test:e2e                  # build dist/ + build referencyjny a2b9ca0 + testy e2e
+```
+
+- `e2e/s1-flow.e2e.mjs` — przebieg z S1 na zbudowanej aplikacji (Chromium, widok telefonu,
+  cała sieć zablokowana): start offline, trening, Wstecz, zabicie procesu, historia, eksport i import
+  w przeglądarce, logowanie bez sieci, komplet klas CSS, brak zapytań do CDN.
+  **Nie obejmuje** znanych ograniczeń Androida: NR-S1-01 (eksport w WebView) i NR-S1-02 (sygnał
+  przerwy przy wygaszonym ekranie) — oba pozostają otwarte.
+- `e2e/visual.e2e.mjs` — 20 ekranów buildu testowanego porównanych piksel po pikselu z buildem
+  referencyjnym (`E2E_REF`, domyślnie `a2b9ca0`) w tej samej przeglądarce; zamrożony zegar,
+  stały `Math.random`, wyłączone animacje. Tolerancja 0,05 (skala pixelmatch) pochłania tylko
+  szum antyaliasingu. Różnice trafiają do `e2e/.out/`. Obrazy wzorcowe do wglądu:
+  `e2e/screenshots/` (odświeżane przez `E2E_UPDATE_SCREENSHOTS=1`).
+- `unit/f1-exports.test.mjs` — lista 539 nazw najwyższego poziomu z `a2b9ca0`
+  (`harness/f1-exports.json`); F1 musi ją zachować.
+- Bez prawdziwych danych, haseł i tokenów: aplikacja działa jako gość, logowanie używa
+  zmyślonego adresu, a sieć jest zablokowana.

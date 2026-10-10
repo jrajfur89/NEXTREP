@@ -2,3 +2,5 @@
 node_modules/
 dist/
 .build-web/
+.e2e-ref/
+tests/e2e/.out/
