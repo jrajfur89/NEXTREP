@@ -84,7 +84,7 @@ await build({
   legalComments: "none",
   define: { "process.env.NODE_ENV": '"production"' },
   // F1.4: images in src/assets/ become files next to the bundle (dist/assets/img/), referenced by URL
-  alias: { "@nextrep-assets": resolve(root, "src/assets") },
+  alias: { "@nextrep-assets": resolve(root, "src/assets"), "@nextrep-engine": resolve(root, "src/engine/index.js") },
   loader: { ".jpg": "file", ".png": "file" },
   assetNames: "img/[name]-[hash]",
   publicPath: "./assets/",

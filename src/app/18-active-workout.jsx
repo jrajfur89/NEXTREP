@@ -1,13 +1,3 @@
-function findMatchingSessions(history, { exerciseId, beforeDate }) {
-  const beforeTime = beforeDate ? new Date(beforeDate).getTime() : Infinity;
-  return history
-    .filter((s) => {
-      const dt = new Date(s.date).getTime();
-      if (!(dt < beforeTime)) return false;
-      return s.exercises?.some((e) => e.exerciseId === exerciseId && e.sets?.length);
-    })
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-}
 
 // Builds one exercise's live workout state: exactly as many rows as the plan's series (no more,
 // no fewer — extra rows can only come from an explicitly added dropset), each independently

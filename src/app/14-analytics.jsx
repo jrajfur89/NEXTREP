@@ -20,114 +20,6 @@ function getRangeBounds(rangeKey) {
   return { start: new Date(0), end, prevStart: null, prevEnd: null };
 }
 
-// ===================== MUSCLE-GROUP WORKLOAD (NR-MGW-001) =====================
-// An analytics layer ABOVE the progression engine, never part of it: progression stays strictly per
-// exact exerciseId; here different exerciseIds of the same PRIMARY muscle group add up.
-//   • The FULL workload of an exercise goes to its primary muscleGroup only; secondaryMuscleGroups
-//     are informational (no double counting, no arbitrary 50%/30% weights).
-//   • Volume = computeSessionVolume (the one definition, drop sets excluded), kept per UNIT and never
-//     mixed: kg (external load × reps — body mass is never added), reps (pure bodyweight), seconds (time).
-//   • Atlas exercises: the map below (stable exerciseIds; "Nogi" split by the owner's decision).
-//     Own exercises: the FIRST category the person declared (Nogi / Cardio / Całe ciało → no group).
-//     No group → skipped here, never guessed, never an error. Kept in code: nothing new is stored,
-//     synced or migrated.
-//   • Chronology always from session.date. Workouts of different exercise sets are never compared
-//     as "up/down" — that's "brak porównania" (an exercise change is not a regression).
-const MUSCLE_GROUPS = [
-  { id: "chest", label: "Klatka piersiowa", metaCat: "Klatka" },
-  { id: "back", label: "Plecy", metaCat: "Plecy" },
-  { id: "shoulders", label: "Barki", metaCat: "Barki" },
-  { id: "biceps", label: "Biceps", metaCat: "Biceps" },
-  { id: "triceps", label: "Triceps", metaCat: "Triceps" },
-  { id: "forearms", label: "Przedramiona", metaCat: "Przedramiona" },
-  { id: "abs", label: "Brzuch", metaCat: "Brzuch" },
-  { id: "quads", label: "Czworogłowe uda", metaCat: "Nogi" },
-  { id: "hamstrings_glutes", label: "Dwugłowe uda / pośladki", metaCat: "Pośladki" },
-  { id: "calves", label: "Łydki", metaCat: "Nogi" },
-];
-// Old category names (existing data) + the MUSCLE_GROUPS labels themselves (what the exercise form
-// saves now: category = [primary label, ...secondary labels]). "Nogi" / "Całe ciało" / "Cardio" → none.
-const CATEGORY_TO_MUSCLE_GROUP = {
-  Klatka: "chest", Plecy: "back", Barki: "shoulders", Biceps: "biceps", Triceps: "triceps", Przedramiona: "forearms", Brzuch: "abs", Pośladki: "hamstrings_glutes",
-  ...Object.fromEntries(MUSCLE_GROUPS.map((g) => [g.label, g.id])),
-};
-const ATLAS_MUSCLE_GROUPS = {
-  squat_barbell: { muscleGroup: "quads", secondaryMuscleGroups: [] },
-  bench_press: { muscleGroup: "chest", secondaryMuscleGroups: [] },
-  deadlift: { muscleGroup: "back", secondaryMuscleGroups: [] },
-  pullup: { muscleGroup: "back", secondaryMuscleGroups: [] },
-  pushup: { muscleGroup: "chest", secondaryMuscleGroups: [] },
-  rkc_plank: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-  dips: { muscleGroup: "chest", secondaryMuscleGroups: ["triceps"] },
-  farmers_walk: { muscleGroup: "forearms", secondaryMuscleGroups: [] },
-  lat_pulldown: { muscleGroup: "back", secondaryMuscleGroups: [] },
-  rdl_barbell: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  db_shoulder_press_seated: { muscleGroup: "shoulders", secondaryMuscleGroups: [] },
-  db_curl_supination: { muscleGroup: "biceps", secondaryMuscleGroups: [] },
-  cable_triceps_rope: { muscleGroup: "triceps", secondaryMuscleGroups: [] },
-  barbell_row: { muscleGroup: "back", secondaryMuscleGroups: ["biceps"] },
-  ez_bar_curl: { muscleGroup: "biceps", secondaryMuscleGroups: [] },
-  pullup_overhand: { muscleGroup: "back", secondaryMuscleGroups: ["biceps"] },
-  db_incline_press_30: { muscleGroup: "chest", secondaryMuscleGroups: [] },
-  chest_supported_row_machine: { muscleGroup: "back", secondaryMuscleGroups: [] },
-  leg_press: { muscleGroup: "quads", secondaryMuscleGroups: [] },
-  rdl_dumbbell: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  leg_curl_seated: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  hip_abduction_machine: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  db_lateral_raise: { muscleGroup: "shoulders", secondaryMuscleGroups: [] },
-  rear_delt_machine: { muscleGroup: "shoulders", secondaryMuscleGroups: [] },
-  cable_crunch: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-  cable_fly_standing: { muscleGroup: "chest", secondaryMuscleGroups: [] },
-  barbell_row_bent: { muscleGroup: "back", secondaryMuscleGroups: ["biceps"] },
-  lat_pulldown_neutral: { muscleGroup: "back", secondaryMuscleGroups: [] },
-  ohp_seated_barbell: { muscleGroup: "shoulders", secondaryMuscleGroups: ["triceps"] },
-  ohp_standing_barbell: { muscleGroup: "shoulders", secondaryMuscleGroups: ["triceps"] },
-  pullup_band_assist: { muscleGroup: "back", secondaryMuscleGroups: ["biceps"] },
-  hanging_knee_raise: { muscleGroup: "abs", secondaryMuscleGroups: ["hamstrings_glutes"] },
-  pullup_underhand: { muscleGroup: "back", secondaryMuscleGroups: ["biceps"] },
-  squat_front_barbell: { muscleGroup: "quads", secondaryMuscleGroups: ["hamstrings_glutes"] },
-  pullup_overhand_weighted: { muscleGroup: "back", secondaryMuscleGroups: ["biceps", "forearms"] },
-  hanging_leg_raise_straight: { muscleGroup: "abs", secondaryMuscleGroups: ["hamstrings_glutes"] },
-  pullup_underhand_weighted: { muscleGroup: "back", secondaryMuscleGroups: ["biceps", "forearms"] },
-  cable_row_seated: { muscleGroup: "back", secondaryMuscleGroups: ["biceps"] },
-  rear_delt_cable: { muscleGroup: "shoulders", secondaryMuscleGroups: [] },
-  db_lunge: { muscleGroup: "quads", secondaryMuscleGroups: ["hamstrings_glutes"] },
-  calf_raise_standing: { muscleGroup: "calves", secondaryMuscleGroups: [] },
-  hip_thrust_barbell: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  bodyweight_squat: { muscleGroup: "quads", secondaryMuscleGroups: [] },
-  db_row_single_arm: { muscleGroup: "back", secondaryMuscleGroups: ["biceps"] },
-  glute_bridge_bodyweight: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  plank: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-  bulgarian_split_squat_db: { muscleGroup: "quads", secondaryMuscleGroups: ["hamstrings_glutes"] },
-  hip_abduction_band: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  band_squat: { muscleGroup: "quads", secondaryMuscleGroups: [] },
-  band_chest_press: { muscleGroup: "chest", secondaryMuscleGroups: [] },
-  band_row: { muscleGroup: "back", secondaryMuscleGroups: [] },
-  band_rdl: { muscleGroup: "hamstrings_glutes", secondaryMuscleGroups: [] },
-  band_overhead_press: { muscleGroup: "shoulders", secondaryMuscleGroups: [] },
-  band_curl: { muscleGroup: "biceps", secondaryMuscleGroups: [] },
-  band_triceps_extension: { muscleGroup: "triceps", secondaryMuscleGroups: [] },
-  band_lateral_raise: { muscleGroup: "shoulders", secondaryMuscleGroups: [] },
-  dead_bug: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-  bird_dog: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-  lying_knee_raise: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-  ab_wheel_rollout: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-  weighted_plank: { muscleGroup: "abs", secondaryMuscleGroups: [] },
-};
-// { muscleGroup, secondaryMuscleGroups } of an exerciseId, or null (no group → not aggregated).
-function getExerciseMuscleGroups(exerciseId, exercises) {
-  if (exerciseId != null && Object.prototype.hasOwnProperty.call(ATLAS_MUSCLE_GROUPS, exerciseId)) return ATLAS_MUSCLE_GROUPS[exerciseId];
-  const ex = (exercises || []).find((e) => e && e.id === exerciseId);
-  const cats = ex && Array.isArray(ex.category) ? ex.category : [];
-  const primary = cats.length ? CATEGORY_TO_MUSCLE_GROUP[cats[0]] || null : null;
-  if (!primary) return null;
-  const secondary = [];
-  cats.slice(1).forEach((c) => {
-    const g = CATEGORY_TO_MUSCLE_GROUP[c];
-    if (g && g !== primary && !secondary.includes(g)) secondary.push(g);
-  });
-  return { muscleGroup: primary, secondaryMuscleGroups: secondary };
-}
 // ---- Muscle groups in the UI (NR-MGW-002): one dictionary (MUSCLE_GROUPS) for the exercise form,
 // every muscle-group filter and the badges. Cardio is not a muscle group, but stays a separate filter.
 const MUSCLE_GROUP_BY_ID = Object.fromEntries(MUSCLE_GROUPS.map((g) => [g.id, g]));
@@ -194,35 +86,6 @@ function readMuscleSelection(exercise) {
   return { atlas: false, primary, secondary, legacyUnmapped: !!exercise && cats.length > 0 && !primary && !isCardioExercise(exercise) };
 }
 
-const WORKLOAD_UNIT_BY_KIND = { weight: "kg", bodyweightPlus: "kg", bodyweight: "reps", time: "seconds" };
-// Workload per primary muscle group over sessions with start ≤ session.date < end (either bound
-// optional): { [group]: { sets, kg, reps, seconds, exerciseIds } }.
-function computeMuscleGroupWorkload(history, exercises, start = null, end = null) {
-  const out = {};
-  const s0 = start ? new Date(start).getTime() : -Infinity;
-  const e0 = end ? new Date(end).getTime() : Infinity;
-  (history || []).forEach((h) => {
-    const t = Date.parse(h && h.date);
-    if (Number.isNaN(t) || t < s0 || t >= e0) return;
-    (h.exercises || []).forEach((ex) => {
-      const mg = getExerciseMuscleGroups(ex.exerciseId, exercises);
-      if (!mg) return;
-      const normal = (ex.sets || []).filter((st) => st.setType !== "dropset");
-      if (!normal.length) return;
-      const g = out[mg.muscleGroup] || (out[mg.muscleGroup] = { sets: 0, kg: 0, reps: 0, seconds: 0, exerciseIds: [] });
-      g.sets += normal.length;
-      const unit = WORKLOAD_UNIT_BY_KIND[ex.type];
-      if (unit) g[unit] += computeSessionVolume(ex.sets, ex.type, ex.type === "time");
-      if (!g.exerciseIds.includes(ex.exerciseId)) g.exerciseIds.push(ex.exerciseId);
-    });
-  });
-  return out;
-}
-// The unit a group's workload is compared in: kg first, then bodyweight reps, then seconds.
-function workloadMainUnit(w) {
-  if (!w) return null;
-  return w.kg > 0 ? "kg" : w.reps > 0 ? "reps" : w.seconds > 0 ? "seconds" : null;
-}
 
 // Statistics per muscle group within [start, end): the muscle-group workload layer (no second
 // volume definition, no double counting). Keyed by MUSCLE_GROUPS ids.
@@ -241,46 +104,7 @@ function computeOverallStats(history, start, end) {
   return { sessionsCount: sessions.length, totalSets, totalVolume };
 }
 
-// For every exercise, finds the most recent session that has a stored analysis for it, and
-// counts how many currently sit at each status — a single, honest "how's training going overall"
-// signal instead of having to open every exercise individually.
-function computeProgressSignal(history) {
-  // Latest performance of every exerciseId, analyzed with the CURRENT engine (never a stored,
-  // possibly outdated analysis text). First-ever performances (baseline) aren't a signal yet.
-  const latestByExercise = {};
-  [...history]
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
-    .forEach((h) => {
-      (h.exercises || []).forEach((ex) => {
-        if (ex.type !== "cardio" && ex.sets?.length) latestByExercise[ex.exerciseId] = { session: h, ex };
-      });
-    });
-  const counts = { green: 0, yellow: 0, red: 0, stagnation: 0 };
-  const items = Object.values(latestByExercise)
-    .map(({ session, ex }) => {
-      const a = analyzeSessionExercise(history, session, ex);
-      return a && !a.baseline ? { exerciseId: ex.exerciseId, name: ex.name, ...a } : null;
-    })
-    .filter(Boolean);
-  items.forEach((a) => {
-    if (counts[a.status] !== undefined) counts[a.status]++;
-  });
-  return { counts, items };
-}
 
-// One point per session that trained this muscle group, chronologically (session.date): its
-// workload in that session's main unit plus the exerciseIds it came from.
-function muscleGroupSessionPoints(history, exercises, group) {
-  return [...(history || [])]
-    .filter((h) => !Number.isNaN(Date.parse(h && h.date)))
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
-    .map((h) => {
-      const w = computeMuscleGroupWorkload([h], exercises)[group];
-      const unit = workloadMainUnit(w);
-      return unit ? { date: h.date, volume: w[unit], unit, exerciseIds: [...w.exerciseIds].sort(), planLabel: h.planLabel || h.planName || "Trening bez planu" } : null;
-    })
-    .filter(Boolean);
-}
 
 // Chart series for one muscle group: the last 10 sessions in the unit of the most recent one
 // (kg / reps / seconds are never drawn on one axis).
@@ -291,20 +115,6 @@ function computeCategoryTimeSeries(history, exercises, group) {
   return points.filter((p) => p.unit === unit).slice(-10);
 }
 
-// Most recent session of this muscle group vs the one before it — session-over-session (a chest day
-// and a back day fall on different days). Only an honest comparison: when the exercises or the unit
-// differ, the result is { comparable: false } ("brak porównania"), never an up/down — switching
-// Bench Press → Dumbbell Bench Press is not a chest regression.
-function computeCategoryLastDelta(history, exercises, group) {
-  const points = muscleGroupSessionPoints(history, exercises, group);
-  if (points.length < 2) return null;
-  const last = points[points.length - 1];
-  const prev = points[points.length - 2];
-  const base = { lastDate: last.date, prevDate: prev.date, prevPlanLabel: prev.planLabel, unit: last.unit };
-  if (last.unit !== prev.unit) return { ...base, comparable: false, reason: "unit" };
-  if (last.exerciseIds.join("|") !== prev.exerciseIds.join("|")) return { ...base, comparable: false, reason: "exercises" };
-  return { ...base, comparable: true, lastVolume: last.volume, prevVolume: prev.volume, delta: last.volume - prev.volume };
-}
 
 // A short, deterministic (not literally AI-generated) plain-language summary of where training
 // stands right now: the overall direction, plus the specific exercises driving it.
@@ -325,23 +135,6 @@ function formatReportSet(s, kind) {
   return `${dropTag}${s.weight}kg × ${s.reps}${rirTag}`;
 }
 
-// Scans every session strictly before `beforeDate` for this exercise's historical best, so a
-// "new record" claim in the report is only ever made when there is real prior data to beat.
-function getHistoricalBest(history, exerciseId, beforeDate) {
-  const matches = findMatchingSessions(history, { exerciseId, beforeDate });
-  let maxWeight = 0,
-    maxReps = 0,
-    maxDuration = 0;
-  matches.forEach((s) => {
-    const data = s.exercises.find((e) => e.exerciseId === exerciseId);
-    (data?.sets || []).forEach((st) => {
-      maxWeight = Math.max(maxWeight, Number(st.weight) || 0);
-      maxReps = Math.max(maxReps, Number(st.reps) || 0);
-      maxDuration = Math.max(maxDuration, Number(st.duration) || 0);
-    });
-  });
-  return { hasHistory: matches.length > 0, maxWeight, maxReps, maxDuration };
-}
 
 // The full local "Analiza treningu" report — generated on demand from the session's own saved
 // data plus history, never stored as a separate text blob, so it's automatically correct again

@@ -11,6 +11,15 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const baseline = JSON.parse(readFileSync(resolve(root, "tools/f1-baseline.json"), "utf8"));
 const order = JSON.parse(readFileSync(resolve(root, "src/app/ORDER.json"), "utf8"));
+import { execFileSync } from "node:child_process";
+// The baseline script itself (for the F1.5 line check): from git, index.html at the baseline commit.
+function baselineScript() {
+  const html = execFileSync("git", ["show", `${baseline.ref}:index.html`], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const s = html.indexOf(">", html.indexOf('<script type="text/babel"')) + 1;
+  const text = html.slice(s, html.indexOf("</script>", s));
+  if (sha(text) !== baseline.appScriptSha256) throw new Error("baseline script from git does not match tools/f1-baseline.json");
+  return text;
+}
 let ok = true;
 const report = (cond, msg) => { console.log(`${cond ? "OK  " : "FAIL"} ${msg}`); if (!cond) ok = false; };
 
@@ -37,8 +46,38 @@ if (existsSync(manifestPath)) {
   }
 }
 
+// F1.5: the progression engine moved to src/engine/legacy-progression.js (real ES module). From here
+// on the app and the engine together must contain exactly the baseline's lines: every non-empty
+// line of the baseline script appears in src/app/ or src/engine/ as often as before, and no other
+// non-empty line exists except the engine's own header, its export list and the import in
+// 00-imports.jsx. Behaviour is proved by tests/unit/f1-engine-equivalence.test.mjs.
+const enginePath = resolve(root, "src/engine/legacy-progression.js");
+if (existsSync(enginePath)) {
+  const IMP_BEGIN = "// F1.5 engine";
+  const IMP_END = '} from "@nextrep-engine";\n';
+  const ib = joined.indexOf(IMP_BEGIN);
+  const ie = joined.indexOf(IMP_END);
+  if (ib !== 0 || ie < 0) { console.log("FAIL F1.5 engine import not found at the top of the app"); process.exit(1); }
+  const app = joined.slice(ie + IMP_END.length);
+  let engine = readFileSync(enginePath, "utf8");
+  engine = engine.slice(engine.indexOf("\n\n") + 2);           // drop the module header comment
+  engine = engine.slice(0, engine.lastIndexOf("\nexport {"));   // drop the export list
+  const count = (text) => { const m = new Map(); for (const l of text.split("\n")) if (l.trim()) m.set(l, (m.get(l) || 0) + 1); return m; };
+  const want = count(Buffer.from(baselineScript()).toString());
+  const have = count(app + "\n" + engine);
+  let lost = 0, added = 0;
+  for (const [l, n] of want) if ((have.get(l) || 0) < n) lost += n - (have.get(l) || 0);
+  for (const [l, n] of have) if ((want.get(l) || 0) < n) added += n - (want.get(l) || 0);
+  report(lost === 0 && added === 0, `F1.5 line conservation app + engine vs baseline: ${lost} non-empty lines lost, ${added} added`);
+  const exp = readFileSync(enginePath, "utf8").match(/\nexport \{([^}]*)\};\n$/);
+  const imp = joined.slice(ib, ie).match(/import \{([^}]*)$/);
+  const names = (m) => (m ? m[1].split(",").map((x) => x.trim()).filter(Boolean).sort().join(",") : "");
+  report(exp && imp && names(exp) === names(imp), `engine exports = names imported by the app (${names(exp).split(",").length})`);
+  console.log("     byte identity of the whole script applies up to F1.4; F1.5+ is checked by line conservation + equivalence tests");
+} else {
 report(Buffer.byteLength(joined) === baseline.appScriptBytes, `size ${Buffer.byteLength(joined)} bytes (baseline ${baseline.appScriptBytes})`);
 report(sha(joined) === baseline.appScriptSha256, `sha256 ${sha(joined)} (baseline ${baseline.appScriptSha256})`);
+}
 
 if (baseline.tailwindConfigSha256) {
   const cfg = (await import(pathToFileURL(resolve(root, "src/tailwind-config.mjs")).href)).default;

@@ -24,6 +24,36 @@ import __asset_nextrep_symbol from "@nextrep-assets/nextrep-symbol.png";
 import __asset_nextrep_logo from "@nextrep-assets/nextrep-logo.png";
 import __asset_nextrep_logo_stacked from "@nextrep-assets/nextrep-logo-stacked.png";
 // F1.4 assets (end)
+// F1.5 engine — the progression engine lives in src/engine/ (real ES module)
+import {
+  toNumber,
+  parseRepRange,
+  parseRirBounds,
+  overallRepRange,
+  noteOverride,
+  avgOf,
+  computeSessionVolume,
+  PROGRESSION_MAX_PERFORMANCES,
+  PROGRESSION_LONG_BREAK_DAYS,
+  summarizePerformance,
+  sumTopK,
+  comparePerformances,
+  computeExerciseAnalysis,
+  exerciseHistoryBefore,
+  analyzeSessionExercise,
+  MUSCLE_GROUPS,
+  CATEGORY_TO_MUSCLE_GROUP,
+  ATLAS_MUSCLE_GROUPS,
+  getExerciseMuscleGroups,
+  WORKLOAD_UNIT_BY_KIND,
+  computeMuscleGroupWorkload,
+  workloadMainUnit,
+  computeProgressSignal,
+  muscleGroupSessionPoints,
+  computeCategoryLastDelta,
+  getHistoricalBest,
+  findMatchingSessions,
+} from "@nextrep-engine";
 
 
 

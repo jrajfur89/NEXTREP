@@ -58,6 +58,10 @@ while ((m = re.exec(code))) {
   const n = m[1] || m[2];
   if (!names.includes(n)) names.push(n);
 }
+// F1.5: names the app imports from the engine module are re-exported too, so tests keep calling
+// them through the app bundle exactly as before.
+const engineImport = code.match(/import \{([^}]*)\} from "@nextrep-engine";/);
+if (engineImport) for (const n of engineImport[1].split(",").map((x) => x.trim()).filter(Boolean)) if (!names.includes(n)) names.push(n);
 if (names.length < 300) throw new Error(`build: only ${names.length} top-level names found — extraction looks wrong`);
 
 // Test-only accessor for module-level state (read-only view, no behaviour change).
@@ -89,6 +93,7 @@ await build({
   loader: { ".jsx": "jsx", ".jpg": "dataurl", ".png": "dataurl" },
   alias: {
     "@nextrep-assets": resolve(here, "../../src/assets"),
+    "@nextrep-engine": resolve(here, "../../src/engine/index.js"),
     "lucide-react": resolve(here, "stubs/lucide-react.mjs"),
     "@supabase/supabase-js": resolve(here, "stubs/supabase-js.mjs"),
   },
