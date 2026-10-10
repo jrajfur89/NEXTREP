@@ -1,0 +1,4 @@
+# S1 native spike (STORE FIRST)
+node_modules/
+dist/
+.build-web/

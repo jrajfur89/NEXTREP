@@ -1,0 +1,21 @@
+{
+  "appId": "app.nextrep.spike",
+  "appName": "NEXTREP S1",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#08090A"
+  },
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK"
+    }
+  },
+  "backgroundColor": "#08090A"
+}

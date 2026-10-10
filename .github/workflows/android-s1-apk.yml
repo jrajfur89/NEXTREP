@@ -1,0 +1,85 @@
+name: S1 Android debug APK
+
+# STORE FIRST — S1 spike only. Builds the current app (index.html, unchanged logic) without CDNs,
+# wraps it in Capacitor 8 and publishes a DEBUG APK as a downloadable artifact.
+# Talks only to the TEST Supabase project (nextrep-f5-test). No deployment anywhere.
+on:
+  push:
+    branches: [spike/capacitor-android]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s1-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXTREP_SUPABASE_URL: https://qnyjrvoudyjxvitazclo.supabase.co   # nextrep-f5-test (test project)
+  NEXTREP_SUPABASE_KEY: sb_publishable_m-a9ngkx_UsLw1IglNj-HQ_JdpAqRmy # publishable key of that test project
+  NEXTREP_TARGET: native
+
+jobs:
+  tests:
+    name: Automated tests (514)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install test dependencies
+        working-directory: tests
+        run: npm ci
+      - name: Run tests
+        working-directory: tests
+        run: npm test
+
+  apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Build web app without CDNs
+        env:
+          NEXTREP_BUILD_ID: __native-s1-run${{ github.run_number }}
+        run: node tools/build-web.mjs
+      - name: Check build output (no CDN, test Supabase only)
+        run: |
+          ! grep -RqE 'cdn\.tailwindcss\.com|esm\.sh|unpkg\.com|fonts\.googleapis\.com' dist/index.html dist/assets/*.js dist/assets/*.css
+          ! grep -Rq 'pyhhvbqcjhpulrmqiguz' dist
+          grep -q 'qnyjrvoudyjxvitazclo' dist/assets/app.js
+          cat dist/build-info.json
+      - name: Copy web app into the Android project
+        run: npx cap sync android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Gradle assembleDebug
+        working-directory: android
+        env:
+          NEXTREP_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Name the APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/nextrep-s1-run${{ github.run_number }}.apk"
+          cp dist/build-info.json out/
+          sha256sum out/*.apk | tee out/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nextrep-s1-apk-run${{ github.run_number }}
+          path: out/
+          retention-days: 30
+          if-no-files-found: error

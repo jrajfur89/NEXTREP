@@ -1,0 +1,27 @@
+{
+  "name": "nextrep-native-spike",
+  "private": true,
+  "description": "S1 spike: build index.html without CDNs and wrap it in Capacitor 8 (Android). index.html stays the single source.",
+  "type": "module",
+  "scripts": {
+    "web:build": "node tools/build-web.mjs",
+    "android:sync": "node tools/build-web.mjs && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@fontsource/barlow-condensed": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "@supabase/supabase-js": "2.117.2",
+    "lucide-react": "0.454.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "esbuild": "0.24.0",
+    "postcss": "8.5.6",
+    "tailwindcss": "3.4.19"
+  }
+}
