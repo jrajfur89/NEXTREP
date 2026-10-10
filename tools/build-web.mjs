@@ -1,22 +1,25 @@
-// NEXTREP S1 (STORE FIRST spike) — builds ../index.html into dist/ WITHOUT any CDN at runtime.
+// NEXTREP — builds the app into dist/ WITHOUT any CDN at runtime (S1, source moved to src/ in F1.3).
 //
-// index.html stays the single source of the app; this script never edits it. It:
-//   1. extracts the <script type="text/babel"> body and the inline `tailwind.config`;
-//   2. applies a small, exact list of build-time substitutions (Supabase project, Google Fonts
-//      @import) — each must match exactly once, otherwise the build fails;
-//   3. bundles the app with esbuild (JSX compiled ahead of time; react, react-dom, lucide-react and
-//      supabase-js from npm, pinned to the same versions as the import map);
-//   4. generates the CSS with Tailwind CLI 3 (same config) + self-hosted Inter / Barlow Condensed;
-//   5. writes dist/index.html: same <head>/<body> as the source minus the CDN tags, plus the
-//      update checker with a "__" build id (= switched off: the native app updates through the store).
+// Sources:
+//   src/app/*.jsx (joined in src/app/ORDER.json order — one scope, exactly like the former inline
+//     <script type="text/babel"> of index.html; tools/check-split.mjs proves the bytes),
+//   src/tailwind-config.mjs (the former inline tailwind.config),
+//   index.html (page shell; the app is inserted at the <!-- NEXTREP_APP … --> marker).
+// Steps:
+//   1. join src/app/ and apply a small, exact list of build-time substitutions (Supabase project,
+//      Google Fonts @import) — each must match exactly once, otherwise the build fails;
+//   2. bundle with esbuild (JSX compiled ahead of time; react, react-dom, lucide-react and
+//      supabase-js from npm, pinned in package.json);
+//   3. CSS with Tailwind CLI 3 (same config) + self-hosted Inter / Barlow Condensed;
+//   4. dist/index.html = shell + CSS links + app script, update checker with a "__" build id
+//      (= switched off: the native app updates through the store).
 //
 // Required env: NEXTREP_SUPABASE_URL, NEXTREP_SUPABASE_KEY (publishable key).
 // The production project is refused unless NEXTREP_ALLOW_PROD=1 (never set in S1).
 import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import vm from "node:vm";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import postcss from "postcss";
 import tailwindcss from "tailwindcss";
@@ -39,18 +42,16 @@ if (!["native", "web"].includes(target)) fail(`unknown NEXTREP_TARGET: ${target}
 if (!buildId.startsWith("__")) fail("NEXTREP_BUILD_ID must start with \"__\" (update checker off in the native build)");
 
 const html = readFileSync(resolve(root, "index.html"), "utf8");
-const sourceSha = createHash("sha256").update(html).digest("hex");
+const APP_MARKER = "<!-- NEXTREP_APP: the app (src/app/, src/engine/) and its CSS are added here by tools/build-web.mjs -->";
+if (html.split(APP_MARKER).length !== 2) fail("index.html: app marker not found exactly once");
+if (html.includes('<script type="text/babel"')) fail("index.html still carries an inline app script — the app lives in src/app/");
 
-// ---- 1. pieces of index.html -------------------------------------------------------------
-const babelOpen = html.indexOf('<script type="text/babel"');
-if (babelOpen < 0) fail("<script type=\"text/babel\"> not found");
-const babelBodyStart = html.indexOf(">", babelOpen) + 1;
-const babelBodyEnd = html.indexOf("</script>", babelBodyStart);
-let app = html.slice(babelBodyStart, babelBodyEnd);
-
-const cfgMatch = html.match(/<script>\s*tailwind\.config\s*=\s*([\s\S]*?);\s*<\/script>/);
-if (!cfgMatch) fail("inline tailwind.config not found");
-const tailwindTheme = vm.runInNewContext(`(${cfgMatch[1]})`);
+// ---- 1. sources ---------------------------------------------------------------------------
+const order = JSON.parse(readFileSync(resolve(root, "src/app/ORDER.json"), "utf8"));
+let app = order.map((f) => readFileSync(resolve(root, "src/app", f), "utf8")).join("");
+const sourceSha = createHash("sha256").update(app).digest("hex");
+const tailwindTheme = (await import(pathToFileURL(resolve(root, "src/tailwind-config.mjs")).href)).default;
+const [shellHead, shellTail] = html.split(APP_MARKER);
 
 // ---- 2. exact substitutions --------------------------------------------------------------
 function replaceOnce(src, from, to, what) {
@@ -94,7 +95,7 @@ const twInput = [
 ].join("\n");
 const twOut = await postcss([
   tailwindcss({
-    content: [{ raw: app, extension: "jsx" }, { raw: html.slice(0, babelOpen), extension: "html" }],
+    content: [{ raw: app, extension: "jsx" }, { raw: shellHead, extension: "html" }],
     theme: tailwindTheme.theme,
   }),
 ]).process(twInput, { from: undefined });
@@ -117,12 +118,8 @@ await build({
 writeFileSync(resolve(dist, "assets/app.css"), twOut.css);
 
 // ---- 5. dist/index.html ------------------------------------------------------------------
-let head = html.slice(0, babelOpen);
-const tail = html.slice(babelBodyEnd + "</script>".length);
-head = replaceOnce(head, '<script src="https://cdn.tailwindcss.com"></script>', "", "Tailwind CDN tag");
-head = head.replace(/<script>\s*tailwind\.config\s*=[\s\S]*?<\/script>/, "");
-head = head.replace(/<script type="importmap">[\s\S]*?<\/script>/, "");
-head = replaceOnce(head, '<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>', "", "Babel CDN tag");
+let head = shellHead;
+const tail = shellTail;
 // Native (Capacitor): no viewport-fit=cover, so Capacitor 8 SystemBars pads the app below the status bar
 // and above the navigation bar (like the installed PWA on Android) and reports 0 safe-area insets to
 // the page — the app's existing env(safe-area-inset-bottom) then adds nothing twice.
@@ -139,8 +136,8 @@ for (const f of ["manifest.webmanifest", "nextrep-intro.mp4", "icons"]) {
   cpSync(resolve(root, f), resolve(dist, f), { recursive: true });
 }
 writeFileSync(resolve(dist, "build-info.json"), JSON.stringify({
-  source: "index.html", sourceSha256: sourceSha, buildId, target, supabaseUrl,
+  source: "src/app (ORDER.json) + index.html shell", appSourceSha256: sourceSha, buildId, target, supabaseUrl,
   builtAt: new Date().toISOString(),
 }, null, 2));
 rmSync(work, { recursive: true, force: true });
-console.log(`[build-web] dist/ ready — index.html sha256 ${sourceSha.slice(0, 12)}…, Supabase ${supabaseUrl}, build id ${buildId}`);
+console.log(`[build-web] dist/ ready — src/app sha256 ${sourceSha.slice(0, 12)}…, Supabase ${supabaseUrl}, build id ${buildId}`);

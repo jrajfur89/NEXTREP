@@ -27,6 +27,11 @@ Gwarancje harnessu:
 
 ## Jak to działa
 
+> **Od F1.3 (2026-10-10):** kod aplikacji jest w `../src/app/*.jsx` (sklejane w kolejności
+> `src/app/ORDER.json` — bajt w bajt dawny skrypt z `index.html`, patrz `tools/check-split.mjs`).
+> `harness/build.mjs` czyta `src/app/`; `--ref <commit>` nadal czyta `index.html` starszego commita.
+> Poniższy opis „wycina z `../index.html`” dotyczy stanu sprzed F1.3.
+
 `harness/build.mjs`:
 1. Wycina z `../index.html` skrypt `<script type="text/babel">` (kod aplikacji).
 2. Podmienia **jedyną** linię `createRoot(...).render(<App />);` na `export { … }` wszystkich

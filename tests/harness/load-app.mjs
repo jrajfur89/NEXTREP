@@ -1,4 +1,4 @@
-// Loads the bundle built from index.html inside a jsdom environment (window, document,
+// Loads the bundle built from the app source (src/app/) inside a jsdom environment (window, document,
 // localStorage, navigator …) so module-level code of the app runs like in a browser.
 // Usage in a test:  const app = await loadApp();  app.computeExerciseAnalysis(...)
 // All date tests assume the owner's time zone (Poland; includes DST transitions).
@@ -47,10 +47,12 @@ export function installDom() {
 export async function loadApp() {
   if (!appPromise) {
     if (!existsSync(bundlePath)) throw new Error("Bundle missing — run `npm run build` (or `npm test`) in tests/ first.");
-    // Guard: the bundle must come from the CURRENT index.html.
+    // Guard: the bundle must come from the CURRENT app source (src/app/, joined in ORDER.json order).
     const meta = JSON.parse(readFileSync(metaPath, "utf8"));
-    const md5 = createHash("md5").update(readFileSync(resolve(here, "../../index.html"))).digest("hex");
-    if (meta.indexMd5 !== md5) throw new Error("Bundle is stale (index.html changed) — run `npm run build`.");
+    const srcDir = resolve(here, "../../src/app");
+    const order = JSON.parse(readFileSync(resolve(srcDir, "ORDER.json"), "utf8"));
+    const md5 = createHash("md5").update(order.map((f) => readFileSync(resolve(srcDir, f), "utf8")).join("")).digest("hex");
+    if (meta.indexMd5 !== md5) throw new Error("Bundle is stale (src/app changed) — run `npm run build`.");
     installDom();
     appPromise = import(pathToFileURL(bundlePath).href);
   }

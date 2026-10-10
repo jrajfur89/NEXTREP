@@ -1,6 +1,6 @@
 // Stage 4A.2 — workspace isolation hardening, unit level.
 // D: saveDataToCloud never uploads a workspace that isn't the session's.
-// E: the Supabase SDK is pinned in the importmap.
+// E: the Supabase SDK is pinned (root package.json since F1.3; formerly the importmap).
 // B: purgeDeletedAccountData touches only the deleted account.
 // C: cancelScheduledSync drops the debounced sync timer.
 import { test, describe, before, beforeEach } from "node:test";
@@ -50,16 +50,16 @@ describe("D. saveDataToCloud guard", () => {
 });
 
 describe("E. Supabase SDK version is pinned", () => {
-  test("importmap points exactly to @supabase/supabase-js@2.117.2", () => {
+  // Since F1.3 the app is built from npm packages (tools/build-web.mjs) instead of the esm.sh
+  // importmap, so the pin lives in the root package.json. Same versions as the former importmap.
+  test("package.json pins exactly @supabase/supabase-js 2.117.2 (and React 18.3.1, lucide 0.454.0); no importmap left", () => {
+    const pkg = JSON.parse(readFileSync(resolve(here, "../../package.json"), "utf8"));
+    assert.equal(pkg.dependencies["@supabase/supabase-js"], "2.117.2");
+    assert.equal(pkg.dependencies.react, "18.3.1");
+    assert.equal(pkg.dependencies["react-dom"], "18.3.1");
+    assert.equal(pkg.dependencies["lucide-react"], "0.454.0");
     const html = readFileSync(resolve(here, "../../index.html"), "utf8");
-    const m = html.match(/<script type="importmap">([\s\S]*?)<\/script>/);
-    assert.ok(m, "importmap present");
-    const map = JSON.parse(m[1]).imports;
-    assert.equal(map["@supabase/supabase-js"], "https://esm.sh/@supabase/supabase-js@2.117.2");
-    // nothing else changed: React, ReactDOM and lucide stay on their existing versions
-    assert.equal(map.react, "https://esm.sh/react@18.3.1");
-    assert.equal(map["react-dom/client"], "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1");
-    assert.equal(map["lucide-react"], "https://esm.sh/lucide-react@0.454.0?deps=react@18.3.1&external=react");
+    assert.doesNotMatch(html, /<script type="importmap">|esm\.sh/);
   });
 });
 

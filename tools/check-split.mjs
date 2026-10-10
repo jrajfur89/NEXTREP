@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sha = (s) => createHash("sha256").update(s).digest("hex");
@@ -17,6 +17,11 @@ let ok = true;
 const report = (cond, msg) => { console.log(`${cond ? "OK  " : "FAIL"} ${msg}`); if (!cond) ok = false; };
 report(Buffer.byteLength(joined) === baseline.appScriptBytes, `size ${Buffer.byteLength(joined)} bytes (baseline ${baseline.appScriptBytes})`);
 report(sha(joined) === baseline.appScriptSha256, `sha256 ${sha(joined)} (baseline ${baseline.appScriptSha256})`);
+
+if (baseline.tailwindConfigSha256) {
+  const cfg = (await import(pathToFileURL(resolve(root, "src/tailwind-config.mjs")).href)).default;
+  report(sha(JSON.stringify(cfg)) === baseline.tailwindConfigSha256, "src/tailwind-config.mjs = the former inline tailwind.config of index.html");
+}
 
 const html = readFileSync(resolve(root, "index.html"), "utf8");
 const open = html.indexOf('<script type="text/babel"');
