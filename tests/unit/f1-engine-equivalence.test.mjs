@@ -79,6 +79,8 @@ describe("F1.5 engine equivalence: src/engine/ vs the app engine of a2b9ca0", ()
   });
 
   test("reference available", (t) => {
+    // In CI the full history is checked out, so a missing reference is an error there.
+    if (!OLD && process.env.CI) assert.fail("reference bundle a2b9ca0 could not be built in CI");
     if (!OLD) t.skip("reference bundle unavailable (no git history)");
   });
 
