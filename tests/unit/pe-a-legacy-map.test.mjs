@@ -26,7 +26,7 @@ describe("LEGACY_ATLAS_MODELS covers today's atlas exactly", () => {
   });
   test("the committed map is exactly what tools/gen-legacy-load-map.mjs produces", async () => {
     const src = (await import("node:fs")).readFileSync(new URL("../../src/engine/load-legacy-map.js", import.meta.url), "utf8");
-    assert.ok(src.includes(await generate()));
+    assert.ok(src.includes(await generate(A.DEFAULT_EXERCISES)));
   });
   test("every built-in exercise gets a definite model with confidence high, none unknown", () => {
     for (const ex of A.DEFAULT_EXERCISES) {

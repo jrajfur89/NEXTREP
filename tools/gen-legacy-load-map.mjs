@@ -9,8 +9,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import * as acorn from "acorn";
-import jsx from "acorn-jsx";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const target = resolve(root, "src/engine/load-legacy-map.js");
@@ -24,9 +22,12 @@ export const EXCEPTIONS = {
   bird_dog: { laterality: "alternating" },
 };
 
-export function readDefaultExercises() {
+// acorn is loaded lazily: the tests pass the exercises themselves and run without root packages
+export async function readDefaultExercises() {
+  const { Parser } = await import("acorn");
+  const { default: jsx } = await import("acorn-jsx");
   const src = readFileSync(resolve(root, "src/app/10-atlas-templates.jsx"), "utf8");
-  const ast = acorn.Parser.extend(jsx()).parse(src, { ecmaVersion: "latest", sourceType: "module" });
+  const ast = Parser.extend(jsx()).parse(src, { ecmaVersion: "latest", sourceType: "module" });
   const decl = ast.body.find((n) => n.type === "VariableDeclaration" && n.declarations[0].id.name === "DEFAULT_EXERCISES");
   if (!decl) throw new Error("DEFAULT_EXERCISES not found");
   const init = decl.declarations[0].init;
@@ -34,10 +35,10 @@ export function readDefaultExercises() {
   return Function(`"use strict"; return (${src.slice(init.start, init.end)});`)();
 }
 
-export async function generate() {
+export async function generate(exercises = null) {
   const { inferLoadModel, legacyEquipmentKey } = await import(pathToFileURL(target).href);
   const lines = [];
-  for (const ex of readDefaultExercises()) {
+  for (const ex of exercises || (await readDefaultExercises())) {
     const inferred = inferLoadModel(ex);
     const e = EXCEPTIONS[ex.id] || {};
     const loadModel = e.loadModel || inferred.loadModel;
