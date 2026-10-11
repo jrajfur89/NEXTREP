@@ -1,6 +1,7 @@
 # NEXTREP 1.0 — MASTER PLAN (audyt kompletności)
 
-Wersja 2 · 11.10.2026 · gałąź `release/1.0` · status: **baza planowania** (przyjęta 11.10.2026 z zastrzeżeniem
+Wersja 2 · 11.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** (przyjęta 11.10.2026; kierunki O-10, O-17, O-18,
+O-21 z 11.10 w `DECISIONS_1_0.md` §1a; wcześniej przyjęta z zastrzeżeniem
 uzupełnienia decyzji i specyfikacji)
 
 Zmiany w wersji 2: decyzje F-1–F-10 z 11.10.2026 (rejestr: `DECISIONS_1_0.md`); specyfikacja 4A.10
@@ -144,8 +145,9 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 - **Tylko plan:** wszystko z SPEC 4A.10 (📝).
 - **Przetestowane:** stare mechanizmy: kopia przed wczytaniem chmury (4A.3), izolacja (4A.2); eksport
   w APK ❌ (NR-S1-01). Nowe: nic.
-- **Brakuje:** implementacja; odpowiedzi P1–P6 (O-17, O-18); projekt ekranów w Stitch.
-- **Zależności:** F2.4 (schemat v2), F3, F4 (Filesystem, Share), O-10 (IndexedDB), O-13 (backend testowy).
+- **Brakuje:** implementacja; szczegółowa specyfikacja kosza i retencji kopii (O-17 pkt 5); akceptacja
+  listy typów „Zachowaj obie” i testów T-20–T-32 (`COVERAGE_S_T.md`, O-22); projekt ekranów w Stitch.
+- **Zależności:** F2.4 (schemat v2), F3, F4 (Filesystem, Share), IndexedDB (O-10, przyjęte), O-13 (backend testowy).
 - **Kryteria odbioru:** scenariusze T-01–T-19 (SPEC §6) i S1–S28 zielone; bramka „Zapisz dane w chmurze”
   (SPEC §7) spełniona przed betą.
 - **Priorytet i etap:** P1, z elementami P0 (zasady Z1–Z4, Z7) · F3 (+ pliki w F4).
@@ -393,12 +395,12 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | S17 | zmiana konta z niewysłaną kolejką | ✅ kolejka per przestrzeń, timery anulowane (4A.2) | zachować testy |
 | S18 | gość → nowe konto | 🟠 4A.4 w kodzie, SQL tylko na teście (usuwane, F-5) | przepisanie przestrzeni do konta + kolejka; SPEC 4A.10 T-01–T-04 |
 | S19 | konto z danymi lokalnymi + chmura („Połącz dane”, 4A.5) | ❌ nierozpoczęte | suma zbiorów po UUID; konflikty tylko dla tych samych UUID |
-| S20 | wybór źródła: urządzenie / chmura / puste | ✅ 4A.3 (ok. 100 testów) | uprościć do v2, zachować kopię przed wczytaniem |
+| S20 | wybór źródła: urządzenie / chmura / puste | ✅ 4A.3 (ok. 100 testów) | brak wyboru źródła w v2 (SPEC 4A.10 §4.2); proponowane nowe brzmienie w `COVERAGE_S_T.md` §4 |
 | S21 | przywrócenie kopii lokalnej | 🟡 kopie w kodzie, wpływ na kolejkę niezweryfikowany; wynik kopii „przed przywróceniem” niesprawdzany | „przywróć brakujące” domyślnie, „dokładny stan” jawnie, przez kolejkę; SPEC 4A.10 T-09, T-11, T-15 |
 | S22 | import pliku JSON | ❌ omija kolejkę, może nadać PRO, nadpisuje listy | walidacja v2, podgląd, „Dodaj” domyślnie, kopia przed importem, kolejka, bez PRO; SPEC 4A.10 T-05–T-08, T-14 |
 | S23 | usunięcie konta | ✅ lokalnie (4A.2); w chmurze `delete_user` | + strona WWW, + subskrypcja |
-| S24 | logowanie offline / sesja wygasła offline | ❌ OPEN (4A.6) | zapisana sesja → przestrzeń konta, sync czeka; bez fałszywego logowania |
-| S25 | brak miejsca w pamięci | ❌ jedna wartość `localStorage` na kopie | IndexedDB, limit kopii, komunikat (D11) |
+| S24 | logowanie offline / sesja wygasła offline | ❌ OPEN (4A.6) | O-18: zapisana, wcześniej uwierzytelniona sesja → offline dane tego konta; nowe logowanie wymaga internetu; zmiana konta bez potwierdzonej tożsamości nie ujawnia danych innego konta (T-28) |
+| S25 | brak miejsca w pamięci | ❌ jedna wartość `localStorage` na kopie | IndexedDB (O-10), limit kopii, komunikat; T-13, T-32 |
 | S26 | atlas zmieniony po treningu | ⛔ (stary atlas kopiowany do konta) | snapshot w treningu (F2, D13) |
 | S27 | te same UUID trafiają do drugiego konta (plik lub przestrzeń gościa użyta ponownie) | ⛔ nieopisane | nowe UUID przy imporcie z innego konta; opróżnienie gościa po przeniesieniu; SPEC 4A.10 T-17, T-01 |
 | S28 | operacja na danych przerwana (import, przywracanie, przeniesienie) | 🟡 markery 4A.3 tylko dla wczytania chmury i wysyłki | dziennik operacji i ekran „Dokończ / Cofnij”; SPEC 4A.10 T-04, T-14, T-15 |
@@ -506,14 +508,14 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | B10 | Treść atlasu (390) i słowniki | ścieżka krytyczna | opóźnienie F3, PE-D/F | partie tygodniowe od tygodnia 1 | F2.3 |
 | B11 | Linki e-mail w APK → `https://localhost` | bloker | brak rejestracji / resetu w APK | OTP | F3 |
 | B12 | Lokalne ścieżki darmowego PRO | bloker sklepu | naruszenie zasad Play | usunięcie | F5 |
-| B13 | `localStorage` jako jedyny magazyn | ryzyko | cicha utrata kopii przy limicie | IndexedDB (D11) | F3 |
+| B13 | `localStorage` jako jedyny magazyn | ryzyko | cicha utrata kopii przy limicie | IndexedDB (O-10, przyjęte) | F3 |
 | B14 | Stoper / cardio w tle; powiadomienie przerwy | błąd | złe czasy, przegapiona przerwa | F4 | F4 |
 | B15 | Zmiana hostname/scheme WebView po wydaniu | ryzyko | utrata danych lokalnych | blokada w konfiguracji i test | F7.0 |
 | B16 | Nazwa pakietu `app.nextrep.spike` | decyzja | nazwa stała na zawsze | decyzja przed pierwszym AAB | F7.0 |
 | B17 | `webContentsDebuggingEnabled: true` | bezpieczeństwo | debug w wydaniu | wyłączyć w release | F7.0 |
 | B18 | Brak 12 testerów | ryzyko | brak dostępu do produkcji | rekrutacja od M1 | M1 |
 | B19 | Koszty (Supabase Pro, Vercel Pro, domena, SMTP, Play) | decyzja | blokada F6 | zgody kosztowe | F6 |
-| B20 | Decyzje STORE FIRST D1–D3, D6–D11 bez potwierdzenia | decyzje | blokady F5–F7 | sekcja F | F2–F6 |
+| B20 | Decyzje STORE FIRST D1–D3, D6–D10 bez potwierdzenia (D11 przyjęte jako O-10) | decyzje | blokady F5–F7 | sekcja F | F2–F6 |
 | B21 | Dług 4A.3 F4–F11 | dług | dotyczy starej sync | znika z v2 | F3 |
 | B22 | Podział FREE/PRO niespójny z D10 („Progres %” w FREE, niewyświetlane podpowiedzi) | zaległość | niezgodność produktu | F5 | F5 |
 | B23 | Serwerowe PRO — weryfikacja wdrożenia | zaległość | niepewny stan produkcji starej wersji | tylko odczyt, Twoja zgoda | F5 |
@@ -522,7 +524,7 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | B26 | Ostrzeżenia Supabase / RLS produkcji 1.0 | ryzyko | odrzucenie, wyciek | doradcy bez krytycznych | F6 |
 | B27 | Inne aplikacje „NextRep” w Google Play i App Store | ryzyko marki | odrzucenie nazwy, pomyłki użytkowników, spór o znak | O-12 przed kartą sklepu | F6 |
 | B28 | Backend testowy bez `nextrep-dev` | decyzja | brak E2E na prawdziwym backendzie w F3 | O-13 | F3 |
-| B29 | Sprzeczne ustalenia o logowaniu offline | sprzeczność | trening offline w przestrzeni gościa | O-18 | F3 |
+| B29 | Logowanie offline — rozstrzygnięte (O-18) | zamknięte w dokumentach | — | implementacja i T-28 w F3 | F3 |
 
 ## C. Harmonogram (tydzień 1 = 12.10.2026)
 
@@ -530,7 +532,7 @@ Jeden wykonawca; szacunek, nie zobowiązanie. Kolumna „równolegle” nie wyd�
 
 | Tydzień | Ścieżka krytyczna | Równolegle |
 | --- | --- | --- |
-| 1–2 (12–25.10) | F2.0: decyzje F-0–F-10 ✅ (11.10), odpowiedzi O-17, O-18, O-20, O-21; słowniki Standaryzacji; F2.3 partia 1 | PE-B start (po zgodzie); design D1 (komponenty) w Stitch |
+| 1–2 (12–25.10) | F2.0: decyzje F-0–F-10 ✅ (11.10), kierunki O-10, O-17, O-18 ✅ (11.10); akceptacja O-21, O-22; szczegóły kosza i retencji (O-17); O-20; słowniki Standaryzacji; F2.3 partia 1 | PE-B start (po zgodzie); design D1 (komponenty) w Stitch |
 | 3–4 (26.10–8.11) | F2.4: schemat v2 lokalnie (PGlite), `nextrep_push`, `sync_seq`, RLS, testy; F2.3 partie 2–3 | PE-C, PE-E; F4 start (powiadomienia, stoper, pliki); M1 lista oczekujących |
 | 5–6 (9–22.11) | F2.5 atlas w `exercise_catalog` (lokalnie); F3.1 UUID, magazyn (IndexedDB), kolejka v2 | F2.3 partie 4–6; D2 Dashboard i aktywny trening; F4 lista kontrolna S22 |
 | 7–9 (23.11–13.12) | F3.2 sync v2 + harness S1–S28 + diagnostyka; F3.3 usunięcie migracji (F-5); konto OTP, offline; 4A.10 | PE-D (partie) po atlasie; D3 pozostałe ekrany; backend testowy (O-13) najpóźniej na start F3.2 |
@@ -605,7 +607,7 @@ RevenueCat dla Apple).
 ## F. Decyzje
 
 Rejestr decyzji (podjętych i otwartych) jest w `DECISIONS_1_0.md`. Stan 11.10.2026: F-0–F-10 podjęte;
-otwarte O-01–O-21 (koszty i wybory biznesowe STORE FIRST, identyfikator pakietu, nazwa, backend testowy,
+przyjęte kierunki O-10, O-17, O-18, O-21 (propozycja gotowa); otwarte pozostałe pozycje O-01–O-22 (koszty i wybory biznesowe STORE FIRST, identyfikator pakietu, nazwa, backend testowy,
 Firebase, monitoring web, analityka, pytania 4A.10 i Reporting Engine, logowanie offline, próg PRO+,
 zmiany tekstu dokumentów designu).
 

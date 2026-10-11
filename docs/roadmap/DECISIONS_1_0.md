@@ -1,6 +1,9 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 1 · 11.10.2026 · gałąź `release/1.0`
+Wersja 2 · 11.10.2026 · gałąź `release/1.0`
+
+Zmiany w wersji 2: kierunki O-10, O-17, O-18, O-21 (decyzje z 11.10.2026, po commicie `81e1d4b`);
+MASTER PLAN v2 przyjęty jako aktualna podstawa planowania.
 
 Rejestr zbiera decyzje 1.0: podjęte (z datą i źródłem) i otwarte. Decyzja jest „podjęta” tylko wtedy,
 gdy padła wprost od Ciebie. Rekomendacja w dokumencie nie jest decyzją. Ten plik zastępuje sekcję F
@@ -21,6 +24,16 @@ gdy padła wprost od Ciebie. Rekomendacja w dokumencie nie jest decyzją. Ten pl
 | F-8 | `app.nextrep` jest kandydatem na identyfikator pakietu; zweryfikować przed zatwierdzeniem | sekcja 4 | kandydat; weryfikacja częściowa |
 | F-9 | PRO+ po premierze i starcie marketingu; próg użytkowników z rzeczywistych danych | MASTER PLAN sekcja E | przyjęta; próg otwarty (O-19) |
 | F-10 | Brak zgody na płatny projekt `nextrep-dev` | MASTER PLAN sekcja C (F2.4 tylko lokalnie), O-13 | przyjęta |
+| F-11 | MASTER PLAN v2 (`81e1d4b`) — aktualna podstawa planowania | — | przyjęta |
+
+## 1a. Kierunki przyjęte 11.10.2026 (po `81e1d4b`) — bez rozpoczynania implementacji
+
+| # | Kierunek | Skutek w dokumentach | Co zostaje otwarte |
+| --- | --- | --- | --- |
+| O-10 | **IndexedDB** jako docelowy główny magazyn danych treningowych, z obsługą błędów i ograniczeń pojemności | SPEC 4A.10 §5.1, §8; MASTER PLAN (D11 → przyjęte); test T-32 (propozycja) | szczegóły warstwy magazynu i limitów — projekt w F3 |
+| O-17 | (1) domyślnie nie nadpisujemy danych; (2) zastąpienie danych wymaga **zweryfikowanej** kopii i jawnego potwierdzenia; (3) dane gościa mogą zostać wyczyszczone dopiero po **potwierdzonym przeniesieniu i synchronizacji**; (4) „Zachowaj obie” tylko tam, gdzie bezpieczne kopiowanie z nowym UUID nie narusza spójności; (5) kosz i retencja kopii wymagają szczegółowej specyfikacji | SPEC 4A.10 Z2, Z3, §4.1, §4.4, §9; testy T-29–T-31 (propozycja) | P1 (kosz) i P4 (retencja) — do szczegółowej specyfikacji; lista typów dla „Zachowaj obie” (propozycja w SPEC §4.4) |
+| O-18 | Zapisana, wcześniej uwierzytelniona sesja umożliwia **dostęp offline do lokalnych danych właściwego konta**. Nowe logowanie wymaga internetu. Zmiana konta bez potwierdzonej tożsamości nie może ujawnić danych innego konta | SPEC 4A.10 P6 (rozstrzygnięte), MASTER PLAN S24, B29; test T-28 (propozycja). Zastępuje wcześniejszą zasadę „gość + komunikat” dla sesji zapisanej | szczegóły wygaśnięcia sesji offline — projekt w F3 |
+| O-21 | Przygotować propozycję sześciu poprawek tekstu; Stitch pozostaje głównym workflow; wartości Design Systemu bez zmian bez Twojej zgody | `docs/design/decisions/2026-10-11-design-docs-text-proposal.md` (z kontrolą niezmiennika wartości) | akceptacja poprawek 1–6 |
 
 ## 2. Decyzje otwarte
 
@@ -35,18 +48,19 @@ gdy padła wprost od Ciebie. Rekomendacja w dokumencie nie jest decyzją. Ten pl
 | O-07 | STORE FIRST D8: plan Vercel | koszt | F6 | |
 | O-08 | STORE FIRST D9: termin i sposób wyłączenia starej wersji | biznes | D.3 MASTER PLAN | dotyczy `LEGACY_PRODUCTION_RISKS.md` |
 | O-09 | STORE FIRST D10: panel administratora w aplikacji Android | produkt | F3 | |
-| O-10 | STORE FIRST D11: magazyn lokalny (IndexedDB) | technika | F3, SPEC 4A.10 §5.1 | rekomendacja STORE FIRST: IndexedDB |
+| ~~O-10~~ | STORE FIRST D11: magazyn lokalny | — | — | **przyjęte 11.10** (sekcja 1a) |
 | O-11 | Ostateczny identyfikator pakietu (kandydat `app.nextrep`) | stała na zawsze | Firebase, RevenueCat, Play Console, F7.0 | sekcja 4 |
 | O-12 | Nazwa w sklepie i znak „NextRep” wobec istniejących aplikacji o tej nazwie | biznes / prawo | karta sklepu, marketing | sekcja 4, pkt 4 |
 | O-13 | Backend testowy dla F3 i toru wewnętrznego bez `nextrep-dev`: lokalny Supabase (CLI / Docker w CI, bez kosztu), wolne miejsce po usunięciu `nextrep-f5-test` (wymaga zgody) albo projekt płatny (wymaga zgody kosztowej) | koszt / technika | F3 (testy E2E na prawdziwym backendzie), D.1 | F2.4 może iść lokalnie (PGlite) bez tej decyzji |
 | O-14 | Projekt Firebase dla Crashlytics (plan bezpłatny, ale to nowy zasób) i test zgodności na buildzie | zasób | F6 | sekcja 3 |
 | O-15 | Monitoring błędów wersji web (Crashlytics nie obejmuje przeglądarki): brak / własny zapis błędów w Supabase / Sentry tylko dla web | technika / prywatność | F6 | MASTER PLAN §2.11 |
 | O-16 | Analityka produktowa: narzędzie i zakres zgód | prywatność | F6, Data safety | |
-| O-17 | 4A.10: pytania P1–P5 (kosz, tryby „zastąp”, opróżnianie gościa, retencja, „Zachowaj obie”) | produkt | F3 | `SPEC_4A10_MOJE_DANE.md` §9 |
-| O-18 | Logowanie offline: „gość + komunikat” (decyzja z rozmów) czy „zapisana sesja otwiera przestrzeń konta” (STORE FIRST, 4A.6) | produkt | F3 | SPEC 4A.10 P6; ryzyko L07 |
+| O-17 | 4A.10: kierunki przyjęte 11.10 (sekcja 1a); otwarte: szczegółowa specyfikacja kosza (P1) i retencji kopii (P4), lista typów „Zachowaj obie” | produkt | F3 | `SPEC_4A10_MOJE_DANE.md` §9 |
+| ~~O-18~~ | Logowanie offline | — | — | **przyjęte 11.10** (sekcja 1a) |
 | O-19 | Próg użytkowników do startu PRO+ | biznes | sekcja E | z danych po publikacji (F-9) |
 | O-20 | Reporting Engine: RE-1–RE-6 (eksport raportu, raport tygodniowy, realizacja planu na poziomie planu, wykresy FREE, „Progres %”, etykiety statusów) | produkt | PE-F, PE-G | `REPORTING_ENGINE_MAP.md` §5 |
-| O-21 | Design: zmiany tekstu 1–6 (oznaczenie §17 jako zastąpionego, `STITCH.md` a krój Barlow Condensed, `DESIGN_STATUS.md`, przeniesienie `DESIGN.md` z `main` do `release/1.0`, zrzuty wzorcowe) | dokumentacja | D1 | decyzja projektowa z 11.10 |
+| O-21 | Design: akceptacja propozycji poprawek 1–6 | dokumentacja | D0, D1 | propozycja gotowa (sekcja 1a) |
+| O-22 | Pokrycie scenariuszy: akceptacja nowych testów T-20–T-32, nowego brzmienia S20 i sposobu obsługi duplikatu S3 = T-10 | testy | F3 | `COVERAGE_S_T.md` |
 
 ## 3. F-4: zgodność Crashlytics ze stosem Capacitor (stan weryfikacji)
 

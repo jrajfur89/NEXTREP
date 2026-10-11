@@ -1,6 +1,7 @@
 # NEXTREP 1.0 — Etap 4A.10: „Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”
 
-Wersja 1 · 11.10.2026 · gałąź `release/1.0` · status: **specyfikacja do akceptacji** (dokumentacja,
+Wersja 2 · 11.10.2026 · gałąź `release/1.0` · status: **specyfikacja do akceptacji**; kierunki O-10, O-17,
+O-18 przyjęte 11.10.2026 i wpisane poniżej (dokumentacja,
 bez implementacji)
 
 ## 0. Pochodzenie dokumentu
@@ -13,7 +14,7 @@ została **odtworzona** z trzech źródeł:
    konfliktów), w v2 automatyczna synchronizacja i bezpieczne łączenie rekordów UUID, a ręczne
    „Zapisz dane w chmurze” znika dopiero po bezpiecznym zastąpieniu.
 2. Kod Etapów 4A.1–4A.4 na `release/1.0` (inwentarz w sekcji 2, z odwołaniami do plików).
-3. Ustalenia STORE FIRST (10.10): IndexedDB (D11, decyzja otwarta), eksport przez Filesystem i Share,
+3. Ustalenia STORE FIRST (10.10): IndexedDB (D11; przyjęte 11.10 jako O-10), eksport przez Filesystem i Share,
    import przez kolejkę synchronizacji, brak migracji starych danych do 1.0.
 
 Wszystko, czego nie dało się wyprowadzić z tych źródeł, jest oznaczone jako **pytanie otwarte**
@@ -24,8 +25,8 @@ Wszystko, czego nie dało się wyprowadzić z tych źródeł, jest oznaczone jak
 | # | Zasada | Pochodzenie | Jak sprawdzamy |
 | --- | --- | --- | --- |
 | Z1 | **Izolacja gościa i kont.** Gość, konto A i konto B mają osobne przestrzenie lokalne, kolejki, kopie, konflikty i identyfikator urządzenia. Operacja w jednej przestrzeni nigdy nie czyta ani nie zapisuje innej. | 4A.1–4A.2 (kod i testy `workspace-*`, `accounts-storage`) | testy izolacji przeniesione do v2 |
-| Z2 | **Brak cichego nadpisywania.** Nie ma zasady „nowszy wygrywa”. Ten sam rekord zmieniony w dwóch miejscach daje konflikt. Import i przywracanie domyślnie **dodają**; tryb „zastąp” wymaga jawnego potwierdzenia i opisu skutków. | `ACCOUNT_DATA_MODEL.md` §23, §38 zasada 6 | testy T-05, T-09, T-11 |
-| Z3 | **Kopia przed każdą operacją ryzykowną:** przywracanie, import, przeniesienie gościa do konta, tryb „zastąp”, usunięcie danych z urządzenia. **Jeśli kopii nie da się utworzyć, operacja się nie rozpoczyna** (zmiana względem starego kodu, sekcja 2, uwaga U2). | 4A.3 (`BEFORE_CLOUD_RESTORE`), 4A.4; F-1 | test T-13 (brak miejsca) |
+| Z2 | **Brak cichego nadpisywania.** Nie ma zasady „nowszy wygrywa”. Ten sam rekord zmieniony w dwóch miejscach daje konflikt. Import i przywracanie domyślnie **dodają**; domyślnie nic nie jest nadpisywane. Tryb „zastąp” wymaga **zweryfikowanej** kopii (Z3) i jawnego potwierdzenia z opisem skutków. | `ACCOUNT_DATA_MODEL.md` §23, §38 zasada 6; O-17 (11.10) | testy T-05, T-09, T-11 |
+| Z3 | **Kopia przed każdą operacją ryzykowną:** przywracanie, import, przeniesienie gościa do konta, tryb „zastąp”, usunięcie danych z urządzenia. **Jeśli kopii nie da się utworzyć, operacja się nie rozpoczyna** (zmiana względem starego kodu, sekcja 2, uwaga U2). Przed zastąpieniem danych kopia musi być **zweryfikowana**: zapisana, odczytana z magazynu i zgodna ze źródłem (liczba rekordów każdego typu i suma kontrolna treści). | 4A.3 (`BEFORE_CLOUD_RESTORE`), 4A.4; F-1; O-17 | testy T-13, T-29 |
 | Z4 | **Odzyskanie po błędzie.** Każda operacja wieloetapowa ma zapisany stan „w toku”. Po przerwaniu (zamknięcie aplikacji, brak sieci, błąd) aplikacja przy starcie pokazuje ekran „Dokończ / Cofnij”. „Cofnij” korzysta z kopii z Z3. | markery `loading_cloud`, `uploading_device` (4A.3) | testy T-14, T-15 |
 | Z5 | **Centrum konfliktów.** Każdy konflikt jest widoczny, porównywalny pole po polu i rozstrzygany przez użytkownika z potwierdzeniem. Liczba konfliktów jest widoczna w „Moje dane”. | `ConflictCenterScreen` (13-account-ui.jsx:88) | testy T-10, S2, S3, S9 |
 | Z6 | **Usunięcia są synchronizowane** (tombstony) i nie wracają po cichu. Konflikt „usunięty tu, zmieniony tam” jest jawny. | `ACCOUNT_DATA_MODEL.md` §38 zasada 7 | S3, S6 |
@@ -48,7 +49,7 @@ Status dotyczy kodu `release/1.0`. „Los w v2” to propozycja tej specyfikacji
 | „Pobierz / Przywróć dane z chmury” (stare) | usunięte z UI w 4A.3 | nadpisywało dane bez kopii | **nie wraca** | — |
 | Centrum konfliktów | `13-account-ui.jsx:88`, `08-sync-meta-pull-conflicts.jsx:1189` | porównanie pól, „Zachowaj moją wersję” / „Użyj wersji z chmury”, potwierdzenie | **zostaje**, rozszerzone o konflikt usunięcia i kolejności (sekcja 4.4) | Moje dane |
 | Migracja danych gościa do konta (4A.4) | `04-account-init-migration.jsx`, SQL F-5 (tylko `nextrep-f5-test`) | maszyna migracji z próbami po stronie serwera, blokady, „Dokończ / Przerwij przenoszenie” | **usuwana** (decyzja F-5); zastępuje ją przepisanie przestrzeni + kolejka v2 (sekcja 4.1) | Przenoszenie |
-| Kopie lokalne | `09-backups.jsx` | jeden klucz `localStorage`; typy: automatyczna (co ≥ 4 s), ręczna, przed importem, przed przywróceniem, przed resetem, przed przeniesieniem; limit 10 na przestrzeń + osobne limity kopii bezpieczeństwa | **zostają**, w IndexedDB (D11 otwarta) z limitem liczby i rozmiaru | Kopie |
+| Kopie lokalne | `09-backups.jsx` | jeden klucz `localStorage`; typy: automatyczna (co ≥ 4 s), ręczna, przed importem, przed przywróceniem, przed resetem, przed przeniesieniem; limit 10 na przestrzeń + osobne limity kopii bezpieczeństwa | **zostają**, w IndexedDB (O-10) z limitem liczby i rozmiaru | Kopie |
 | Przywracanie kopii | `09-backups.jsx:144`, `13-account-ui.jsx:1591` | nadpisuje pola lokalne, kopia „przed przywróceniem”, przeładowanie | **zmienione**: tryb „dodaj brakujące” domyślnie, „przywróć dokładny stan” jawnie, przez kolejkę (sekcja 5.2) | Kopie |
 | Eksport JSON | `13-account-ui.jsx:1510` | pobranie pliku przez Blob; w APK nie działa (NR-S1-01) | **zmienione**: Filesystem + Share, format v2 | Przenoszenie |
 | Import JSON | `13-account-ui.jsx:1540` | nadpisuje całe listy, omija kolejkę synchronizacji, może zapisać PRO | **zmienione**: walidacja v2, podgląd, tryb „dodaj” domyślnie, kolejka, bez PRO | Przenoszenie |
@@ -97,7 +98,8 @@ Zawartość ekranu:
 2. „Przenieś”: kopia „przed przeniesieniem” (Z3) → zapis „operacja w toku” (Z4) → przepisanie rekordów
    gościa do przestrzeni konta **z tymi samymi UUID** → wszystkie rekordy do kolejki → wysyłka.
 3. Wynik: po potwierdzeniu przez serwer komunikat z liczbami („Przeniesiono: 12 planów, 140
-   treningów…”); przestrzeń gościa zostaje opróżniona, kopia „przed przeniesieniem” zostaje (retencja
+   treningów…”); przestrzeń gościa zostaje opróżniona **dopiero po potwierdzonym przeniesieniu i pełnej
+   synchronizacji** (kolejka pusta, serwer potwierdził wszystkie rekordy; O-17), kopia „przed przeniesieniem” zostaje (retencja
    w sekcji 5.1). Opróżnienie chroni przed ponownym przeniesieniem tych samych UUID do innego konta.
 4. Konto już ma dane w chmurze: przeniesienie **dodaje** rekordy gościa (zbiory UUID są rozłączne,
    więc nie powstają konflikty). Rekordy podobne z nazwy (np. dwa plany „PPL”) nie są łączone
@@ -143,6 +145,17 @@ w drugim („Przywróć i zachowaj zmiany” / „Usuń”); (c) kolejność tej
 miejscach (konflikt rodzica, wybór jednej kolejności); (d) plik / urządzenie przy imporcie. Każdy wybór
 wymaga potwierdzenia. Ekran dostępny z klawiatury i czytnika ekranu (wymaganie STORE FIRST).
 
+**„Zachowaj obie” (O-17):** dozwolone tylko tam, gdzie kopia z nowym UUID nie narusza spójności.
+Propozycja listy typów (do akceptacji, O-17):
+
+| Typ rekordu | „Zachowaj obie” | Powód |
+| --- | --- | --- |
+| Plan (z ćwiczeniami planu i seriami planu) | tak — cały plan z nowymi UUID dla rodzica i wszystkich dzieci, nazwa z dopiskiem „(kopia)” | kopia samodzielna, bez odwołań z historii |
+| Ćwiczenie własne | tak — nowe UUID; historia dalej wskazuje oryginał i czyta snapshot | snapshot chroni historię (D13) |
+| Trening, ćwiczenie treningu, seria treningu | **nie** | podwójne liczenie objętości, rekordów i statystyk (PE-24) |
+| Pojedyncze ćwiczenie planu lub seria planu | **nie** | naruszenie ciągłości `position` i superserii rodzica |
+| Pomiar, pole własne | **nie** (do potwierdzenia) | duplikat tego samego dnia lub tej samej nazwy pola |
+
 ## 5. Obszar „Kopie i odzyskiwanie”
 
 ### 5.1 Kopie lokalne
@@ -153,7 +166,8 @@ wymaga potwierdzenia. Ekran dostępny z klawiatury i czytnika ekranu (wymaganie 
 | Ręczna | „Utwórz kopię teraz” | wspólny limit z automatycznymi |
 | Przed przywróceniem / importem / przeniesieniem / zastąpieniem / usunięciem z urządzenia | automatycznie przed operacją (Z3) | 2 najnowsze każdego typu + każda, do której odwołuje się operacja w toku; nigdy nie wypierane przez kopie automatyczne |
 
-Magazyn: IndexedDB za warstwą magazynu (D11 otwarta), limit łącznego rozmiaru, komunikat o braku
+Magazyn: IndexedDB za warstwą magazynu (O-10: docelowy główny magazyn danych treningowych i kopii, z
+obsługą błędów i ograniczeń pojemności), limit łącznego rozmiaru, komunikat o braku
 miejsca. Kopie należą do przestrzeni (Z1); lista pokazuje tylko kopie bieżącej przestrzeni.
 
 ### 5.2 Przywracanie kopii
@@ -209,7 +223,8 @@ pobierają się automatycznie (Z11). Gość: ostrzeżenie, że to usunięcie ost
 | T-18 | Eksport i ponowny import tego samego pliku | 0 zmian (wszystko identyczne) |
 | T-19 | Eksport i import na S22 przez Filesystem i Share | plik zapisany i wczytany (zamyka NR-S1-01) |
 
-Scenariusze synchronizacji S1–S28 (MASTER PLAN §3.2) obowiązują równolegle.
+Scenariusze synchronizacji S1–S28 (MASTER PLAN §3.2) obowiązują równolegle. Pokrycie S ↔ T, duplikaty i
+proponowane testy T-20–T-32: `COVERAGE_S_T.md` (do akceptacji, O-22).
 
 ## 7. Bramka usunięcia „Zapisz dane w chmurze”
 
@@ -228,7 +243,7 @@ przycisk bez zmian.
 
 ## 8. Zależności i etap
 
-- Wymaga: schemat v2 i `nextrep_push` (F2.4), klient na v2 (F3), IndexedDB (D11), wtyczki Filesystem i
+- Wymaga: schemat v2 i `nextrep_push` (F2.4), klient na v2 (F3), IndexedDB (O-10), wtyczki Filesystem i
   Share (F4), projekt ekranów (Stitch, D3), backend testowy (decyzja otwarta, rejestr decyzji).
 - Etap wdrożenia: F3 (logika, ekrany), F4 (pliki natywne). Priorytet P1, z elementami P0: Z1–Z4, Z7.
 
@@ -236,9 +251,9 @@ przycisk bez zmian.
 
 | # | Pytanie | Propozycja |
 | --- | --- | --- |
-| P1 | Czy 1.0 ma „Ostatnio usunięte” (kosz) z przywracaniem? | tak, 30 dni, tylko przywracanie (bez edycji); zwiększa bezpieczeństwo przy synchronizowanych usunięciach |
-| P2 | Czy w 1.0 są tryby „Zastąp” (import) i „Przywróć dokładnie ten stan”? | tak, z osobnym potwierdzeniem; bez nich nie da się wycofać masowego błędu |
-| P3 | Czy po przeniesieniu gość → konto przestrzeń gościa ma być opróżniana? | tak (sekcja 4.1 pkt 3), z kopią |
-| P4 | Retencja kopii: liczba i limit rozmiaru | 10 zwykłych, 2 na typ kopii bezpieczeństwa, łącznie do ustalenia po pomiarze rozmiaru danych |
-| P5 | Czy Centrum konfliktów ma opcję „Zachowaj obie” (kopia rekordu z nowym UUID) dla planów i ćwiczeń własnych? | do decyzji; nie dotyczy treningów i serii |
-| P6 | Logowanie offline: wcześniejsza decyzja z rozmów (październik 2026) mówi „bez trybu niepotwierdzonej sesji; gdy sesji nie da się potwierdzić offline — gość i komunikat”, a STORE FIRST (10.10): „zapisana sesja otwiera przestrzeń konta”; `STAGE_4A_PLAN.md` (4A.6) zakłada kontynuację w przestrzeni konta. To wpływa na ryzyko wpisania treningu do przestrzeni gościa offline | wybrać jedną zasadę; jeśli zostaje „gość”, „Moje dane” konta musi wykrywać dane gościa i proponować przeniesienie (4.1 pkt 6) |
+| P1 | Czy 1.0 ma „Ostatnio usunięte” (kosz) z przywracaniem? | **otwarte — wymaga szczegółowej specyfikacji (O-17 pkt 5)**; propozycja wyjściowa: 30 dni, tylko przywracanie |
+| P2 | Tryby „Zastąp” i „Przywróć dokładnie ten stan” | **kierunek przyjęty (O-17):** dopuszczalne wyłącznie ze zweryfikowaną kopią i jawnym potwierdzeniem; domyślnie nic nie jest nadpisywane |
+| P3 | Opróżnianie przestrzeni gościa po przeniesieniu | **kierunek przyjęty (O-17):** dopiero po potwierdzonym przeniesieniu i synchronizacji (§4.1 pkt 3) |
+| P4 | Retencja kopii: liczba i limit rozmiaru | **otwarte — wymaga szczegółowej specyfikacji (O-17 pkt 5)**; propozycja wyjściowa: 10 zwykłych, 2 na typ kopii bezpieczeństwa |
+| P5 | „Zachowaj obie” | **kierunek przyjęty (O-17):** tylko gdzie kopia z nowym UUID nie narusza spójności; lista typów do akceptacji (§4.4) |
+| P6 | Dostęp offline | **przyjęte (O-18):** zapisana, wcześniej uwierzytelniona sesja otwiera offline lokalne dane właściwego konta; nowe logowanie wymaga internetu; zmiana konta bez potwierdzonej tożsamości nie ujawnia danych innego konta (test T-28, `COVERAGE_S_T.md`) |
