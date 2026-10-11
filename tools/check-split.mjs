@@ -1,97 +1,100 @@
-// F1.2 — proof that the split is purely mechanical: the files in src/app/ joined in ORDER.json
-// order are byte-for-byte the app script recorded in tools/f1-baseline.json (index.html at
-// a2b9ca0, the finished S1). While index.html still carries the script (F1.2), it must also be
-// identical to it. Exit code 1 on any difference.
+// F1 proof + current-tree consistency. Exit code 1 on any failure.
+//
+// 1. F1 proof (frozen): the tree at the end of F1 (tools/f1-baseline.json "f1EndRef", read from
+//    git) is exactly the baseline app script of a2b9ca0 — assets re-inlined (F1.4) and every
+//    non-empty line of the baseline present in src/app/ + src/engine/legacy-progression.js as often
+//    as before, nothing added (F1.5). Byte identity of the whole script was proved up to F1.4.
+//    Since PE-A4.5 the app itself changes on purpose, so this proof is checked on the F1 end
+//    commit, not on the working tree; later changes are proved by their own tests
+//    (tests/unit/pe-a-adapter-equivalence.test.mjs compares with the F1.6 build).
+// 2. Current tree: asset files match MANIFEST and each is used once; every name the app imports
+//    from the engine is exported by it; the Tailwind config is the former inline one; index.html
+//    carries no app script.
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const baseline = JSON.parse(readFileSync(resolve(root, "tools/f1-baseline.json"), "utf8"));
-const order = JSON.parse(readFileSync(resolve(root, "src/app/ORDER.json"), "utf8"));
-import { execFileSync } from "node:child_process";
-// The baseline script itself (for the F1.5 line check): from git, index.html at the baseline commit.
+const git = (args, encoding = "utf8") => execFileSync("git", args, { cwd: root, encoding, maxBuffer: 64 * 1024 * 1024 });
+// file at a git ref, or in the working tree when ref is null
+const readAt = (ref, path, binary = false) =>
+  ref ? git(["show", `${ref}:${path}`], binary ? "buffer" : "utf8") : readFileSync(resolve(root, path), binary ? undefined : "utf8");
+
+let ok = true;
+const report = (cond, msg) => { console.log(`${cond ? "OK  " : "FAIL"} ${msg}`); if (!cond) ok = false; };
+
+function joinedApp(ref) {
+  const order = JSON.parse(readAt(ref, "src/app/ORDER.json"));
+  return { order, text: order.map((f) => readAt(ref, `src/app/${f}`)).join("") };
+}
 function baselineScript() {
-  const html = execFileSync("git", ["show", `${baseline.ref}:index.html`], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const html = git(["show", `${baseline.ref}:index.html`]);
   const s = html.indexOf(">", html.indexOf('<script type="text/babel"')) + 1;
   const text = html.slice(s, html.indexOf("</script>", s));
   if (sha(text) !== baseline.appScriptSha256) throw new Error("baseline script from git does not match tools/f1-baseline.json");
   return text;
 }
-let ok = true;
-const report = (cond, msg) => { console.log(`${cond ? "OK  " : "FAIL"} ${msg}`); if (!cond) ok = false; };
-
-let joined = order.map((f) => readFileSync(resolve(root, "src/app", f), "utf8")).join("");
-
-// F1.4: images live in src/assets/. Undo that step exactly — drop the import block and put every
-// "data:<mime>;base64,<bytes>" literal back in place of its identifier — before comparing bytes.
-const manifestPath = resolve(root, "src/assets/MANIFEST.json");
-if (existsSync(manifestPath)) {
-  const { assets } = JSON.parse(readFileSync(manifestPath, "utf8"));
+// F1.4: drop the asset import block and put every data: literal back in place of its identifier
+function reinlineAssets(ref, text, check) {
   const BEGIN = "// F1.4 assets (begin)";
   const END = "// F1.4 assets (end)\n";
-  const b = joined.indexOf(BEGIN);
-  const e = joined.indexOf(END);
-  if (b !== 0 || e < 0) { console.log("FAIL F1.4 asset import block not found at the top of src/app/00-imports.jsx"); process.exit(1); }
-  joined = joined.slice(e + END.length);
+  if (text.indexOf(BEGIN) !== 0 || text.indexOf(END) < 0) { check(false, "F1.4 asset import block at the top of src/app/00-imports.jsx"); return text; }
+  let out = text.slice(text.indexOf(END) + END.length);
+  const { assets } = JSON.parse(readAt(ref, "src/assets/MANIFEST.json"));
   for (const a of assets) {
-    const bytes = readFileSync(resolve(root, "src/assets", a.file));
-    report(sha(bytes) === a.sha256, `asset ${a.file} (${bytes.length} bytes) matches MANIFEST`);
+    const bytes = readAt(ref, `src/assets/${a.file}`, true);
+    check(sha(bytes) === a.sha256, `asset ${a.file} (${bytes.length} bytes) matches MANIFEST`);
     const re = new RegExp(`\\b${a.id}\\b`, "g");
-    const n = (joined.match(re) || []).length;
-    report(n === 1, `asset id ${a.id} used exactly once (found ${n})`);
-    joined = joined.replace(re, () => `"data:${a.mime};base64,${bytes.toString("base64")}"`);
+    const n = (out.match(re) || []).length;
+    check(n === 1, `asset id ${a.id} used exactly once (found ${n})`);
+    out = out.replace(re, () => `"data:${a.mime};base64,${bytes.toString("base64")}"`);
   }
+  return out;
 }
 
-// F1.5: the progression engine moved to src/engine/legacy-progression.js (real ES module). From here
-// on the app and the engine together must contain exactly the baseline's lines: every non-empty
-// line of the baseline script appears in src/app/ or src/engine/ as often as before, and no other
-// non-empty line exists except the engine's own header, its export list and the import in
-// 00-imports.jsx. Behaviour is proved by tests/unit/f1-engine-equivalence.test.mjs.
-const enginePath = resolve(root, "src/engine/legacy-progression.js");
-if (existsSync(enginePath)) {
-  const IMP_BEGIN = "// F1.5 engine";
+// ---- 1. F1 proof on the F1 end commit ---------------------------------------------------------
+{
+  const ref = baseline.f1EndRef;
+  const quiet = (cond, msg) => { if (!cond) report(false, `[F1 ${ref}] ${msg}`); };
+  const { text } = joinedApp(ref);
+  const joined = reinlineAssets(ref, text, quiet);
   const IMP_END = '} from "@nextrep-engine";\n';
-  const ib = joined.indexOf(IMP_BEGIN);
-  const ie = joined.indexOf(IMP_END);
-  if (ib !== 0 || ie < 0) { console.log("FAIL F1.5 engine import not found at the top of the app"); process.exit(1); }
-  const app = joined.slice(ie + IMP_END.length);
-  let engine = readFileSync(enginePath, "utf8");
-  engine = engine.slice(engine.indexOf("\n\n") + 2);           // drop the module header comment
-  engine = engine.slice(0, engine.lastIndexOf("\nexport {"));   // drop the export list
-  const count = (text) => { const m = new Map(); for (const l of text.split("\n")) if (l.trim()) m.set(l, (m.get(l) || 0) + 1); return m; };
-  const want = count(Buffer.from(baselineScript()).toString());
+  const app = joined.slice(joined.indexOf(IMP_END) + IMP_END.length);
+  let engine = readAt(ref, "src/engine/legacy-progression.js");
+  engine = engine.slice(engine.indexOf("\n\n") + 2);
+  engine = engine.slice(0, engine.lastIndexOf("\nexport {"));
+  const count = (t) => { const m = new Map(); for (const l of t.split("\n")) if (l.trim()) m.set(l, (m.get(l) || 0) + 1); return m; };
+  const want = count(baselineScript());
   const have = count(app + "\n" + engine);
   let lost = 0, added = 0;
   for (const [l, n] of want) if ((have.get(l) || 0) < n) lost += n - (have.get(l) || 0);
   for (const [l, n] of have) if ((want.get(l) || 0) < n) added += n - (want.get(l) || 0);
-  report(lost === 0 && added === 0, `F1.5 line conservation app + engine vs baseline: ${lost} non-empty lines lost, ${added} added`);
-  const exp = readFileSync(enginePath, "utf8").match(/\nexport \{([^}]*)\};\n$/);
-  const imp = joined.slice(ib, ie).match(/import \{([^}]*)$/);
-  const names = (m) => (m ? m[1].split(",").map((x) => x.trim()).filter(Boolean).sort().join(",") : "");
-  report(exp && imp && names(exp) === names(imp), `engine exports = names imported by the app (${names(exp).split(",").length})`);
-  console.log("     byte identity of the whole script applies up to F1.4; F1.5+ is checked by line conservation + equivalence tests");
-} else {
-report(Buffer.byteLength(joined) === baseline.appScriptBytes, `size ${Buffer.byteLength(joined)} bytes (baseline ${baseline.appScriptBytes})`);
-report(sha(joined) === baseline.appScriptSha256, `sha256 ${sha(joined)} (baseline ${baseline.appScriptSha256})`);
+  report(lost === 0 && added === 0, `F1 end ${ref}: app + engine = baseline ${baseline.ref} line for line (${lost} lost, ${added} added; assets re-inlined)`);
 }
 
+// ---- 2. current tree --------------------------------------------------------------------------
+const { order, text: current } = joinedApp(null);
+if (existsSync(resolve(root, "src/assets/MANIFEST.json"))) {
+  let assetsOk = true;
+  reinlineAssets(null, current, (c, m) => { if (!c) { assetsOk = false; report(false, m); } });
+  report(assetsOk, "assets: every file matches MANIFEST and every asset id is used exactly once");
+}
+{
+  // names imported by the app from the engine, from every `import { … } from "@nextrep-engine"`
+  const imported = [...current.matchAll(/import \{([^}]*)\} from "@nextrep-engine";/g)].flatMap((m) => m[1].split(",").map((x) => x.trim()).filter(Boolean));
+  const exported = new Set(Object.keys(await import(pathToFileURL(resolve(root, "src/engine/index.js")).href)));
+  const missing = imported.filter((n) => !exported.has(n));
+  report(imported.length > 0 && missing.length === 0, `engine: all ${imported.length} names the app imports are exported by src/engine/index.js${missing.length ? ` (missing: ${missing.join(", ")})` : ""}`);
+  report(new Set(imported).size === imported.length, "engine: no name imported twice");
+}
 if (baseline.tailwindConfigSha256) {
   const cfg = (await import(pathToFileURL(resolve(root, "src/tailwind-config.mjs")).href)).default;
   report(sha(JSON.stringify(cfg)) === baseline.tailwindConfigSha256, "src/tailwind-config.mjs = the former inline tailwind.config of index.html");
 }
-
-const html = readFileSync(resolve(root, "index.html"), "utf8");
-const open = html.indexOf('<script type="text/babel"');
-if (open >= 0) {
-  const s = html.indexOf(">", open) + 1;
-  const inline = html.slice(s, html.indexOf("</script>", s));
-  report(inline === joined, "index.html still carries the script and it is identical to src/app/ (assets re-inlined)");
-} else {
-  console.log("     index.html carries no app script (F1.3+): src/app/ is the only copy");
-}
+report(!readFileSync(resolve(root, "index.html"), "utf8").includes('<script type="text/babel"'), "index.html carries no app script: src/app/ is the only copy");
 console.log(`     ${order.length} files: ${order.join(", ")}`);
 process.exit(ok ? 0 : 1);

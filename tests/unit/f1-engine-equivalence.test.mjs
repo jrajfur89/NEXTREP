@@ -11,6 +11,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRefApp } from "../harness/load-app.mjs";
 import * as ENGINE from "../../src/engine/index.js";
+import * as LEGACY_ENGINE from "../../src/engine/legacy-progression.js";
 
 const REF = "a2b9ca0";
 const here = dirname(fileURLToPath(import.meta.url));
@@ -75,7 +76,8 @@ const same = (name, a, b, ctx) => assert.deepEqual(JSON.parse(JSON.stringify(b ?
 describe("F1.5 engine equivalence: src/engine/ vs the app engine of a2b9ca0", () => {
   test("all 27 names are exported by src/engine/", () => {
     for (const n of NAMES) assert.ok(n in ENGINE, n);
-    assert.equal(Object.keys(ENGINE).length, NAMES.length);
+    // exactly these 27 in the moved module (PE-A4.5 adds volume.js next to it in index.js)
+    assert.equal(Object.keys(LEGACY_ENGINE).length, NAMES.length);
   });
 
   test("reference available", (t) => {

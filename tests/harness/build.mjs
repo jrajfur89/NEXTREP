@@ -9,7 +9,7 @@
 //    with the tests); lucide-react and @supabase/supabase-js are replaced by local stubs
 //    (no network, no real Supabase project is ever contacted).
 // Output: harness/.build/app.bundle.mjs + harness/.build/app.meta.json (md5 of the app source).
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,8 +29,30 @@ const ref = refArg > 0 ? process.argv[refArg + 1] : null;
 // Source of the app (F1.3): src/app/*.jsx joined in src/app/ORDER.json order — exactly the bytes of
 // the former inline script (tools/check-split.mjs). An older commit (--ref) still has the app inline
 // in its index.html, read via `git show` as before.
+// A commit from F1.3 on (app in src/app/) given with --ref: its whole src/ tree is extracted from git
+// into .build/ref-<ref>-src/ and the bundle uses THAT engine and those assets (PE-A4.5 compares
+// with the F1.6 build this way).
+const repoRoot = resolve(here, "../..");
+let srcRoot = resolve(here, "../../src");
+const refHasSrcApp = (() => {
+  if (!ref) return false;
+  try {
+    execFileSync("git", ["cat-file", "-e", `${ref}:src/app/ORDER.json`], { cwd: repoRoot, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+if (refHasSrcApp) {
+  const dir = resolve(outDir, `ref-${ref}-src`);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  const tar = execFileSync("git", ["archive", "--format=tar", ref, "src"], { cwd: repoRoot, maxBuffer: 256 * 1024 * 1024 });
+  execFileSync("tar", ["-x", "-C", dir], { input: tar });
+  srcRoot = resolve(dir, "src");
+}
 function appFromSrc() {
-  const srcDir = resolve(here, "../../src/app");
+  const srcDir = resolve(srcRoot, "app");
   const order = JSON.parse(readFileSync(resolve(srcDir, "ORDER.json"), "utf8"));
   return order.map((f) => readFileSync(resolve(srcDir, f), "utf8")).join("");
 }
@@ -40,11 +62,11 @@ function appFromHtml(html) {
   const bodyStart = html.indexOf(">", open) + 1;
   return html.slice(bodyStart, html.indexOf("</script>", bodyStart));
 }
-const html = ref
+const html = ref && !refHasSrcApp
   ? execFileSync("git", ["show", `${ref}:index.html`], { cwd: resolve(here, "../.."), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
   : null;
 const tag = ref ? `ref-${ref}` : "app";
-let code = ref ? appFromHtml(html) : appFromSrc();
+let code = ref && !refHasSrcApp ? appFromHtml(html) : appFromSrc();
 const code0 = code; // source as read (before the test-only export rewrite)
 
 const RENDER_LINE = 'createRoot(document.getElementById("root")).render(<App />);';
@@ -92,14 +114,14 @@ await build({
   // carried before (the tile-asset tests pin their hashes)
   loader: { ".jsx": "jsx", ".jpg": "dataurl", ".png": "dataurl" },
   alias: {
-    "@nextrep-assets": resolve(here, "../../src/assets"),
-    "@nextrep-engine": resolve(here, "../../src/engine/index.js"),
+    "@nextrep-assets": resolve(srcRoot, "assets"),
+    "@nextrep-engine": resolve(srcRoot, "engine/index.js"),
     "lucide-react": resolve(here, "stubs/lucide-react.mjs"),
     "@supabase/supabase-js": resolve(here, "stubs/supabase-js.mjs"),
   },
   logLevel: "error",
 });
 
-const md5 = createHash("md5").update(ref ? html : code0).digest("hex");
+const md5 = createHash("md5").update(html ?? code0).digest("hex");
 writeFileSync(resolve(outDir, `${tag}.meta.json`), JSON.stringify({ indexMd5: md5, exportedNames: names.length, builtAt: new Date().toISOString() }, null, 2));
-console.log(`[build] ${ref ? ref + ":index.html" : "src/app"} md5=${md5} exported=${names.length} names → harness/.build/${tag}.bundle.mjs`);
+console.log(`[build] ${ref ? ref + (refHasSrcApp ? ":src/app" : ":index.html") : "src/app"} md5=${md5} exported=${names.length} names → harness/.build/${tag}.bundle.mjs`);

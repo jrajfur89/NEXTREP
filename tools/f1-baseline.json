@@ -5,5 +5,7 @@
   "appScriptSha256": "a2044e49d802c96fdd27a49012096d7607a82132f55d0ed82554225e81fb62a0",
   "indexHtmlSha256": "565818f7255bf066a934914cebdc67a3910c398cd413b029d582dad9a33569ed",
   "tailwindConfigSha256": "b6dcea67669b71049a016635d9242755a4ca89be0106a651f69595f360108a6f",
-  "note2": "tailwindConfigSha256 = SHA-256 of JSON.stringify(inline tailwind.config of index.html at a2b9ca0); src/tailwind-config.mjs must give the same value."
+  "note2": "tailwindConfigSha256 = SHA-256 of JSON.stringify(inline tailwind.config of index.html at a2b9ca0); src/tailwind-config.mjs must give the same value.",
+  "f1EndRef": "28e2e70",
+  "note3": "f1EndRef = last commit of F1 (F1.6). Since PE-A4.5 the F1 line-conservation proof is checked on this commit from git; later app changes are proved by their own equivalence tests."
 }

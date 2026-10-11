@@ -194,7 +194,7 @@ function StatsScreen({ history, exercises, onNavigate, onOpenExercise }) {
             {groupsWithData.map((g) => {
               const cat = g.id;
               const st = byCategory[cat];
-              const delta = computeCategoryLastDelta(history, exercises, cat);
+              const delta = muscleGroupLastDelta(history, exercises, cat);
               const meta = CATEGORY_META[g.metaCat] || { icon: Dumbbell, classes: "bg-neutral-800 text-neutral-300" };
               // workload stays in its own units: external-load kg, bodyweight reps, seconds
               const workloadParts = [
@@ -364,7 +364,7 @@ function HistoryScreen({ history, plans, exercises, updatePlans, updateExercises
                       <p className="text-neutral-500 text-xs mt-1">
                         {isCardioSession(s)
                           ? cardioSessionSummary(s) || fmtDuration(s.durationSec)
-                          : `${s.exercisesCount} ${plWord(s.exercisesCount, "ćwiczenie", "ćwiczenia", "ćwiczeń")} · ${s.totalSets} ${plWord(s.totalSets, "seria", "serie", "serii")} · ${Math.round(s.volume)} kg objętości · ${fmtDuration(s.durationSec)}`}
+                          : `${s.exercisesCount} ${plWord(s.exercisesCount, "ćwiczenie", "ćwiczenia", "ćwiczeń")} · ${s.totalSets} ${plWord(s.totalSets, "seria", "serie", "serii")} · ${Math.round(sessionVolume(s))} kg objętości · ${fmtDuration(s.durationSec)}`}
                       </p>
                     </button>
                     <button onClick={() => setConfirmDelete(s)} className="p-2 text-neutral-600 active:text-red-500">
@@ -432,7 +432,7 @@ function HistoryScreen({ history, plans, exercises, updatePlans, updateExercises
                           <span className="text-xs flex-shrink-0">{overallIcon}</span>
                         </div>
                         <p className="text-neutral-500 text-xs mt-1">
-                          {s.totalSets} {plWord(s.totalSets, "seria", "serie", "serii")} · {s.totalReps} powt. · {Math.round(s.volume)} kg objętości
+                          {s.totalSets} {plWord(s.totalSets, "seria", "serie", "serii")} · {s.totalReps} powt. · {Math.round(sessionVolume(s))} kg objętości
                         </p>
                         <p className="text-neutral-400 text-xs mt-1.5 leading-snug">{rep.narrative}</p>
                         <span className="text-orange-400 text-xs font-semibold mt-1.5 inline-flex items-center gap-1">
@@ -503,7 +503,7 @@ function HistoryScreen({ history, plans, exercises, updatePlans, updateExercises
                   <p className="text-neutral-500 text-xs mt-1">
                     {isCardioSession(s)
                       ? cardioSessionSummary(s) || fmtDuration(s.durationSec)
-                      : `${s.exercisesCount} ${plWord(s.exercisesCount, "ćwiczenie", "ćwiczenia", "ćwiczeń")} · ${s.totalSets} ${plWord(s.totalSets, "seria", "serie", "serii")} · ${Math.round(s.volume)} kg objętości · ${fmtDuration(s.durationSec)}`}
+                      : `${s.exercisesCount} ${plWord(s.exercisesCount, "ćwiczenie", "ćwiczenia", "ćwiczeń")} · ${s.totalSets} ${plWord(s.totalSets, "seria", "serie", "serii")} · ${Math.round(sessionVolume(s))} kg objętości · ${fmtDuration(s.durationSec)}`}
                   </p>
                 </button>
                 <button onClick={() => setConfirmDelete(s)} className="p-2 text-neutral-600 active:text-red-500">
@@ -1197,11 +1197,12 @@ function currentExecutionLine(session, ex) {
 }
 
 function HistoryDetail({ session, exercises, history, onBack, onOpenExercise, onStartEdit, onOpenReport, isPro, onOpenUnlock }) {
-  // "Objętość wg ćwiczeń": the canonical computeSessionVolume (same rules as the PRO analysis —
+  // "Objętość wg ćwiczeń": exerciseVolume from the volume access point (src/engine/volume.js);
+  // until PE-A5 that is the canonical computeSessionVolume (same rules as the PRO analysis —
   // weight × reps, MW+ = external load × reps, time = seconds, bodyweight = reps). Units differ
   // by kind, so each bar is scaled against the largest value OF THE SAME UNIT.
   const volUnit = (type) => (type === "time" ? "time" : type === "bodyweight" ? "reps" : "kg");
-  const volumeOf = (ex) => (ex.type === "cardio" ? 0 : computeSessionVolume(ex.sets, ex.type));
+  const volumeOf = (ex) => (ex.type === "cardio" ? 0 : exerciseVolume(ex.sets, ex.type));
   const maxVolumeByUnit = {};
   session.exercises.forEach((ex) => {
     const u = volUnit(ex.type);
@@ -1250,7 +1251,7 @@ function HistoryDetail({ session, exercises, history, onBack, onOpenExercise, on
         </div>
         <div className="grid grid-cols-2 gap-2 mt-2">
           <Stat label="Suma ciężarów" value={`${Math.round(session.totalWeight)} kg`} wide />
-          <Stat label="Objętość" value={`${Math.round(session.volume)} kg`} wide />
+          <Stat label="Objętość" value={`${Math.round(sessionVolume(session))} kg`} wide />
         </div>
 
         {/* Gating: history, comparisons, charts and recommendations exist only in the PRO branch;
@@ -1283,7 +1284,7 @@ function HistoryDetail({ session, exercises, history, onBack, onOpenExercise, on
         <div className="mt-5 space-y-3">
           {session.exercises.map((ex, i) => {
             const liveExercise = exercises.find((e) => e.id === ex.exerciseId);
-            const vol = computeSessionVolume(ex.sets, ex.type);
+            const vol = exerciseVolume(ex.sets, ex.type);
             const sum = summarizeExerciseSets(ex.sets, ex.type);
             // Free: only THIS workout's execution vs the plan (no history). PRO: + analysis panel.
             const currentLine = currentExecutionLine(session, ex);

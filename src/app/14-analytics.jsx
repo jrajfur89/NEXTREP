@@ -90,7 +90,7 @@ function readMuscleSelection(exercise) {
 // Statistics per muscle group within [start, end): the muscle-group workload layer (no second
 // volume definition, no double counting). Keyed by MUSCLE_GROUPS ids.
 function computeStatsByCategory(history, exercises, start, end) {
-  return computeMuscleGroupWorkload(history, exercises, start, end);
+  return muscleGroupWorkload(history, exercises, start, end);
 }
 
 // Session-level totals (already stored on each session) within [start, end).
@@ -100,7 +100,7 @@ function computeOverallStats(history, start, end) {
     return d >= start && d < end;
   });
   const totalSets = sessions.reduce((s, h) => s + (h.totalSets || 0), 0);
-  const totalVolume = sessions.reduce((s, h) => s + (h.volume || 0), 0);
+  const totalVolume = sessions.reduce((s, h) => s + (sessionVolume(h) || 0), 0);
   return { sessionsCount: sessions.length, totalSets, totalVolume };
 }
 
@@ -109,7 +109,7 @@ function computeOverallStats(history, start, end) {
 // Chart series for one muscle group: the last 10 sessions in the unit of the most recent one
 // (kg / reps / seconds are never drawn on one axis).
 function computeCategoryTimeSeries(history, exercises, group) {
-  const points = muscleGroupSessionPoints(history, exercises, group);
+  const points = muscleGroupPoints(history, exercises, group);
   if (!points.length) return [];
   const unit = points[points.length - 1].unit;
   return points.filter((p) => p.unit === unit).slice(-10);
@@ -279,7 +279,7 @@ function generateTrainingReport(session, history, exercises) {
       totalSets: session.totalSets,
       totalReps: session.totalReps,
       totalWeight: session.totalWeight,
-      volume: session.volume,
+      volume: sessionVolume(session),
       durationSec: session.durationSec,
       dropsetCount: (session.exercises || []).reduce((sum, ex) => sum + ex.sets.filter((s) => s.setType === "dropset").length, 0),
     },

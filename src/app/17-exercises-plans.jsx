@@ -496,10 +496,7 @@ function ExerciseDetail({ exercise, history, onBack, updateExercises, isPro, onO
   const totalWorkouts = entries.length;
   const totalSets = entries.reduce((sum, e) => sum + e.data.sets.length, 0);
   const totalReps = entries.reduce((sum, e) => sum + e.data.sets.reduce((s, st) => s + (Number(st.reps) || 0), 0), 0);
-  const totalLoad = entries.reduce(
-    (sum, e) => sum + e.data.sets.reduce((s, st) => s + (Number(st.weight) || 0) * (st.reps != null ? Number(st.reps) : 1), 0),
-    0
-  );
+  const totalLoad = entries.reduce((sum, e) => sum + exerciseDetailVolume(e.data.sets), 0);
   const totalDuration = entries.reduce((sum, e) => sum + e.data.sets.reduce((s, st) => s + (Number(st.duration) || 0), 0), 0);
 
   const chartEntries = [...entries].reverse();
@@ -508,7 +505,7 @@ function ExerciseDetail({ exercise, history, onBack, updateExercises, isPro, onO
   const maxRepsSeries = chartEntries.map((e) => Math.max(0, ...e.data.sets.map((s) => Number(s.reps) || 0)));
   const maxDurationSeries = chartEntries.map((e) => Math.max(0, ...e.data.sets.map((s) => Number(s.duration) || 0)));
   const maxSpeedSeries = chartEntries.map((e) => Math.max(0, ...e.data.sets.map((s) => Number(s.speed) || 0)));
-  const volumeSeries = chartEntries.map((e) => e.data.sets.reduce((s, st) => s + (Number(st.weight) || 0) * (st.reps != null ? Number(st.reps) : 1), 0));
+  const volumeSeries = chartEntries.map((e) => exerciseDetailVolume(e.data.sets));
 
   const kind = getExerciseKind(exercise);
 
@@ -1763,7 +1760,7 @@ function exercisePerformanceSeries(history, session, ex) {
   return [...prior, { session, sets: ex.sets || [], isCurrent: true }].map((p) => ({
     ...p,
     date: p.session.date,
-    volume: computeSessionVolume(p.sets, ex.type),
+    volume: exerciseVolume(p.sets, ex.type),
     summary: summarizeExerciseSets(p.sets, ex.type),
   }));
 }
@@ -1808,7 +1805,7 @@ function workoutComparisonSeries(history, session, mode) {
     session: s,
     date: s.date,
     isCurrent: s === session,
-    volume: Math.round(Number(s.volume) || 0),
+    volume: Math.round(Number(sessionVolume(s)) || 0),
     totalSets: s.totalSets,
     totalReps: s.totalReps,
   }));

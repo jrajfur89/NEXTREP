@@ -54,6 +54,16 @@ import {
   getHistoricalBest,
   findMatchingSessions,
 } from "@nextrep-engine";
+// PE-A (A4.5) volume access point — every volume shown on a screen comes from here
+import {
+  sessionVolume,
+  exerciseVolume,
+  muscleGroupWorkload,
+  muscleGroupPoints,
+  muscleGroupLastDelta,
+  exerciseDetailVolume,
+  draftVolume,
+} from "@nextrep-engine";
 
 
 

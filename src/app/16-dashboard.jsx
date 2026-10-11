@@ -135,7 +135,8 @@ function getNextPlan(plans, history) {
 //                the live clock is Date.now() − startTime and the draft is saved on every change,
 //                on interrupt and when the page is hidden/closed),
 //   done/total — exercises whose planned (non-dropset) sets are all performed / all exercises,
-//   volume     — kg, exactly the formula finish() stores as session.volume, over performed sets
+//   volume     — from the volume access point (src/engine/volume.js, draftVolume); until PE-A5
+//                kg, exactly the formula finish() stores as session.volume, over performed sets
 //                only (isSetPerformed), so the number matches the finished workout's report.
 // An empty or broken draft → null (not treated as an active workout).
 function summarizeActiveWorkoutDraft(draft) {
@@ -146,17 +147,12 @@ function summarizeActiveWorkoutDraft(draft) {
   const saved = Date.parse(draft.savedAt);
   const elapsedSec = Number.isFinite(start) && Number.isFinite(saved) && saved >= start ? Math.floor((saved - start) / 1000) : null;
   let done = 0;
-  let volume = 0;
   items.forEach((it) => {
     const sets = Array.isArray(it.sets) ? it.sets : [];
     const planned = sets.filter((st) => st && st.setType !== "dropset");
     if (planned.length > 0 && planned.every((st) => isSetPerformed(st, it.type))) done++;
-    sets
-      .filter((st) => st && isSetPerformed(st, it.type))
-      .forEach((st) => {
-        volume += (toNumber(st.weight) || 0) * (st.reps !== "" && st.reps != null ? Number(st.reps) : 1);
-      });
   });
+  const volume = draftVolume(items, isSetPerformed);
   return { name: (draft.plan && draft.plan.name) || "Trening bez planu", elapsedSec, doneExercises: done, totalExercises: items.length, volume };
 }
 
