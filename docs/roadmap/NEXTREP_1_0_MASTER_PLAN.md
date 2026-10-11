@@ -1,6 +1,13 @@
 # NEXTREP 1.0 — MASTER PLAN (audyt kompletności)
 
-Wersja 1 · 11.10.2026 · gałąź `release/1.0` (HEAD `31d4da3`) · status: **do akceptacji**
+Wersja 2 · 11.10.2026 · gałąź `release/1.0` · status: **baza planowania** (przyjęta 11.10.2026 z zastrzeżeniem
+uzupełnienia decyzji i specyfikacji)
+
+Zmiany w wersji 2: decyzje F-1–F-10 z 11.10.2026 (rejestr: `DECISIONS_1_0.md`); specyfikacja 4A.10
+(`SPEC_4A10_MOJE_DANE.md`); mapa Reporting Engine (`REPORTING_ENGINE_MAP.md`); konflikt narzędzi designu
+(`docs/design/decisions/2026-10-11-design-tool-google-stitch.md`); rejestr ryzyk starej produkcji
+(`LEGACY_PRODUCTION_RISKS.md`); weryfikacja Crashlytics i propozycja monitoringu synchronizacji (§2.11);
+weryfikacja identyfikatora pakietu. Sekcja F przeniesiona do rejestru decyzji.
 
 Ten dokument zbiera w jednym miejscu wszystko, co ustalono dla NEXTREP 1.0, i porównuje to z tym,
 co faktycznie jest w kodzie i w testach. Nie zmienia żadnej decyzji produktowej. Tam, gdzie ustalenia
@@ -15,7 +22,7 @@ są sprzeczne albo niepełne, zapisuje to jako kwestię do decyzji (sekcja F).
 `docs/design/` z `main`, `docs/atlas/`, `tests/README.md`); dokumenty projektu: „NEXTREP 1.0 STORE
 FIRST — audyt i plan” (10.10), „Progress Engine 2.0: audyt i specyfikacja” (10–11.10), „F1: plan
 modularizacji”, „F1: raport końcowy i plan PE-A”, „A4.5: raport i plan F2”, „F2: projekt struktury
-atlasu” (v2); Twoje decyzje z rozmów (S1, F1, PE-A, F2 v2, K2–K4, P1–P4).
+atlasu” (v2); Twoje decyzje z rozmów (S1, F1, PE-A, F2 v2, K2–K4, P1–P4, F-0–F-10).
 
 **Statusy.** Funkcja jest „gotowa” wyłącznie z dowodem w kodzie i w teście (automatycznym albo
 na telefonie). Stary plan, opis w dokumencie ani status w `STAGE_STATUS.md` nie są dowodem.
@@ -46,9 +53,9 @@ wdrożony tylko na `nextrep-f5-test`, nie na produkcji (`docs/sql/README.md`). D
 2. **Stara synchronizacja ma znaną utratę danych:** ciężar z przecinkiem („62,5”) trafia do chmury jako
    `null` (`docs/sql/README.md` §8, niepoprawione). Kolejność ćwiczeń i serii w planach nie jest
    synchronizowana (brak `position`, Etap 13 zaparkowany). To uzasadnia czysty start 1.0 na v2.
-3. **Etap 4A.10** („Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”) nie ma dokumentu w
-   repozytorium ani ekranów w kodzie. Dziś są ekrany „Moje konto”, „Kopia zapasowa”, „Konflikty
-   synchronizacji”. Potrzebuję treści tych ustaleń (decyzja F-1).
+3. **Etap 4A.10** („Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”) — specyfikacja
+   odtworzona 11.10 (F-1) w `SPEC_4A10_MOJE_DANE.md`; w kodzie brak tych ekranów (są „Moje konto”,
+   „Kopia zapasowa”, „Konflikty synchronizacji”). Pytania P1–P6 otwarte.
 4. **Atlas 1.0:** gotowe narzędzia (walidator, szablon, import, kontrakt snapshotu); treść 0 z ok. 390
    ćwiczeń. Gotowe plany (8 szablonów) wskazują stare identyfikatory i trzeba je zbudować od nowa.
 5. **Progress Engine 2.0:** zrobione PE-A1–A4 i A4.5 (fundament, bez zmian na ekranach). PE-B–PE-H,
@@ -59,9 +66,12 @@ wdrożony tylko na `nextrep-f5-test`, nie na produkcji (`docs/sql/README.md`). D
    (dźwięk końca przerwy przy zgaszonym ekranie) otwarte. Stoper i timer cardio liczą tyknięcia.
 8. **Konto:** rejestracja, logowanie, reset hasła i usuwanie konta są w kodzie, ale linki z e-maili
    w APK prowadzą na `https://localhost`. Brak polityki prywatności, regulaminu i strony WWW usuwania konta.
-9. **Monitoring i marketing:** brak w kodzie (Crashlytics/Sentry, analityka, lista oczekujących).
-10. **Design:** fundamenty DONE, komponenty i ekrany w większości TODO. Twoja wiadomość mówi o Google
-    Stitch, a `DESIGN.md` §17 (10.10) przenosi pracę do Claude Design — do potwierdzenia (F-2).
+9. **Monitoring i marketing:** brak w kodzie. F-4: Crashlytics (zgodność z Capacitor 8 deklarowana, test
+   buildu przed przyjęciem); propozycja monitoringu synchronizacji w §2.11. Brak analityki i listy oczekujących.
+10. **Design:** fundamenty DONE, komponenty i ekrany w większości TODO. F-2: ekrany w Google Stitch;
+    `DESIGN.md` §17 na `main` (Claude Design) jest z tym sprzeczny, a `release/1.0` ma starszą wersję
+    `DESIGN.md` — konflikty K1–K8 i propozycje zmian tekstu czekają na akceptację.
+11. **Nazwa:** w Google Play i App Store istnieją już aplikacje „NextRep” (rejestr decyzji, O-12).
 
 Szacunek: publikacja w Google Play ok. **tydzień 19–22 od dziś** (luty–marzec 2027), przy jednym
 wykonawcy, terminowym dostarczaniu treści atlasu i szybkich decyzjach. Ścieżka krytyczna: treść
@@ -114,27 +124,31 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
   (19). **Nieprzetestowane automatycznie:** push / pull / apply / konflikty / tombstony na dwóch
   urządzeniach (harness utracony — `tests/README.md`), SQL i RLS produkcji (testy utracone).
 - **Brakuje:** całość v2 (patrz sekcja 3.3), harness dwóch urządzeń na prawdziwym Postgresie (PGlite jest
-  już w testach), testy RLS każdej tabeli, decyzja o losie 4A.4 (usunięcie przy czystym starcie).
-- **Zależności:** F2 (atlas, snapshot), projekt `nextrep-dev` (koszt, osobna zgoda), decyzja F-1 (4A.10).
+  już w testach), testy RLS każdej tabeli, usunięcie kodu 4A.4 / F-5 (decyzja F-5, 11.10).
+- **Zależności:** F2 (atlas, snapshot), backend testowy bez `nextrep-dev` (F-10: brak zgody; O-13),
+  SPEC 4A.10 (F-1).
 - **Kryteria odbioru:** sekcja 3.4.
 - **Priorytet i etap:** P0 · F2.4 (schemat v2 lokalnie) → F3 (klient na v2).
 
 ### 2.3 Uproszczenie danych z Etapu 4A.10: „Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”
 
-- **Wcześniejsze ustalenia:** wymienione w Twojej wiadomości; w repozytorium i w dokumentach projektu nie
-  znalazłem opisu Etapu 4A.10 (ostatni opisany krok to 4A.9 „Final regression”).
-- **Stan w kodzie:** brak tych trzech ekranów. Są: „Moje konto” (konto, synchronizacja, wybór źródła,
-  przenoszenie danych gościa 4A.4), „Kopia zapasowa” (kopie lokalne w `localStorage`, limit 10 na
-  przestrzeń, eksport JSON przez Blob, import przez plik), „Konflikty synchronizacji”. Teksty
-  „Przenoszenie danych…” istnieją tylko jako komunikaty migracji 4A.4.
-- **Tylko plan / brakuje:** specyfikacja 4A.10 (zakres, co znika, co zostaje), projekt ekranów.
-- **Przetestowane:** kopie lokalne i przywracanie przed wczytaniem chmury (4A.3); eksport w APK ❌ (NR-S1-01).
-- **Zależności:** F-1 (treść ustaleń), v2 (przy UUID „Przenoszenie” = przepisanie przestrzeni + kolejka),
-  F4 (pliki natywne), D11 STORE FIRST (IndexedDB).
-- **Kryteria odbioru:** trzy ekrany zgodne ze specyfikacją; eksport i import pliku na S22; import przez
-  kolejkę synchronizacji i bez nadawania PRO; przywrócenie kopii z potwierdzeniem i kopią sprzed
-  przywrócenia; gość widzi ostrzeżenie o utracie danych przy odinstalowaniu.
-- **Priorytet i etap:** P1 · specyfikacja w F2, wdrożenie w F3 (+ pliki w F4).
+- **Ustalenia:** F-1 (11.10): trzy obszary; zasady starego systemu (izolacja gościa i kont, brak cichego
+  nadpisywania, kopia przed przywracaniem, odzyskanie po błędzie, Centrum konfliktów); w v2 automatyczna
+  synchronizacja i łączenie po UUID; „Zapisz dane w chmurze” znika dopiero po spełnieniu bramki.
+  Specyfikacja: `SPEC_4A10_MOJE_DANE.md` (odtworzona, oryginał 4A.10 nie istnieje w repozytorium).
+- **Stan w kodzie:** brak trzech ekranów. Są: „Moje konto” (konto, synchronizacja, wybór źródła,
+  „Zapisz dane w chmurze” do `user_data`, przenoszenie 4A.4), „Kopia zapasowa” (kopie w `localStorage`,
+  limit 10, eksport Blob, import nadpisujący), „Konflikty synchronizacji”. Luki U1–U4 starego kodu
+  (PRO z importu, niesprawdzana kopia przed importem i przywróceniem, import poza kolejką, jeden klucz
+  `localStorage`) — SPEC §2.
+- **Tylko plan:** wszystko z SPEC 4A.10 (📝).
+- **Przetestowane:** stare mechanizmy: kopia przed wczytaniem chmury (4A.3), izolacja (4A.2); eksport
+  w APK ❌ (NR-S1-01). Nowe: nic.
+- **Brakuje:** implementacja; odpowiedzi P1–P6 (O-17, O-18); projekt ekranów w Stitch.
+- **Zależności:** F2.4 (schemat v2), F3, F4 (Filesystem, Share), O-10 (IndexedDB), O-13 (backend testowy).
+- **Kryteria odbioru:** scenariusze T-01–T-19 (SPEC §6) i S1–S28 zielone; bramka „Zapisz dane w chmurze”
+  (SPEC §7) spełniona przed betą.
+- **Priorytet i etap:** P1, z elementami P0 (zasady Z1–Z4, Z7) · F3 (+ pliki w F4).
 
 ### 2.4 Atlas ok. 390 ćwiczeń i gotowe plany
 
@@ -158,17 +172,19 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 
 ### 2.5 Finalny design i dokumentacja marki
 
-- **Ustalenia:** `DESIGN.md` (kolory, typografia, odstępy, promienie, efekty — DONE), kierunek aktywnego
-  treningu (§15), fotografia (§16), zasoby marki: Logotype i Symbol niezmienne (§18, 11.10). §17: praca
-  wizualna w Claude Design, notatki Stitch historyczne. Twoja wiadomość: „według Google Stitch”.
+- **Ustalenia:** `DESIGN.md` na `main` (kolory, typografia, odstępy, promienie, efekty — DONE), kierunek
+  aktywnego treningu (§15), fotografia (§16), zasoby marki: Logotype i Symbol niezmienne (§18, 11.10).
+  F-2 (11.10): ekrany w **Google Stitch**, `DESIGN.md` = zasady, Claude = implementacja; wartości bez
+  zmian. Konflikty z §17 (Claude Design) i ze `STITCH.md` (tylko Inter, a §3 ma Barlow Condensed) oraz
+  starsza wersja `DESIGN.md` na `release/1.0`: `docs/design/decisions/2026-10-11-design-tool-google-stitch.md`.
 - **Stan w kodzie:** obecny wygląd aplikacji (Tailwind, ciemny motyw), stare logo w aplikacji;
   nowe zasoby marki nie są wdrożone (wymaga osobnej zgody). `DESIGN_STATUS.md`: komponenty poza
   przyciskami i kartami TODO; ekrany „not yet designed”; prototyp i przekazanie do implementacji TODO.
 - **Przetestowane:** test wizualny chroni OBECNY wygląd (20 ekranów); nowego designu nie ma czego testować.
 - **Brakuje:** komponenty, 9–10 ekranów, stany puste/błędów, ekrany nowych funkcji (4A.10, PRO/PRO+,
   zakupy, zgody, usuwanie konta, onboarding), grafiki sklepu, ikona aplikacji 1.0.
-- **Zależności:** F-2 (narzędzie: Claude Design czy Stitch), PE-F/G/H (nowe ekrany statystyk, raportu,
-  treningu), F3 (dane v2).
+- **Zależności:** O-21 (zmiany tekstu dokumentów designu, w tym przeniesienie aktualnego `DESIGN.md`
+  na `release/1.0`), projekt Stitch, PE-F/G/H (nowe ekrany statystyk, raportu, treningu), F3 (dane v2).
 - **Kryteria odbioru:** każdy ekran zaakceptowany i opisany w `docs/design/`; wdrożenie bez zmian logiki;
   nowe wzorce wizualne w teście wizualnym; kontrast sprawdzony na urządzeniu.
 - **Priorytet i etap:** P1 · D1–D4 (sekcja C) równolegle z F2–F3; wdrożenie w F3.5.
@@ -176,20 +192,19 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 ### 2.6 Progress Engine 2.0 i NEXTREP Reporting Engine
 
 - **Ustalenia:** D1–D14 i PE-01–PE-32 (10.10), P1–P4, K2–K4, praca partii (F2 v2 pkt 1), etapy PE-A–PE-H,
-  A5 jako ostatni krok F3 z osobną bramką. „NEXTREP Reporting Engine” nie ma osobnej specyfikacji;
-  w specyfikacji PE to raport (PE-G: podsumowanie trenera, Najlepsze momenty, zakładki Ćwiczenia /
-  Partie, „Na następny trening”) i statystyki (PE-F).
-- **Stan w kodzie:** stary silnik (`legacy-progression.js`, F1.5) zasila wszystkie ekrany; nowy
-  fundament: `load.js`, `volume.js` (wzory F1.6), `muscle-work.js`, `load-snapshot.js` — nieużywane przez
-  ekrany poza punktem dostępu z wzorami F1.6.
-- **Przetestowane:** PE-03–07, PE-18, część PE-08 ✅; stary silnik: 43 + 5 testów progresji, 39 partii.
-  Raport, rekordy i „Twój następny krok” nie mają testów (specyfikacja PE).
-- **Brakuje:** PE-B (analiza ćwiczenia), PE-C (cele i teksty), PE-D (partie, tygodnie), PE-E (rekordy,
-  w tym błąd przecinka w `getHistoricalBest`), PE-F (statystyki, archiwum), PE-G (raport), PE-H (aktywny
-  trening), A5, specyfikacja Reporting Engine (raporty tygodniowe? eksport? — F-3).
-- **Zależności:** PE-B/C/E — brak (czyste funkcje, można zaczynać); PE-D/F — atlas F2; PE-F/G/H i A5 — F3.
+  A5 jako ostatni krok F3 z osobną bramką. F-3 (11.10): Reporting Engine obejmuje progresję, regresję,
+  objętość, rekordy, trendy, stagnację, realizację planu i rekomendacje — mapa obszarów, powierzchni
+  i zależności: `REPORTING_ENGINE_MAP.md`.
+- **Stan w kodzie (dowody, 11.10):** PE-A ✅ (`load.js`, `volume.js`, testy `pe-a-*`); `muscle-work.js` i
+  `load-snapshot.js` ✅ (testy F2); PE-B–PE-H i A5: brak kodu w `src/engine/`. Ekrany korzystają ze
+  starego silnika (`legacy-progression.js`, `14-analytics.jsx`).
+- **Przetestowane:** PE-03–07, PE-18, część PE-08; stary silnik: 43 + 5 testów progresji, 39 testów
+  partii. Raport, rekordy i „Twój następny krok” bez testów.
+- **Brakuje:** PE-B–PE-H, A5; odpowiedzi RE-1–RE-6 (O-20).
+- **Zależności:** PE-B/C/E — brak (czyste funkcje); PE-D — treść atlasu; PE-F/G/H i A5 — F3 i projekty
+  ekranów (graf w mapie, §3).
 - **Kryteria odbioru:** PE-01–PE-32 zielone; PE-17 i PE-24 na S22; raport i aktywny trening z jednej
-  funkcji; brak ekranu z własnym wzorem obliczeń.
+  funkcji; brak ekranu z własnym wzorem obliczeń; każdy z ośmiu obszarów mapy ma wskazane testy.
 - **Priorytet i etap:** P0 (PE-B, C, E, G, H) / P1 (PE-D, F) · PE-B/C/E równolegle z F2; PE-D–H w F3; A5 na końcu F3.
 
 ### 2.7 FREEMIUM, PRO i architektura PRO+
@@ -262,7 +277,8 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
   i rejestracja w APK — nie.
 - **Brakuje:** OTP, SMTP, domena, dokumenty prawne, strona usuwania konta, poprawiony tekst, decyzja
   o panelu admina w Androidzie (STORE FIRST D10), `webContentsDebuggingEnabled: false` w wydaniu,
-  ostateczna nazwa pakietu (dziś `app.nextrep.spike`), klucz wydaniowy i Play App Signing.
+  ostateczna nazwa pakietu (dziś `app.nextrep.spike`; kandydat `app.nextrep` — weryfikacja w
+  `DECISIONS_1_0.md` §4), klucz wydaniowy i Play App Signing.
 - **Zależności:** D7 (domena), F6 (produkcja), F5 (ostrzeżenie o subskrypcji).
 - **Kryteria odbioru:** cały cykl konta kodem z e-maila na S22; usunięcie konta w aplikacji i przez WWW;
   doradcy bezpieczeństwa Supabase bez ostrzeżeń krytycznych; testy RLS każdej tabeli v2.
@@ -270,15 +286,34 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 
 ### 2.11 Monitoring
 
-- **Ustalenia:** błędy przed publikacją (pamięć: Sentry, bez danych treningowych i osobowych; Twoja
-  wiadomość: Crashlytics); Android Vitals; diagnostyka synchronizacji, płatności i reklam.
-- **Stan w kodzie:** brak SDK błędów i analityki; diagnostyka synchronizacji tylko w konsoli
-  (`[sync diag]`) i panelu admina (statystyki użytkowników).
-- **Brakuje:** wybór narzędzia (F-4), zgody i Data safety dla analityki, zdarzenia produktowe (lista),
-  panel zdrowia synchronizacji (kolejki, konflikty, błędy push), monitoring webhooków płatności.
-- **Kryteria odbioru:** awaria testowa widoczna w panelu w < 5 min bez danych osobowych; zdarzenia
-  zgodne z polityką prywatności; alarmy dla 5xx Supabase i błędów webhooka.
-- **Priorytet i etap:** P0 (błędy), P1 (analityka) · F6.
+- **Ustalenia:** F-4 (11.10): Crashlytics dla Androida, warunkowo — po potwierdzeniu zgodności z
+  Capacitor; Android Vitals; diagnostyka synchronizacji, płatności i reklam; bez danych treningowych i
+  osobowych w raportach błędów (wcześniejsze ustalenie).
+- **Stan w kodzie:** brak SDK błędów i analityki; brak globalnej obsługi błędów JS; diagnostyka
+  synchronizacji tylko w konsoli (`[sync diag]`) i w panelu admina (statystyki użytkowników).
+- **Weryfikacja Crashlytics (11.10):** `@capacitor-firebase/crashlytics` 8.5.2 deklaruje Capacitor ≥ 8
+  (nasz 8.5.3) — zgodność deklarowana ✅, potwierdzenie buildem ❌ (wymaga projektu Firebase, O-14).
+  Ograniczenia: tylko Android i iOS (wersja web bez monitoringu, O-15); błędy JS z WebView trzeba
+  przekazywać ręcznie (`window.onerror`, `unhandledrejection` → `recordException`); bundel minifikowany
+  bez map źródeł, więc stosy JS będą mało czytelne. Szczegóły: `DECISIONS_1_0.md` §3.
+- **Propozycja: monitoring synchronizacji (v2)**
+
+  | Warstwa | Co mierzymy | Jak | Bez danych treningowych |
+  | --- | --- | --- | --- |
+  | Klient — dziennik diagnostyczny | długość kolejki, wiek najstarszej zmiany, próby i wyniki wysyłki wg klasy (sieć, 401/403, konflikt wersji, 5xx), konflikty utworzone i rozstrzygnięte, czas i liczba rekordów pobrania, data ostatniej potwierdzonej synchronizacji, blokada minimalnej wersji, nieudane kopie bezpieczeństwa, brak miejsca | lokalny bufor (np. 500 ostatnich zdarzeń, IndexedDB); ekran „Diagnostyka synchronizacji” w „Moje dane” z eksportem raportu do zgłoszenia | tylko liczby, kody i znaczniki czasu |
+  | Klient — Crashlytics | klucze kontekstu (stan synchronizacji, przedział długości kolejki, przedział wieku ostatniej synchronizacji, wersja schematu); zdarzenia niekrytyczne przy naruszeniu niezmienników (duplikat UUID, osierocony rekord po pobraniu, ujemna lub zdublowana `position`, nieudane rozstrzygnięcie konfliktu, nieoczekiwana odpowiedź `nextrep_push`) | `setCustomKey`, `recordException` | jw.; identyfikator użytkownika nie jest wysyłany (do decyzji przy Data safety) |
+  | Serwer — `nextrep_push` | na każde wywołanie: liczba zaakceptowanych, konfliktów, odrzuconych, wersja klienta, czas | tabela `sync_events` (tylko liczniki), retencja 30–90 dni | jw. |
+  | Serwer — kontrole niezmienników | dzieci bez rodzica, zdublowane pozycje na liście, żywe dzieci usuniętego rodzica, spadek wersji | zapytanie okresowe (mechanizm harmonogramu do sprawdzenia w planie Supabase, O-05) | tylko liczby |
+  | Panel admina „Zdrowie synchronizacji” | odsetek błędów wysyłki, odsetek konfliktów, klienci poniżej `min_client_version`, liczba kont z kolejką starszą niż 24 h, wyniki kontroli | widok w istniejącym panelu admina (D10 otwarta dla Androida; web wystarczy) | jw. |
+  | Alarmy | wzrost 5xx, czas `nextrep_push` (p95), skok konfliktów, niezerowe kontrole niezmienników | e-mail do administratora | jw. |
+
+- **Brakuje:** O-14 (projekt Firebase i test buildu), O-15 (web), O-16 (analityka i zgody), Data safety,
+  lista zdarzeń produktowych, monitoring webhooków płatności (F5).
+- **Kryteria odbioru:** awaria testowa i błąd JS widoczne w Crashlytics w < 5 min bez danych osobowych;
+  sztucznie wywołany błąd synchronizacji widoczny w dzienniku klienta, w `sync_events` i na panelu;
+  eksport diagnostyki nie zawiera nazw, ciężarów ani notatek (test); alarmy 5xx i webhooka działają.
+- **Priorytet i etap:** P0 (błędy, diagnostyka synchronizacji) · dziennik klienta i `sync_events` w F3
+  (razem z v2), Crashlytics, panel i alarmy w F6; P1 (analityka) · F6.
 
 ### 2.12 Marketing
 
@@ -356,15 +391,17 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | S15 | stary klient po zmianie schematu | ❌ brak blokady | `app_config`: stary klient nie synchronizuje, prosi o aktualizację |
 | S16 | trening w toku na A, B w tym czasie | 🟢 szkic nie jest synchronizowany (test) | bez zmian; jasny komunikat |
 | S17 | zmiana konta z niewysłaną kolejką | ✅ kolejka per przestrzeń, timery anulowane (4A.2) | zachować testy |
-| S18 | gość → nowe konto | 🟠 4A.4 w kodzie, SQL tylko na teście | przepisanie przestrzeni do konta + kolejka; test na pustym i niepustym koncie |
+| S18 | gość → nowe konto | 🟠 4A.4 w kodzie, SQL tylko na teście (usuwane, F-5) | przepisanie przestrzeni do konta + kolejka; SPEC 4A.10 T-01–T-04 |
 | S19 | konto z danymi lokalnymi + chmura („Połącz dane”, 4A.5) | ❌ nierozpoczęte | suma zbiorów po UUID; konflikty tylko dla tych samych UUID |
 | S20 | wybór źródła: urządzenie / chmura / puste | ✅ 4A.3 (ok. 100 testów) | uprościć do v2, zachować kopię przed wczytaniem |
-| S21 | przywrócenie kopii lokalnej | 🟡 kopie w kodzie, wpływ na kolejkę niezweryfikowany | przywrócenie = zmiany w kolejce albo jawne „zastąp chmurę” z potwierdzeniem |
-| S22 | import pliku JSON | ❌ omija kolejkę, może nadać PRO | walidacja formatu v2, kopia przed importem, kolejka, bez PRO |
+| S21 | przywrócenie kopii lokalnej | 🟡 kopie w kodzie, wpływ na kolejkę niezweryfikowany; wynik kopii „przed przywróceniem” niesprawdzany | „przywróć brakujące” domyślnie, „dokładny stan” jawnie, przez kolejkę; SPEC 4A.10 T-09, T-11, T-15 |
+| S22 | import pliku JSON | ❌ omija kolejkę, może nadać PRO, nadpisuje listy | walidacja v2, podgląd, „Dodaj” domyślnie, kopia przed importem, kolejka, bez PRO; SPEC 4A.10 T-05–T-08, T-14 |
 | S23 | usunięcie konta | ✅ lokalnie (4A.2); w chmurze `delete_user` | + strona WWW, + subskrypcja |
 | S24 | logowanie offline / sesja wygasła offline | ❌ OPEN (4A.6) | zapisana sesja → przestrzeń konta, sync czeka; bez fałszywego logowania |
 | S25 | brak miejsca w pamięci | ❌ jedna wartość `localStorage` na kopie | IndexedDB, limit kopii, komunikat (D11) |
 | S26 | atlas zmieniony po treningu | ⛔ (stary atlas kopiowany do konta) | snapshot w treningu (F2, D13) |
+| S27 | te same UUID trafiają do drugiego konta (plik lub przestrzeń gościa użyta ponownie) | ⛔ nieopisane | nowe UUID przy imporcie z innego konta; opróżnienie gościa po przeniesieniu; SPEC 4A.10 T-17, T-01 |
+| S28 | operacja na danych przerwana (import, przywracanie, przeniesienie) | 🟡 markery 4A.3 tylko dla wczytania chmury i wysyłki | dziennik operacji i ekran „Dokończ / Cofnij”; SPEC 4A.10 T-04, T-14, T-15 |
 
 ### 3.3 Brakujące elementy v2 (zakres F2.4 + F3)
 
@@ -374,14 +411,16 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 2. `nextrep_push` i pull po `sync_seq`, testowane w PGlite / lokalnym Postgresie (bez kosztów).
 3. Klient: UUID wszędzie, jedna kolejka, tombstony lokalne, pięć list z `position`, konflikty
    (w tym usunięty / zmieniony i kolejność), Centrum konfliktów dostępne z klawiatury i czytnika ekranu.
-4. Usunięcie warstwy migracji (V1, F-5, 4A.4, `user_data`, stare klucze) — ok. 3 500 linii i ok. 300 testów,
-   z decyzją, co z 4A.4 (F-5).
-5. Harness dwóch klientów (S1–S26) na prawdziwym SQL.
-6. Projekt `nextrep-dev` dopiero po zgodzie na koszt (F2-2); do tego czasu tylko lokalnie.
+4. Usunięcie warstwy migracji (V1, F-5, 4A.4, `user_data`, stare klucze) — ok. 3 500 linii i ok. 300 testów
+   (decyzja F-5: usunąć; wymagane zachowania gościa i konta przez SPEC 4A.10).
+5. Harness dwóch klientów (S1–S28) na prawdziwym SQL.
+6. Dziennik diagnostyczny synchronizacji i `sync_events` (§2.11).
+7. Brak zgody na `nextrep-dev` (F-10): F2.4 lokalnie (PGlite / lokalny Postgres); backend dla testów E2E
+   F3 i toru wewnętrznego — decyzja O-13.
 
 ### 3.4 Kryteria odbioru synchronizacji v2
 
-- Wszystkie scenariusze S1–S26 mają test automatyczny (dwóch klientów, ten sam backend SQL) i są zielone.
+- Wszystkie scenariusze S1–S28 mają test automatyczny (dwóch klientów, ten sam backend SQL) i są zielone.
 - Brak duplikatów po przerwaniu i ponowieniu (S13) na 1 000 losowych przebiegów.
 - Pięć list: kolejność identyczna na obu klientach po każdej sekwencji zmian.
 - RLS: użytkownik B nie czyta, nie zapisuje i nie usuwa danych A w żadnej tabeli (test per tabela).
@@ -414,7 +453,7 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | A18 | Punkt dostępu do objętości (A4.5) | ✅ | równoważność F1.6 | A5 |
 | A19 | Snapshot modelu w treningu | 🟠 kontrakt + SQL szkic | 21 testów | F2.4/F3 |
 | A20 | PE-B…PE-H, A5 | 📝 | spec PE | F2/F3 |
-| A21 | NEXTREP Reporting Engine (poza PE-G) | ⛔ brak specyfikacji | — | F-3 |
+| A21 | NEXTREP Reporting Engine (osiem obszarów analityki PRO) | 📝 mapa zakresu i zależności | `REPORTING_ENGINE_MAP.md`; kod: tylko PE-A | PE-B–PE-H, A5 |
 | A22 | Konto: rejestracja, logowanie, reset, usunięcie | 🟡 | kod; linki e-mail nie działają w APK | F3/F6 |
 | A23 | Logowanie offline (4A.6) | ❌ OPEN | komunikat ✅, przestrzeń konta ❌ | F3 |
 | A24 | Izolacja kont i przestrzeni | ✅ | 4A.2 testy | zachować w F3 |
@@ -425,7 +464,7 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | A29 | Konflikty i Centrum konfliktów | 🟡 | kod; E2E OPEN | F3 |
 | A30 | Synchronizacja v2 (`nextrep_push`, `sync_seq`, pięć list, UUID) | 📝 | — | F2.4/F3 |
 | A31 | Minimalna wersja klienta (`app_config`) | 📝 | — | F3 |
-| A32 | „Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie” (4A.10) | ⛔ brak specyfikacji | — | F-1 → F3 |
+| A32 | „Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie” (4A.10) | 📝 specyfikacja odtworzona | `SPEC_4A10_MOJE_DANE.md` | F3 / F4 |
 | A33 | Kopie lokalne | 🟡 | `localStorage`, limit 10 | F3 (IndexedDB) |
 | A34 | Eksport / import pliku | ❌ w APK | NR-S1-01; import omija kolejkę | F3/F4 |
 | A35 | PRO serwerowe (admin) | 🟡 | „deployment verification pending” | F5 |
@@ -441,27 +480,29 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | A45 | Ekran włączony, haptyka | 🟡 web | Wake Lock web | F4 |
 | A46 | Przycisk Wstecz | ✅ | S22 | — |
 | A47 | Polityka prywatności, regulamin, strona usuwania konta | ⛔ | — | F6 |
-| A48 | Monitoring błędów | ⛔ | — | F6 |
+| A48 | Monitoring błędów (Crashlytics, F-4 warunkowo) | 📝 zgodność deklarowana, bez testu buildu | §2.11, `DECISIONS_1_0.md` §3 | F6 |
 | A49 | Analityka produktowa | ⛔ | — | F6 |
 | A50 | Lista oczekujących, kampanie | ⛔ | — | M1–M3 |
 | A51 | Nowy design (komponenty, ekrany) | 🟠 fundamenty | `docs/design/` | D1–D4 |
 | A52 | Zasoby marki (Logotype, Symbol) | 📝 zatwierdzone, niewdrożone | `DESIGN.md` §18 | D4 |
 | A53 | Mechanizm aktualizacji web (build id) | ✅ web / wyłączony w APK | `index.html` | Play + `app_config` |
-| A54 | AAB release, podpis, nazwa pakietu | ⛔ | `app.nextrep.spike`, klucz debug | F7.0 |
+| A54 | AAB release, podpis, nazwa pakietu | ⛔ (kandydat `app.nextrep`) | `app.nextrep.spike`, klucz debug | F7.0 |
+| A55 | Monitoring synchronizacji (dziennik klienta, `sync_events`, panel, alarmy) | 📝 propozycja | §2.11 | F3 / F6 |
+| A56 | „Zapisz dane w chmurze” (`user_data`) | 🗑 po bramce SPEC 4A.10 §7 | `13-account-ui.jsx:805` | F3 |
 
 ## B. Rejestr zaległości i ryzyk
 
 | ID | Pozycja | Typ | Skutek | Działanie | Etap |
 | --- | --- | --- | --- | --- | --- |
-| B01 | Harness synchronizacji utracony | zaległość | brak dowodu dla S1–S26 | harness dwóch klientów na PGlite | F3 |
-| B02 | Ciężar z przecinkiem → `null` w chmurze (stara sync) | błąd | utrata danych na drugim urządzeniu (produkcja) | v2: numeric; dla `main` — tylko Twoja decyzja | F3 / F-6 |
+| B01 | Harness synchronizacji utracony | zaległość | brak dowodu dla S1–S28 | harness dwóch klientów na PGlite | F3 |
+| B02 | Ciężar z przecinkiem → `null` w chmurze (stara sync) | błąd starej produkcji | utrata danych na drugim urządzeniu | v2: numeric + PE-27; stara produkcja: `LEGACY_PRODUCTION_RISKS.md` L01 (F-6: bez zmian `main`) | F3 |
 | B03 | Brak `position` w planach (stara sync) | błąd | inna kolejka na drugim urządzeniu | v2 pięć list | F3 |
 | B04 | Kod 4A.4 na `release/1.0` wymaga SQL F-5 niewdrożonego na produkcji | ryzyko | APK wskazany na produkcję zatrzymałby sync | APK tylko na projekt testowy; decyzja o usunięciu 4A.4 | F3 |
 | B05 | Dokumenty statusu nieaktualne (4A.4 „NOT STARTED”, liczby testów) | dokumentacja | mylący stan | aktualizacja po akceptacji tego planu | F2 |
-| B06 | 4A.10 bez specyfikacji | luka | ryzyko pominięcia ustaleń | F-1 | F2 |
-| B07 | Reporting Engine bez specyfikacji | luka | niejasny zakres raportów | F-3 | F2 |
-| B08 | Design: Stitch czy Claude Design | sprzeczność | rozjazd pracy | F-2 | teraz |
-| B09 | Monitoring: Crashlytics czy Sentry | decyzja | inne SDK, inne Data safety | F-4 | F6 |
+| B06 | 4A.10 odtworzone, nie oryginalne | ryzyko | pominięcie ustaleń, których nie ma w źródłach | przegląd SPEC 4A.10, P1–P6 | F2 |
+| B07 | Reporting Engine: RE-1–RE-6 otwarte | luka | niejasny zakres raportów | O-20 | F2 |
+| B08 | Dokumenty designu sprzeczne z F-2 (§17, `STITCH.md`); starszy `DESIGN.md` na `release/1.0` | sprzeczność | implementacja według nieaktualnych wartości | O-21 (zmiany tekstu 1–6) | przed D1 |
+| B09 | Crashlytics: brak testu buildu, brak wersji web, nieczytelne stosy JS | ryzyko | luki w monitoringu | O-14, O-15; spike po zgodzie | F6 |
 | B10 | Treść atlasu (390) i słowniki | ścieżka krytyczna | opóźnienie F3, PE-D/F | partie tygodniowe od tygodnia 1 | F2.3 |
 | B11 | Linki e-mail w APK → `https://localhost` | bloker | brak rejestracji / resetu w APK | OTP | F3 |
 | B12 | Lokalne ścieżki darmowego PRO | bloker sklepu | naruszenie zasad Play | usunięcie | F5 |
@@ -479,6 +520,9 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | B24 | `getHistoricalBest` czyta „57,5” jako NaN, dropsety w rekordach | błąd | błędne rekordy | PE-E | F2 |
 | B25 | Ekran szczegółów ćwiczenia: przecinek = 0 kg | błąd (zachowany w A4.5) | zaniżone liczby | A5 | F3 |
 | B26 | Ostrzeżenia Supabase / RLS produkcji 1.0 | ryzyko | odrzucenie, wyciek | doradcy bez krytycznych | F6 |
+| B27 | Inne aplikacje „NextRep” w Google Play i App Store | ryzyko marki | odrzucenie nazwy, pomyłki użytkowników, spór o znak | O-12 przed kartą sklepu | F6 |
+| B28 | Backend testowy bez `nextrep-dev` | decyzja | brak E2E na prawdziwym backendzie w F3 | O-13 | F3 |
+| B29 | Sprzeczne ustalenia o logowaniu offline | sprzeczność | trening offline w przestrzeni gościa | O-18 | F3 |
 
 ## C. Harmonogram (tydzień 1 = 12.10.2026)
 
@@ -486,20 +530,21 @@ Jeden wykonawca; szacunek, nie zobowiązanie. Kolumna „równolegle” nie wyd�
 
 | Tydzień | Ścieżka krytyczna | Równolegle |
 | --- | --- | --- |
-| 1–2 (12–25.10) | F2.0: decyzje F-1…F-6; specyfikacja 4A.10; słowniki Standaryzacji; F2.3 partia 1 | PE-B start; design D1 (komponenty) |
+| 1–2 (12–25.10) | F2.0: decyzje F-0–F-10 ✅ (11.10), odpowiedzi O-17, O-18, O-20, O-21; słowniki Standaryzacji; F2.3 partia 1 | PE-B start (po zgodzie); design D1 (komponenty) w Stitch |
 | 3–4 (26.10–8.11) | F2.4: schemat v2 lokalnie (PGlite), `nextrep_push`, `sync_seq`, RLS, testy; F2.3 partie 2–3 | PE-C, PE-E; F4 start (powiadomienia, stoper, pliki); M1 lista oczekujących |
 | 5–6 (9–22.11) | F2.5 atlas w `exercise_catalog` (lokalnie); F3.1 UUID, magazyn (IndexedDB), kolejka v2 | F2.3 partie 4–6; D2 Dashboard i aktywny trening; F4 lista kontrolna S22 |
-| 7–9 (23.11–13.12) | F3.2 sync v2 + harness S1–S26; F3.3 usunięcie migracji; konto OTP, offline; 4A.10; „Połącz dane” | PE-D (partie) po atlasie; D3 pozostałe ekrany; decyzje kosztowe (nextrep-dev) |
+| 7–9 (23.11–13.12) | F3.2 sync v2 + harness S1–S28 + diagnostyka; F3.3 usunięcie migracji (F-5); konto OTP, offline; 4A.10 | PE-D (partie) po atlasie; D3 pozostałe ekrany; backend testowy (O-13) najpóźniej na start F3.2 |
 | 10–12 (14.12–3.01) | F3.4 PE-F, PE-G, PE-H; F3.5 wdrożenie designu; **A5 (osobna bramka)** | F6.1 dokumenty prawne, strona usuwania konta; Play Console (D1) |
-| 13–14 (4–17.01) | F5 Billing + RevenueCat, model uprawnień FREE/PRO/PRO+, usunięcie lokalnego PRO; F7.0 AAB, tor wewnętrzny | F6.2 produkcja 1.0 (Supabase Pro, SMTP, domena, Edge Functions), monitoring; M2 kampania przedpremierowa |
+| 13–14 (4–17.01) | F5 Billing + RevenueCat, model uprawnień FREE/PRO/PRO+, usunięcie lokalnego PRO; F7.0 AAB, tor wewnętrzny | F6.2 produkcja 1.0 (plan Supabase wg O-05, SMTP, domena, Edge Functions), Crashlytics (O-14) i panel synchronizacji; M2 kampania przedpremierowa |
 | 15 (18–24.01) | stabilizacja, regresja pełna, raport przedpremierowy | rekrutacja testerów domknięta |
 | 16–17 (25.01–7.02) | F7.1 test zamknięty 14 dni (12+ testerów), poprawki | M2 trwa |
 | 18 (8–14.02) | wniosek o produkcję, ocena Google (do 7 dni) | karta sklepu final |
 | 19 (15–21.02) | **Publikacja 1.0** z rozkładem procentowym | M3 kampania po publikacji |
 | 20–22 | rezerwa (opóźnienia atlasu, odrzucenie, poprawki) | utrzymanie (sekcja E) |
 
-Etapy designu: D1 komponenty (tyg. 1–3) → D2 Dashboard + aktywny trening (tyg. 4–6) → D3 pozostałe
-ekrany i stany (tyg. 7–10) → D4 wdrożenie i zasoby marki (tyg. 10–12, w F3.5).
+Etapy designu (Google Stitch, F-2): D0 uzgodnienie dokumentów (O-21) → D1 komponenty (tyg. 1–3) → D2
+Dashboard + aktywny trening (tyg. 4–6) → D3 pozostałe ekrany i stany, w tym 4A.10 (tyg. 7–10) → D4
+wdrożenie i zasoby marki (tyg. 10–12, w F3.5).
 Etapy Progress Engine: PE-B/C/E (tyg. 1–5, bez zależności) → PE-D (po atlasie, tyg. 7–9) → PE-F/G/H
 (F3.4) → A5 (koniec F3, osobna akceptacja).
 Plany: szablony 1.0 po pierwszych partiach atlasu (tyg. 5–8), walidacja w F2 tools, w aplikacji w F3.
@@ -508,12 +553,13 @@ Plany: szablony 1.0 po pierwszych partiach atlasu (tyg. 5–8), walidacja w F2 t
 
 ### D.1 Wejście do testu wewnętrznego (tor wewnętrzny)
 
-- [ ] Wszystkie testy automatyczne zielone; harness synchronizacji S1–S26 zielony.
+- [ ] Wszystkie testy automatyczne zielone; harness synchronizacji S1–S28 zielony.
 - [ ] Atlas 1.0 kompletny w zakresie 1.0 (0 błędów walidatora), szablony planów na nowych id.
 - [ ] Brak kodu migracji starych danych i ścieżek darmowego PRO.
 - [ ] F4 zaliczone na S22 (NR-S1-01, NR-S1-02 zamknięte).
 - [ ] AAB podpisany, Play App Signing, ostateczna nazwa pakietu, `webContentsDebuggingEnabled: false`, stały hostname/scheme.
-- [ ] Backend testowy 1.0 z RLS i testami RLS każdej tabeli.
+- [ ] Backend testowy 1.0 z RLS i testami RLS każdej tabeli (rodzaj backendu: O-13).
+- [ ] SPEC 4A.10: T-01–T-19 zielone; bramka „Zapisz dane w chmurze” spełniona.
 
 ### D.2 Wejście do testu zamkniętego (beta)
 
@@ -521,7 +567,7 @@ Plany: szablony 1.0 po pierwszych partiach atlasu (tyg. 5–8), walidacja w F2 t
 - [ ] Billing: zakup, odnowienie, anulowanie, przywrócenie, wygaśnięcie u testera licencji.
 - [ ] Produkcja 1.0: Supabase Pro, kopie zapasowe, SMTP z domeny, Edge Functions, doradcy bez krytycznych.
 - [ ] Polityka prywatności, regulamin, strona usuwania konta online; Data safety, deklaracja zdrowotna, IARC wypełnione.
-- [ ] Monitoring błędów działa (zdarzenie testowe widoczne), bez danych osobowych.
+- [ ] Monitoring błędów działa (Crashlytics: awaria testowa i błąd JS widoczne), bez danych osobowych; panel zdrowia synchronizacji i alarmy działają.
 - [ ] ≥ 15 testerów zapisanych (rezerwa ponad 12).
 
 ### D.3 Wniosek o produkcję i publikacja
@@ -547,7 +593,7 @@ Plany: szablony 1.0 po pierwszych partiach atlasu (tyg. 5–8), walidacja w F2 t
 konwersja do PRO), lejek marketingowy (zapisy → instalacje → konta → PRO).
 
 **PRO+ AI Coach — warunki startu prac:** 1.0 opublikowane; kampania M3 rozpoczęta; co najmniej
-uzgodniona liczba aktywnych użytkowników i dane o retencji (próg do decyzji); stabilne Android Vitals;
+liczba aktywnych użytkowników i retencja ustalone z rzeczywistych danych po publikacji (F-9, O-19); stabilne Android Vitals;
 Twoja osobna zgoda. Etapy: E1 specyfikacja (zakres coachingu, źródło faktów = silnik PE i raporty,
 bezpieczeństwo treści zdrowotnych, zgody i polityka prywatności, koszty modelu); E2 prototyp na
 koncie testowym; E3 beta PRO+ dla części użytkowników; E4 wydanie. Wcześniej (w 1.0) tylko poziom
@@ -556,20 +602,12 @@ koncie testowym; E3 beta PRO+ dla części użytkowników; E4 wydanie. Wcześnie
 **iOS:** po stabilizacji Androida (STORE FIRST: ok. 3–5 tygodni, Mac z Xcode, App Store Connect,
 RevenueCat dla Apple).
 
-## F. Decyzje do podjęcia
+## F. Decyzje
 
-| # | Decyzja | Rekomendacja | Blokuje |
-| --- | --- | --- | --- |
-| F-1 | Treść ustaleń Etapu 4A.10 („Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”) | przekaż dokument lub podsumowanie; dopiszę specyfikację | F3 |
-| F-2 | Narzędzie designu: Google Stitch czy Claude Design (`DESIGN.md` §17) | potwierdzić jedno; zaktualizować `DESIGN_STATUS.md` | D1–D4 |
-| F-3 | Zakres NEXTREP Reporting Engine poza PE-F/PE-G | spisać listę raportów 1.0 albo potwierdzić, że = PE-F + PE-G | PE-G |
-| F-4 | Monitoring błędów: Crashlytics czy Sentry | Crashlytics (Android Vitals i Firebase w jednym) albo Sentry (web + Android jednym SDK); do Twojej decyzji | F6 |
-| F-5 | Los kodu 4A.4 / F-5 w 1.0 | usunąć przy czystym starcie (STORE FIRST); nie wdrażać SQL F-5 na produkcję | F3 |
-| F-6 | Poprawka przecinka w starej synchronizacji na `main` (B02) | tylko jeśli chcesz chronić bieżące dane przed 1.0; inaczej eksport przed wyłączeniem | — |
-| F-7 | STORE FIRST D1 (konto Play), D2 (ceny), D3 (reklamy), D6 (Supabase Pro), D7 (domena), D8 (Vercel), D9 (stara wersja), D10 (admin w Androidzie), D11 (IndexedDB) | potwierdzić albo zmienić; rekomendacje w dokumencie STORE FIRST | F3–F7 |
-| F-8 | Nazwa pakietu 1.0 (zamiast `app.nextrep.spike`) | np. `app.nextrep`; stała na zawsze | F7.0 |
-| F-9 | Próg użytkowników do startu PRO+ | do ustalenia po M3 | E |
-| F-10 | Zgoda kosztowa na `nextrep-dev` | po F2.4 lokalnym | F2.5/F3 |
+Rejestr decyzji (podjętych i otwartych) jest w `DECISIONS_1_0.md`. Stan 11.10.2026: F-0–F-10 podjęte;
+otwarte O-01–O-21 (koszty i wybory biznesowe STORE FIRST, identyfikator pakietu, nazwa, backend testowy,
+Firebase, monitoring web, analityka, pytania 4A.10 i Reporting Engine, logowanie offline, próg PRO+,
+zmiany tekstu dokumentów designu).
 
 ---
 
