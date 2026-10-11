@@ -1,0 +1,576 @@
+# NEXTREP 1.0 — MASTER PLAN (audyt kompletności)
+
+Wersja 1 · 11.10.2026 · gałąź `release/1.0` (HEAD `31d4da3`) · status: **do akceptacji**
+
+Ten dokument zbiera w jednym miejscu wszystko, co ustalono dla NEXTREP 1.0, i porównuje to z tym,
+co faktycznie jest w kodzie i w testach. Nie zmienia żadnej decyzji produktowej. Tam, gdzie ustalenia
+są sprzeczne albo niepełne, zapisuje to jako kwestię do decyzji (sekcja F).
+
+---
+
+## 0. Zasady audytu
+
+**Źródła.** Kod i testy gałęzi `release/1.0`; dokumenty w repozytorium (`NEXTREP_PROJECT_STATE.md`,
+`STAGE_STATUS.md`, `STAGE_4A_PLAN.md`, `SYNC_AND_MIGRATION.md`, `ACCOUNT_DATA_MODEL.md`, `docs/sql/`,
+`docs/design/` z `main`, `docs/atlas/`, `tests/README.md`); dokumenty projektu: „NEXTREP 1.0 STORE
+FIRST — audyt i plan” (10.10), „Progress Engine 2.0: audyt i specyfikacja” (10–11.10), „F1: plan
+modularizacji”, „F1: raport końcowy i plan PE-A”, „A4.5: raport i plan F2”, „F2: projekt struktury
+atlasu” (v2); Twoje decyzje z rozmów (S1, F1, PE-A, F2 v2, K2–K4, P1–P4).
+
+**Statusy.** Funkcja jest „gotowa” wyłącznie z dowodem w kodzie i w teście (automatycznym albo
+na telefonie). Stary plan, opis w dokumencie ani status w `STAGE_STATUS.md` nie są dowodem.
+
+| Status | Znaczenie |
+| --- | --- |
+| ✅ ZWERYFIKOWANE | jest w kodzie `release/1.0` i ma przechodzący test automatyczny lub zaliczony test na S22 |
+| 🟡 W KODZIE, TEST NIEPEŁNY | jest w kodzie, ale test nie obejmuje kluczowych scenariuszy albo pochodzi sprzed utraty harnessu |
+| 🟠 CZĘŚCIOWO | część zakresu w kodzie, część brakuje |
+| 📝 TYLKO PLAN | opisane w dokumentach, brak w kodzie |
+| ⛔ BRAK | ani w kodzie, ani w zatwierdzonym planie (luka) |
+| 🗑 DO USUNIĘCIA | w kodzie, ale 1.0 tego nie przenosi (stara warstwa migracji) |
+
+**Ważne o stanie gałęzi.** `release/1.0` = `main` (`68159b3`) + niewdrożona praca Etapu 4A.4
+(`wip/4a4`, 21 commitów: migracja gościa do konta, F-5) + S1 + F1 + PE-A1–A4 + A4.5 + F2.1–F2.2.
+Produkcja (Vercel, `main`) działa na starszym kodzie bez 4A.4. Kod 4A.4 wymaga SQL F-5, który jest
+wdrożony tylko na `nextrep-f5-test`, nie na produkcji (`docs/sql/README.md`). Dokumenty statusu
+(`STAGE_STATUS.md` z 4A.4 jako „NOT STARTED”) są w tym miejscu nieaktualne.
+
+---
+
+## 1. Podsumowanie wykonawcze
+
+1. **Synchronizacja docelowa (v2) nie istnieje w kodzie.** Nie ma `nextrep_push`, `sync_seq`, kursorów,
+   `position` na listach planów, wspólnych UUID ani `app_config` z minimalną wersją klienta. Działa stara
+   synchronizacja rekordowa przez `legacy_id`. Jej pełny harness testowy został utracony; dziś test
+   automatyczny obejmuje tylko kolejkę (10 testów), nie push / pull / konflikty na dwóch urządzeniach.
+2. **Stara synchronizacja ma znaną utratę danych:** ciężar z przecinkiem („62,5”) trafia do chmury jako
+   `null` (`docs/sql/README.md` §8, niepoprawione). Kolejność ćwiczeń i serii w planach nie jest
+   synchronizowana (brak `position`, Etap 13 zaparkowany). To uzasadnia czysty start 1.0 na v2.
+3. **Etap 4A.10** („Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”) nie ma dokumentu w
+   repozytorium ani ekranów w kodzie. Dziś są ekrany „Moje konto”, „Kopia zapasowa”, „Konflikty
+   synchronizacji”. Potrzebuję treści tych ustaleń (decyzja F-1).
+4. **Atlas 1.0:** gotowe narzędzia (walidator, szablon, import, kontrakt snapshotu); treść 0 z ok. 390
+   ćwiczeń. Gotowe plany (8 szablonów) wskazują stare identyfikatory i trzeba je zbudować od nowa.
+5. **Progress Engine 2.0:** zrobione PE-A1–A4 i A4.5 (fundament, bez zmian na ekranach). PE-B–PE-H,
+   NEXTREP Reporting Engine i A5 są tylko planem.
+6. **Monetyzacja:** PRO działa lokalnie (flaga, „reklama” bez SDK, import kopii nadaje PRO) i z nadania
+   admina na serwerze. Brak Google Play Billing, RevenueCat, AdMob, PRO+. Ceny w UI są wpisane na sztywno.
+7. **Funkcje natywne:** jest tylko `@capacitor/app` (przycisk Wstecz). NR-S1-01 (eksport) i NR-S1-02
+   (dźwięk końca przerwy przy zgaszonym ekranie) otwarte. Stoper i timer cardio liczą tyknięcia.
+8. **Konto:** rejestracja, logowanie, reset hasła i usuwanie konta są w kodzie, ale linki z e-maili
+   w APK prowadzą na `https://localhost`. Brak polityki prywatności, regulaminu i strony WWW usuwania konta.
+9. **Monitoring i marketing:** brak w kodzie (Crashlytics/Sentry, analityka, lista oczekujących).
+10. **Design:** fundamenty DONE, komponenty i ekrany w większości TODO. Twoja wiadomość mówi o Google
+    Stitch, a `DESIGN.md` §17 (10.10) przenosi pracę do Claude Design — do potwierdzenia (F-2).
+
+Szacunek: publikacja w Google Play ok. **tydzień 19–22 od dziś** (luty–marzec 2027), przy jednym
+wykonawcy, terminowym dostarczaniu treści atlasu i szybkich decyzjach. Ścieżka krytyczna: treść
+atlasu → F3 (klient na v2) → F5 (Billing) → test zamknięty 14 dni → ocena Google.
+
+---
+
+## 2. Obszary (1–14)
+
+Każdy obszar: wcześniejsze ustalenia · stan w kodzie · tylko plan · przetestowane · brakuje ·
+zależności · kryteria odbioru · priorytet i etap. Priorytety: **P0** blokuje publikację, **P1** wymagane
+w 1.0, **P2** po 1.0.
+
+### 2.1 Zrealizowane etapy: S1, F1, PE-A1–A4, A4.5, F2.1–F2.2
+
+| Etap | Ustalenia | Stan w kodzie | Przetestowane | Brakuje |
+| --- | --- | --- | --- | --- |
+| S1 | Capacitor 8, APK debug z CI, bez CDN | build `tools/build-web.mjs`, Capacitor 8.5.3, `app.nextrep.spike`, klucz debug | ✅ S22: 11/12 (NR-S1-01 otwarte → F4) | NR-S1-01, NR-S1-02 |
+| F1 | modularizacja bez zmiany zachowania | `src/app/` (22 pliki), `src/engine/`, `src/assets/` | ✅ 523 testy, E2E 11/11, S22 8/8 | prawdziwe moduły zamiast łączenia plików (F3) |
+| PE-A1–A4 | silnik obciążenia i objętości, bez zmian na ekranach | `src/engine/load.js`, `load-legacy-map.js` | ✅ 649 testów, `app.js` bez zmian | — |
+| A4.5 | jeden punkt dostępu do objętości (10 miejsc, 6 ekranów) | `src/engine/volume.js` = wzory F1.6 | ✅ równoważność z F1.6 (1500 historii, 40 ekranów) | — |
+| F2.1–F2.2 | walidator atlasu, snapshot, szablon XLSX, import | `atlas-schema/validate.js`, `load-snapshot.js`, `muscle-work.js`, `db/v2-draft/`, `tools/*atlas*` | ✅ 729 testów, CI #20 | treść atlasu, migracje v2 |
+
+Priorytet: zamknięte. Do przeniesienia: NR-S1-01, NR-S1-02 → F4 (P0).
+
+### 2.2 STORE FIRST: schemat v2 i synchronizacja
+
+Szczegółowa analiza scenariuszy jest w sekcji 3.
+
+- **Wcześniejsze ustalenia (STORE FIRST, 10.10):** nowy projekt Supabase; jeden UUID rekordu od urządzenia
+  do chmury; kolumny wspólne `id, user_id, created_at, updated_at, version, deleted_at, device_id, sync_seq`;
+  `position NOT NULL` na pięciu listach (plany, ćwiczenia planu, serie planu, ćwiczenia treningu, serie
+  treningu), sortowanie `(position, created_at, id)`, przenumerowanie rodzeństwa, zmiana kolejności
+  podnosi wersję rodzica; push jedną funkcją `nextrep_push` z atomową kontrolą wersji; pull po
+  `sync_seq` per tabela; Centrum konfliktów bez „nowszy wygrywa”; `app_config` z minimalną wersją
+  klienta; RLS `user_id = auth.uid()`, `version/updated_at/sync_seq` nadaje serwer; kolejka offline jedna;
+  tombstony lokalne dla wszystkich typów; izolacja kont zostaje; usunięcie ok. 3 500 linii migracji.
+- **Stan w kodzie:** stara synchronizacja (`07-sync-queue-push.jsx`, `08-sync-meta-pull-conflicts.jsx`,
+  ok. 2 750 linii): kolejka `nextrep_sync_queue_v1` (upsert/delete, retry, deduplikacja), push rekord po
+  rekordzie przez REST z wyszukaniem po `(user_id, legacy_id)` (bez UNIQUE w bazie — chroni blokada
+  w kliencie), pull całych tabel stronami, konflikty wersji z magazynem `nextrep_sync_conflicts_v1`
+  i Centrum konfliktów, tombstony `deleted_at`. `position` wysyłane tylko dla ćwiczeń i serii treningu;
+  planów, ćwiczeń planu i serii planu — nie. Brak `nextrep_push`, `sync_seq`, `app_config`, UUID od
+  urządzenia. Izolacja kont ✅ (4A.2), wybór źródła ✅ (4A.3), migracja gościa (4A.4) w kodzie, nie na
+  produkcji. Z v2 istnieje tylko szkic kolumn snapshotu (`db/v2-draft/001_load_snapshot.sql`).
+- **Tylko plan:** cały schemat v2, `nextrep_push`, `sync_seq`, kursory, pięć list z `position`,
+  `app_config`, tombstony lokalne, „Połącz dane” (4A.5) jako suma zbiorów, logowanie offline (4A.6).
+- **Przetestowane:** kolejka (10 testów), izolacja kont i przestrzeni (`workspace-*`, `accounts-storage`),
+  wybór źródła (ok. 100 testów 4A.3), migracja gościa 4A.4 (ok. 100 testów), wartości do chmury Etapu 11
+  (19). **Nieprzetestowane automatycznie:** push / pull / apply / konflikty / tombstony na dwóch
+  urządzeniach (harness utracony — `tests/README.md`), SQL i RLS produkcji (testy utracone).
+- **Brakuje:** całość v2 (patrz sekcja 3.3), harness dwóch urządzeń na prawdziwym Postgresie (PGlite jest
+  już w testach), testy RLS każdej tabeli, decyzja o losie 4A.4 (usunięcie przy czystym starcie).
+- **Zależności:** F2 (atlas, snapshot), projekt `nextrep-dev` (koszt, osobna zgoda), decyzja F-1 (4A.10).
+- **Kryteria odbioru:** sekcja 3.4.
+- **Priorytet i etap:** P0 · F2.4 (schemat v2 lokalnie) → F3 (klient na v2).
+
+### 2.3 Uproszczenie danych z Etapu 4A.10: „Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”
+
+- **Wcześniejsze ustalenia:** wymienione w Twojej wiadomości; w repozytorium i w dokumentach projektu nie
+  znalazłem opisu Etapu 4A.10 (ostatni opisany krok to 4A.9 „Final regression”).
+- **Stan w kodzie:** brak tych trzech ekranów. Są: „Moje konto” (konto, synchronizacja, wybór źródła,
+  przenoszenie danych gościa 4A.4), „Kopia zapasowa” (kopie lokalne w `localStorage`, limit 10 na
+  przestrzeń, eksport JSON przez Blob, import przez plik), „Konflikty synchronizacji”. Teksty
+  „Przenoszenie danych…” istnieją tylko jako komunikaty migracji 4A.4.
+- **Tylko plan / brakuje:** specyfikacja 4A.10 (zakres, co znika, co zostaje), projekt ekranów.
+- **Przetestowane:** kopie lokalne i przywracanie przed wczytaniem chmury (4A.3); eksport w APK ❌ (NR-S1-01).
+- **Zależności:** F-1 (treść ustaleń), v2 (przy UUID „Przenoszenie” = przepisanie przestrzeni + kolejka),
+  F4 (pliki natywne), D11 STORE FIRST (IndexedDB).
+- **Kryteria odbioru:** trzy ekrany zgodne ze specyfikacją; eksport i import pliku na S22; import przez
+  kolejkę synchronizacji i bez nadawania PRO; przywrócenie kopii z potwierdzeniem i kopią sprzed
+  przywrócenia; gość widzi ostrzeżenie o utracie danych przy odinstalowaniu.
+- **Priorytet i etap:** P1 · specyfikacja w F2, wdrożenie w F3 (+ pliki w F4).
+
+### 2.4 Atlas ok. 390 ćwiczeń i gotowe plany
+
+- **Ustalenia:** ok. 390 ćwiczeń, pełne polskie nazwy, stałe `exerciseId`, rodziny wariantów, zamknięte
+  słowniki sprzętu i mięśni, wiele mięśni głównych z różnych grup, aliasy, archiwizacja, ćwiczenia
+  systemowe i prywatne, hantle na jeden hantel, rodzina ≠ zamiennik; treść z ChatGPT, pola techniczne
+  proponuję ja, zatwierdzasz Ty (K2); snapshot modelu w treningu (D13, F2-4, F2-5). Gotowe plany (FBW,
+  Split, 5×5, PPL, Home, Glutes, Bands, Abs) jako szablony na nowych identyfikatorach (STORE FIRST).
+- **Stan w kodzie:** stary atlas 68 ćwiczeń + 8 szablonów planów w `10-atlas-templates.jsx` (używane przez
+  aplikację); nowy atlas `src/atlas/atlas.json` = pusty (wydanie 0); walidator, szablon XLSX, import,
+  kontrakt snapshotu, szkic SQL — gotowe, nieużywane przez aplikację.
+- **Przetestowane:** narzędzia ✅ (73 testy na danych syntetycznych). Treść: brak.
+- **Brakuje:** słowniki sprzętu, mięśni i cech ze Standaryzacji; partie ćwiczeń; pola techniczne każdej
+  partii; format `exerciseId`; zatwierdzenie typów pomiaru; szablony planów 1.0; zdjęcia ćwiczeń /
+  partii (ok. 40, `DESIGN.md` §16); atlas w aplikacji (F3).
+- **Zależności:** Standaryzacja (Ty + ChatGPT), F2.4 (`exercise_catalog`), F3.
+- **Kryteria odbioru:** cały atlas: 0 błędów walidatora, ostrzeżenia przejrzane; każdy wpis z modelem,
+  lateralnością i liczeniem powtórzeń; 8 szablonów planów walidowanych na nowych identyfikatorach;
+  atlas offline w paczce aplikacji.
+- **Priorytet i etap:** P0 · F2.3 (partie, równolegle) → F3 (atlas w aplikacji).
+
+### 2.5 Finalny design i dokumentacja marki
+
+- **Ustalenia:** `DESIGN.md` (kolory, typografia, odstępy, promienie, efekty — DONE), kierunek aktywnego
+  treningu (§15), fotografia (§16), zasoby marki: Logotype i Symbol niezmienne (§18, 11.10). §17: praca
+  wizualna w Claude Design, notatki Stitch historyczne. Twoja wiadomość: „według Google Stitch”.
+- **Stan w kodzie:** obecny wygląd aplikacji (Tailwind, ciemny motyw), stare logo w aplikacji;
+  nowe zasoby marki nie są wdrożone (wymaga osobnej zgody). `DESIGN_STATUS.md`: komponenty poza
+  przyciskami i kartami TODO; ekrany „not yet designed”; prototyp i przekazanie do implementacji TODO.
+- **Przetestowane:** test wizualny chroni OBECNY wygląd (20 ekranów); nowego designu nie ma czego testować.
+- **Brakuje:** komponenty, 9–10 ekranów, stany puste/błędów, ekrany nowych funkcji (4A.10, PRO/PRO+,
+  zakupy, zgody, usuwanie konta, onboarding), grafiki sklepu, ikona aplikacji 1.0.
+- **Zależności:** F-2 (narzędzie: Claude Design czy Stitch), PE-F/G/H (nowe ekrany statystyk, raportu,
+  treningu), F3 (dane v2).
+- **Kryteria odbioru:** każdy ekran zaakceptowany i opisany w `docs/design/`; wdrożenie bez zmian logiki;
+  nowe wzorce wizualne w teście wizualnym; kontrast sprawdzony na urządzeniu.
+- **Priorytet i etap:** P1 · D1–D4 (sekcja C) równolegle z F2–F3; wdrożenie w F3.5.
+
+### 2.6 Progress Engine 2.0 i NEXTREP Reporting Engine
+
+- **Ustalenia:** D1–D14 i PE-01–PE-32 (10.10), P1–P4, K2–K4, praca partii (F2 v2 pkt 1), etapy PE-A–PE-H,
+  A5 jako ostatni krok F3 z osobną bramką. „NEXTREP Reporting Engine” nie ma osobnej specyfikacji;
+  w specyfikacji PE to raport (PE-G: podsumowanie trenera, Najlepsze momenty, zakładki Ćwiczenia /
+  Partie, „Na następny trening”) i statystyki (PE-F).
+- **Stan w kodzie:** stary silnik (`legacy-progression.js`, F1.5) zasila wszystkie ekrany; nowy
+  fundament: `load.js`, `volume.js` (wzory F1.6), `muscle-work.js`, `load-snapshot.js` — nieużywane przez
+  ekrany poza punktem dostępu z wzorami F1.6.
+- **Przetestowane:** PE-03–07, PE-18, część PE-08 ✅; stary silnik: 43 + 5 testów progresji, 39 partii.
+  Raport, rekordy i „Twój następny krok” nie mają testów (specyfikacja PE).
+- **Brakuje:** PE-B (analiza ćwiczenia), PE-C (cele i teksty), PE-D (partie, tygodnie), PE-E (rekordy,
+  w tym błąd przecinka w `getHistoricalBest`), PE-F (statystyki, archiwum), PE-G (raport), PE-H (aktywny
+  trening), A5, specyfikacja Reporting Engine (raporty tygodniowe? eksport? — F-3).
+- **Zależności:** PE-B/C/E — brak (czyste funkcje, można zaczynać); PE-D/F — atlas F2; PE-F/G/H i A5 — F3.
+- **Kryteria odbioru:** PE-01–PE-32 zielone; PE-17 i PE-24 na S22; raport i aktywny trening z jednej
+  funkcji; brak ekranu z własnym wzorem obliczeń.
+- **Priorytet i etap:** P0 (PE-B, C, E, G, H) / P1 (PE-D, F) · PE-B/C/E równolegle z F2; PE-D–H w F3; A5 na końcu F3.
+
+### 2.7 FREEMIUM, PRO i architektura PRO+
+
+- **Ustalenia:** FREE = „co zrobiłem”, PRO = „czy robię postęp i co dalej”; tabela podziału (D10 PE);
+  serwerowe uprawnienie `nextrep_my_pro` (admin), PRO wymaga konta (STORE FIRST D4, rekomendacja);
+  ceny w UI 12,99 zł / mies. i 59,99 zł / rok; PRO+ AI Coach dopiero po wydaniu i kampanii.
+- **Stan w kodzie:** `hasProAccess` = lokalna flaga `manualPro` lub odblokowanie „za reklamę” na 24 h
+  (bez SDK) + serwerowe `nextrep_my_pro`; import kopii może ustawić PRO; ceny na sztywno; blokady PRO
+  w wielu ekranach (`isPro` w 7 plikach); obecny podział nie odpowiada D10 (np. „Progres %” w FREE).
+  PRO+: brak.
+- **Przetestowane:** izolacja lokalnego PRO (4A.2); serwerowe PRO — „deployment verification pending”.
+- **Brakuje:** usunięcie lokalnych ścieżek PRO (4A.8), podział FREE/PRO wg D10, model uprawnień z poziomem
+  (`free | pro | pro_plus`) i źródłem (`google_play | admin | promo | trial`), offline cache uprawnienia
+  z datą ważności, ekran zakupu z cenami z RevenueCat, „Przywróć zakupy”, zarządzanie subskrypcją.
+- **Zależności:** F3 (konto, v2), F5 (Billing), STORE FIRST D2 (ceny, produkty), D3 (reklamy).
+- **Kryteria odbioru:** brak jakiejkolwiek ścieżki darmowego PRO w kliencie; PRO widoczne w Androidzie
+  i webie z jednego serwera; offline PRO działa do daty ważności, potem FREE; PRO+ można dodać jako nowy
+  poziom bez zmiany schematu.
+- **Priorytet i etap:** P0 · F5 (model uprawnień zaprojektowany już w F2.4/F3).
+
+### 2.8 Google Play Billing, RevenueCat, reklamy, uprawnienia, offline
+
+- **Ustalenia:** Billing 8+ (od 31.08.2026); RevenueCat → webhook → Edge Function → `pro_grants`
+  (`google_play`); reklamy: decyzja D3 (AdMob z UMP albo usunięcie); offline: ostatnia odpowiedź serwera
+  z datą ważności.
+- **Stan w kodzie:** brak Billing, RevenueCat, AdMob, Edge Functions; przycisk „Obejrzyj reklamę”
+  odblokowuje PRO bez reklamy (tekst w UI to przyznaje).
+- **Przetestowane:** nic.
+- **Brakuje:** całość; konto Play Console (STORE FIRST D1), produkty, testerzy licencji, tor wewnętrzny,
+  idempotentny webhook, deklaracje reklam w Play.
+- **Zależności:** F3, tor wewnętrzny Play (F7.0), domena i SMTP (F6), D1, D2, D3.
+- **Kryteria odbioru:** zakup, odnowienie, anulowanie, przywrócenie, zwrot i wygaśnięcie u testera
+  licencji; uprawnienie w webie; offline zgodnie z zasadą; jeśli reklamy — UMP i zgoda przed pierwszą
+  reklamą; jeśli nie — deklaracja „brak reklam” i usunięcie przycisku.
+- **Priorytet i etap:** P0 · F5.
+
+### 2.9 Funkcje natywne Androida
+
+- **Ustalenia (F4):** powiadomienie końca odpoczynku (zgoda od Androida 13), ekran włączony, haptyka,
+  eksport i import pliku (Filesystem, Share), przycisk Wstecz, timery od znaczników czasu, zapis szkicu
+  na `pause`, linki zewnętrzne poza WebView, edge-to-edge.
+- **Stan w kodzie:** `@capacitor/app` (Wstecz: `goBack` lub nic) ✅; SystemBars `css` ✅; timer treningu
+  i przerwy od znaczników czasu ✅; stoper ćwiczenia i timer cardio liczą tyknięcia (`s + 1`, linie 168
+  i 529 `18-active-workout.jsx`) ❌; Web Wake Lock, `navigator.vibrate`, AudioContext — webowe; eksport
+  przez Blob ❌ w APK; `mailto:` i linki YouTube bez obsługi natywnej.
+- **Przetestowane:** S22: start offline, Wstecz, przetrwanie blokady ekranu i przełączania, przywrócenie
+  szkicu ✅ (S1/F1). NR-S1-01 ❌, NR-S1-02 ❌.
+- **Brakuje:** wtyczki: Local Notifications, Keep Awake, Haptics, Filesystem, Share, Browser (lub
+  odpowiedniki); stoper i cardio na znacznikach czasu; powiadomienie trwającego treningu (opcja przy
+  oszczędzaniu baterii Samsung).
+- **Zależności:** F1 (spełnione); dla importu — format v2 (F3).
+- **Kryteria odbioru:** lista kontrolna na S22: powiadomienie końca przerwy przy zgaszonym ekranie
+  (także w trybie oszczędzania), stoper w tle, eksport i ponowny import pliku, linki zewnętrzne, wibracja.
+- **Priorytet i etap:** P0 · F4 (może iść równolegle z F2/F3).
+
+### 2.10 Konta, logowanie, reset hasła, usuwanie konta, bezpieczeństwo, dokumenty prawne
+
+- **Ustalenia:** Supabase Auth bez Google; potwierdzenia kodem 6-cyfrowym (`verifyOtp`) zamiast linków;
+  własny SMTP i domena; usuwanie konta w aplikacji i na stronie WWW; ostrzeżenie o subskrypcji przed
+  usunięciem; brak logowania offline bez potwierdzenia sesji (memory/decyzja), zapisana sesja otwiera
+  lokalną przestrzeń konta (STORE FIRST); RLS wszędzie, brak `service_role` w kliencie; samohostowane
+  czcionki ✅ (F1); polityka prywatności, regulamin.
+- **Stan w kodzie:** rejestracja, logowanie, wylogowanie, reset hasła, nowe hasło, usuwanie konta
+  (`delete_user`) ✅ w kodzie; linki e-mail przez `authRedirectUrl()` (implicit flow) — w APK `https://localhost`;
+  logowanie offline: komunikat sieci ✅, kontynuacja w przestrzeni konta — OPEN (4A.6); panel
+  administratora (role po stronie serwera) w kodzie; brak polityki prywatności, regulaminu, strony WWW
+  usuwania konta; tekst o usuwaniu konta niezgodny z kodem (STORE FIRST).
+- **Przetestowane:** czyszczenie lokalne po usunięciu konta ✅ (4A.2), komunikat offline ✅; reset hasła
+  i rejestracja w APK — nie.
+- **Brakuje:** OTP, SMTP, domena, dokumenty prawne, strona usuwania konta, poprawiony tekst, decyzja
+  o panelu admina w Androidzie (STORE FIRST D10), `webContentsDebuggingEnabled: false` w wydaniu,
+  ostateczna nazwa pakietu (dziś `app.nextrep.spike`), klucz wydaniowy i Play App Signing.
+- **Zależności:** D7 (domena), F6 (produkcja), F5 (ostrzeżenie o subskrypcji).
+- **Kryteria odbioru:** cały cykl konta kodem z e-maila na S22; usunięcie konta w aplikacji i przez WWW;
+  doradcy bezpieczeństwa Supabase bez ostrzeżeń krytycznych; testy RLS każdej tabeli v2.
+- **Priorytet i etap:** P0 · F3 (OTP, offline) + F6 (prawo, SMTP, strona).
+
+### 2.11 Monitoring
+
+- **Ustalenia:** błędy przed publikacją (pamięć: Sentry, bez danych treningowych i osobowych; Twoja
+  wiadomość: Crashlytics); Android Vitals; diagnostyka synchronizacji, płatności i reklam.
+- **Stan w kodzie:** brak SDK błędów i analityki; diagnostyka synchronizacji tylko w konsoli
+  (`[sync diag]`) i panelu admina (statystyki użytkowników).
+- **Brakuje:** wybór narzędzia (F-4), zgody i Data safety dla analityki, zdarzenia produktowe (lista),
+  panel zdrowia synchronizacji (kolejki, konflikty, błędy push), monitoring webhooków płatności.
+- **Kryteria odbioru:** awaria testowa widoczna w panelu w < 5 min bez danych osobowych; zdarzenia
+  zgodne z polityką prywatności; alarmy dla 5xx Supabase i błędów webhooka.
+- **Priorytet i etap:** P0 (błędy), P1 (analityka) · F6.
+
+### 2.12 Marketing
+
+- **Ustalenia:** lista oczekujących, kampania przedpremierowa, kampania po publikacji, pomiar skuteczności.
+- **Stan:** brak w kodzie i w dokumentach (poza kartą sklepu w STORE FIRST).
+- **Brakuje:** strona z listą oczekujących (zgoda RODO), plan kampanii, materiały, link UTM / Play
+  Install Referrer, karta sklepu, zrzuty z nowego designu, rekrutacja ≥ 12 testerów (STORE FIRST).
+- **Zależności:** domena (D7), design (zrzuty), polityka prywatności.
+- **Kryteria odbioru:** lista oczekujących działa od ~tygodnia 4; ≥ 15 testerów zapisanych przed F7;
+  pomiar: zapisy → instalacje → konta → PRO.
+- **Priorytet i etap:** P1 · M1–M3 (sekcja C).
+
+### 2.13 Beta-testy, publikacja, pierwsze tygodnie
+
+- **Ustalenia:** tor wewnętrzny → test zamknięty ≥ 12 testerów przez 14 dni (konto osobiste) → wniosek
+  (do 7 dni) → produkcja z rozkładem procentowym; AAB, Play App Signing, API 36, Data safety, deklaracja
+  zdrowotna, IARC, konto dla recenzenta.
+- **Stan:** brak konta Play Console (stan z 10.10); CI buduje tylko APK debug.
+- **Brakuje:** konto (D1), AAB release, podpis, karta sklepu, deklaracje, testerzy.
+- **Kryteria odbioru:** sekcja D.
+- **Priorytet i etap:** P0 · F7.
+
+### 2.14 PRO+ AI Coach
+
+- **Ustalenia:** wyłącznie po publikacji 1.0 i rozpoczęciu kampanii, gdy są użytkownicy.
+- **Stan:** brak (i słusznie).
+- **Do przygotowania wcześniej (bez budowy funkcji):** poziom `pro_plus` w modelu uprawnień (F3/F5);
+  silnik raportów jako deterministyczne źródło faktów dla przyszłego AI; zgody i polityka prywatności
+  pisane tak, by nie trzeba było ich zmieniać pod AI bez nowej zgody użytkownika.
+- **Priorytet i etap:** P2 · sekcja E.
+
+---
+
+## 3. Synchronizacja — analiza szczegółowa
+
+### 3.1 Dwie implementacje
+
+| Cecha | Stara (kod `release/1.0`, produkcja na `main`) | Docelowa v2 (STORE FIRST, tylko plan) |
+| --- | --- | --- |
+| Identyfikator | lokalne `uid()` + UUID w chmurze, łączone przez `legacy_id` (bez UNIQUE w bazie) | jeden UUID z urządzenia |
+| Push | rekord po rekordzie: odczyt, potem insert/update; blokada w kliencie przed duplikatem | `nextrep_push(paczka)` — atomowo, kontrola wersji, zwrot konfliktów |
+| Pull | całe tabele stronami, porównanie treści | `sync_seq > kursor` per tabela |
+| Wersja i czas | `version` z klienta, `updated_at` | `version`, `updated_at`, `sync_seq` nadaje serwer |
+| Kolejność | `position` tylko ćwiczenia i serie treningu; plany i ich elementy bez kolejności | `position NOT NULL` na pięciu listach, wersja rodzica |
+| Konflikt | ta sama wersja zmieniona inaczej → magazyn konfliktów, Centrum konfliktów | to samo; konflikt kolejności = konflikt rodzica |
+| Usunięcie | `deleted_at` zdalnie; lokalnie usunięcie z tablicy | tombstony lokalne dla wszystkich typów |
+| Stary klient | brak blokady (mechanizm aktualizacji tylko przeładowuje web) | `app_config.min_client_version` — stary klient nie synchronizuje |
+| Pierwsze połączenie | heurystyki `bootstrapSyncMeta…`, migracja V1, F-5 | wspólne UUID od początku |
+| Gość → konto | maszyna migracji 4A.4 + SQL F-5 (tylko test) | przepisanie przestrzeni + rekordy do kolejki |
+| Testy | kolejka (10); harness push/pull/konflikty utracony | harness dwóch urządzeń na Postgresie (do zbudowania) |
+
+Wniosek: starej implementacji nie domykamy dla 1.0 (czysty start). Jej scenariusze opisuję, bo
+produkcja `main` nadal z niej korzysta dla Twoich bieżących treningów.
+
+### 3.2 Scenariusze i ich status
+
+Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
+
+| # | Scenariusz | Stara | v2 — wymaganie |
+| --- | --- | --- | --- |
+| S1 | A i B zmieniają różne rekordy → oba w chmurze i na obu urządzeniach | 🟡 „TESTING”, brak testu automatycznego | test automatyczny dwóch klientów |
+| S2 | A i B zmieniają ten sam rekord → konflikt, wybór wersji | 🟡 mechanizm w kodzie, E2E OPEN | konflikt z `nextrep_push`, Centrum konfliktów, test |
+| S3 | A usuwa, B edytuje (offline) | ❌ OPEN | jawny konflikt „usunięty / zmieniony”, bez cichego wskrzeszenia |
+| S4 | A i B usuwają ten sam rekord | ⛔ nieopisane | idempotentne, bez konfliktu |
+| S5 | przywrócenie usuniętego rekordu (ten sam id) | 🟡 ścieżka w push (`deleted_at = null`) | test; wersja rośnie |
+| S6 | usunięcie rodzica (plan, trening) z dziećmi | ⛔ nieopisane dla kaskady tombstonów | tombstony dzieci w tej samej paczce; pull nie zostawia sierot |
+| S7 | ćwiczenie własne usunięte, a użyte w historii / planach | ⛔ | archiwizacja zamiast usunięcia; historia czyta snapshot |
+| S8 | zmiana kolejności planów / ćwiczeń planu / serii planu na A, B widzi tę samą | ❌ brak `position` (Etap 13 zaparkowany) | przenumerowanie, wersja rodzica, test pięciu list |
+| S9 | A i B zmieniają kolejność tej samej listy | ❌ | jeden konflikt rodzica |
+| S10 | superseria przestawiona na jednym urządzeniu | ⛔ | walidacja ciągłości `superset_group` |
+| S11 | ciężar „62,5” na A → B | ❌ trafia jako `null` (znane, niepoprawione) | liczby w schemacie numeric; test przecinka |
+| S12 | oba urządzenia offline, zmiany, potem połączenie | 🟡 „TESTING” | test: kolejność wysyłki, konflikty, brak duplikatów |
+| S13 | aplikacja zabita w trakcie wysyłki paczki | 🟡 blokada i ponawianie | `nextrep_push` atomowe; ponowienie bez duplikatów (ten sam UUID) |
+| S14 | zegar urządzenia przestawiony | 🟢 wersje, nie zegar, decydują o konflikcie; pull bez zależności | `sync_seq` z serwera |
+| S15 | stary klient po zmianie schematu | ❌ brak blokady | `app_config`: stary klient nie synchronizuje, prosi o aktualizację |
+| S16 | trening w toku na A, B w tym czasie | 🟢 szkic nie jest synchronizowany (test) | bez zmian; jasny komunikat |
+| S17 | zmiana konta z niewysłaną kolejką | ✅ kolejka per przestrzeń, timery anulowane (4A.2) | zachować testy |
+| S18 | gość → nowe konto | 🟠 4A.4 w kodzie, SQL tylko na teście | przepisanie przestrzeni do konta + kolejka; test na pustym i niepustym koncie |
+| S19 | konto z danymi lokalnymi + chmura („Połącz dane”, 4A.5) | ❌ nierozpoczęte | suma zbiorów po UUID; konflikty tylko dla tych samych UUID |
+| S20 | wybór źródła: urządzenie / chmura / puste | ✅ 4A.3 (ok. 100 testów) | uprościć do v2, zachować kopię przed wczytaniem |
+| S21 | przywrócenie kopii lokalnej | 🟡 kopie w kodzie, wpływ na kolejkę niezweryfikowany | przywrócenie = zmiany w kolejce albo jawne „zastąp chmurę” z potwierdzeniem |
+| S22 | import pliku JSON | ❌ omija kolejkę, może nadać PRO | walidacja formatu v2, kopia przed importem, kolejka, bez PRO |
+| S23 | usunięcie konta | ✅ lokalnie (4A.2); w chmurze `delete_user` | + strona WWW, + subskrypcja |
+| S24 | logowanie offline / sesja wygasła offline | ❌ OPEN (4A.6) | zapisana sesja → przestrzeń konta, sync czeka; bez fałszywego logowania |
+| S25 | brak miejsca w pamięci | ❌ jedna wartość `localStorage` na kopie | IndexedDB, limit kopii, komunikat (D11) |
+| S26 | atlas zmieniony po treningu | ⛔ (stary atlas kopiowany do konta) | snapshot w treningu (F2, D13) |
+
+### 3.3 Brakujące elementy v2 (zakres F2.4 + F3)
+
+1. Schemat v2: tabele użytkownika z kolumnami wspólnymi, `exercise_catalog`, `atlas_releases`,
+   `custom_exercises`, `workout_exercises` ze snapshotem, `workout_exercise_load_corrections`, `app_config`,
+   uprawnienia z poziomem (`free | pro | pro_plus`), RLS, triggery `sync_seq`, `version`, `updated_at`.
+2. `nextrep_push` i pull po `sync_seq`, testowane w PGlite / lokalnym Postgresie (bez kosztów).
+3. Klient: UUID wszędzie, jedna kolejka, tombstony lokalne, pięć list z `position`, konflikty
+   (w tym usunięty / zmieniony i kolejność), Centrum konfliktów dostępne z klawiatury i czytnika ekranu.
+4. Usunięcie warstwy migracji (V1, F-5, 4A.4, `user_data`, stare klucze) — ok. 3 500 linii i ok. 300 testów,
+   z decyzją, co z 4A.4 (F-5).
+5. Harness dwóch klientów (S1–S26) na prawdziwym SQL.
+6. Projekt `nextrep-dev` dopiero po zgodzie na koszt (F2-2); do tego czasu tylko lokalnie.
+
+### 3.4 Kryteria odbioru synchronizacji v2
+
+- Wszystkie scenariusze S1–S26 mają test automatyczny (dwóch klientów, ten sam backend SQL) i są zielone.
+- Brak duplikatów po przerwaniu i ponowieniu (S13) na 1 000 losowych przebiegów.
+- Pięć list: kolejność identyczna na obu klientach po każdej sekwencji zmian.
+- RLS: użytkownik B nie czyta, nie zapisuje i nie usuwa danych A w żadnej tabeli (test per tabela).
+- Stary klient (wersja < `min_client_version`) nie wysyła ani nie pobiera danych.
+- Na S22 i w przeglądarce: trening offline → połączenie → dane na drugim urządzeniu.
+
+---
+
+## A. Rejestr funkcji i statusów
+
+| ID | Funkcja | Status | Dowód (kod / test) | Etap docelowy |
+| --- | --- | --- | --- | --- |
+| A01 | Build bez CDN, Capacitor 8, APK z CI | ✅ | `tools/build-web.mjs`, CI #20, S22 | — |
+| A02 | Modularizacja `src/` | ✅ | F1, `check-split` | prawdziwe moduły w F3 |
+| A03 | Dashboard (podsumowanie 30 dni, karta przerwanego treningu) | ✅ | `dates-dashboard` (19), E2E | design D3 |
+| A04 | Atlas 68 ćwiczeń + cardio | 🗑 (zastąpi atlas 1.0) | `10-atlas-templates.jsx` | F3 |
+| A05 | Atlas 1.0 (ok. 390) — narzędzia | ✅ | 73 testy F2 | — |
+| A06 | Atlas 1.0 — treść | 📝 | `src/atlas/atlas.json` puste | F2.3 |
+| A07 | Ćwiczenia własne z modelem obciążenia | 📝 | projekt F2 v2 | F3 |
+| A08 | Plany użytkownika, edytor, superserie | 🟡 | kod; brak `position` w sync | F3 (v2) |
+| A09 | Gotowe plany (8 szablonów) | 🟡 stare id | `READY_PLAN_TEMPLATES` | F2.3/F3 |
+| A10 | Aktywny trening: serie, RIR, dropsety, timer przerwy, szkic | ✅ | E2E, S22 | PE-H |
+| A11 | Stoper ćwiczenia i timer cardio w tle | ❌ | tyknięcia (`s + 1`) | F4 |
+| A12 | Historia, edycja, dopisanie treningu wstecz | ✅ | E2E | — |
+| A13 | Pomiary i pola własne | 🟡 | kod, brak testów dedykowanych | F3 |
+| A14 | Statystyki partii (10 grup) | ✅ stare | `muscle-groups` (39) | PE-D/F |
+| A15 | Raport treningowy | 🟡 | kod; brak testów raportu (spec PE) | PE-G |
+| A16 | Silnik progresji (stary) | ✅ | 43 + 5 testów | PE-B |
+| A17 | Silnik obciążenia i objętości (PE-A) | ✅ | 649→729 testów | A5 |
+| A18 | Punkt dostępu do objętości (A4.5) | ✅ | równoważność F1.6 | A5 |
+| A19 | Snapshot modelu w treningu | 🟠 kontrakt + SQL szkic | 21 testów | F2.4/F3 |
+| A20 | PE-B…PE-H, A5 | 📝 | spec PE | F2/F3 |
+| A21 | NEXTREP Reporting Engine (poza PE-G) | ⛔ brak specyfikacji | — | F-3 |
+| A22 | Konto: rejestracja, logowanie, reset, usunięcie | 🟡 | kod; linki e-mail nie działają w APK | F3/F6 |
+| A23 | Logowanie offline (4A.6) | ❌ OPEN | komunikat ✅, przestrzeń konta ❌ | F3 |
+| A24 | Izolacja kont i przestrzeni | ✅ | 4A.2 testy | zachować w F3 |
+| A25 | Wybór źródła (urządzenie / chmura / puste) | ✅ | 4A.3 (~100 testów) | uprościć w F3 |
+| A26 | Gość → konto (4A.4) | 🟠 kod + SQL na teście | ~100 testów, brak produkcji | 🗑 / przepisać w F3 |
+| A27 | Połącz dane (4A.5) | 📝 | — | F3 |
+| A28 | Synchronizacja stara (kolejka, push, pull) | 🟡 / 🗑 | 10 testów kolejki | zastąpi v2 |
+| A29 | Konflikty i Centrum konfliktów | 🟡 | kod; E2E OPEN | F3 |
+| A30 | Synchronizacja v2 (`nextrep_push`, `sync_seq`, pięć list, UUID) | 📝 | — | F2.4/F3 |
+| A31 | Minimalna wersja klienta (`app_config`) | 📝 | — | F3 |
+| A32 | „Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie” (4A.10) | ⛔ brak specyfikacji | — | F-1 → F3 |
+| A33 | Kopie lokalne | 🟡 | `localStorage`, limit 10 | F3 (IndexedDB) |
+| A34 | Eksport / import pliku | ❌ w APK | NR-S1-01; import omija kolejkę | F3/F4 |
+| A35 | PRO serwerowe (admin) | 🟡 | „deployment verification pending” | F5 |
+| A36 | PRO lokalne / „reklama” / PRO z importu | 🗑 | `hasProAccess` | F5 (usunąć) |
+| A37 | Podział FREE / PRO wg D10 | 📝 | — | F5 |
+| A38 | Google Play Billing + RevenueCat | 📝 | — | F5 |
+| A39 | Reklamy (AdMob + UMP) | 📝 decyzja D3 | — | F5/F6 |
+| A40 | PRO+ (poziom uprawnień) | 📝 | — | F3/F5 (model) |
+| A41 | PRO+ AI Coach | 📝 po premierze | — | E |
+| A42 | Panel administratora | 🟡 | kod, testy ręczne historyczne | D10 STORE FIRST |
+| A43 | Formularz opinii (`mailto:`) | 🟡 | kod; `mailto:` w APK niesprawdzone | F4 |
+| A44 | Powiadomienie końca przerwy | ❌ | NR-S1-02 | F4 |
+| A45 | Ekran włączony, haptyka | 🟡 web | Wake Lock web | F4 |
+| A46 | Przycisk Wstecz | ✅ | S22 | — |
+| A47 | Polityka prywatności, regulamin, strona usuwania konta | ⛔ | — | F6 |
+| A48 | Monitoring błędów | ⛔ | — | F6 |
+| A49 | Analityka produktowa | ⛔ | — | F6 |
+| A50 | Lista oczekujących, kampanie | ⛔ | — | M1–M3 |
+| A51 | Nowy design (komponenty, ekrany) | 🟠 fundamenty | `docs/design/` | D1–D4 |
+| A52 | Zasoby marki (Logotype, Symbol) | 📝 zatwierdzone, niewdrożone | `DESIGN.md` §18 | D4 |
+| A53 | Mechanizm aktualizacji web (build id) | ✅ web / wyłączony w APK | `index.html` | Play + `app_config` |
+| A54 | AAB release, podpis, nazwa pakietu | ⛔ | `app.nextrep.spike`, klucz debug | F7.0 |
+
+## B. Rejestr zaległości i ryzyk
+
+| ID | Pozycja | Typ | Skutek | Działanie | Etap |
+| --- | --- | --- | --- | --- | --- |
+| B01 | Harness synchronizacji utracony | zaległość | brak dowodu dla S1–S26 | harness dwóch klientów na PGlite | F3 |
+| B02 | Ciężar z przecinkiem → `null` w chmurze (stara sync) | błąd | utrata danych na drugim urządzeniu (produkcja) | v2: numeric; dla `main` — tylko Twoja decyzja | F3 / F-6 |
+| B03 | Brak `position` w planach (stara sync) | błąd | inna kolejka na drugim urządzeniu | v2 pięć list | F3 |
+| B04 | Kod 4A.4 na `release/1.0` wymaga SQL F-5 niewdrożonego na produkcji | ryzyko | APK wskazany na produkcję zatrzymałby sync | APK tylko na projekt testowy; decyzja o usunięciu 4A.4 | F3 |
+| B05 | Dokumenty statusu nieaktualne (4A.4 „NOT STARTED”, liczby testów) | dokumentacja | mylący stan | aktualizacja po akceptacji tego planu | F2 |
+| B06 | 4A.10 bez specyfikacji | luka | ryzyko pominięcia ustaleń | F-1 | F2 |
+| B07 | Reporting Engine bez specyfikacji | luka | niejasny zakres raportów | F-3 | F2 |
+| B08 | Design: Stitch czy Claude Design | sprzeczność | rozjazd pracy | F-2 | teraz |
+| B09 | Monitoring: Crashlytics czy Sentry | decyzja | inne SDK, inne Data safety | F-4 | F6 |
+| B10 | Treść atlasu (390) i słowniki | ścieżka krytyczna | opóźnienie F3, PE-D/F | partie tygodniowe od tygodnia 1 | F2.3 |
+| B11 | Linki e-mail w APK → `https://localhost` | bloker | brak rejestracji / resetu w APK | OTP | F3 |
+| B12 | Lokalne ścieżki darmowego PRO | bloker sklepu | naruszenie zasad Play | usunięcie | F5 |
+| B13 | `localStorage` jako jedyny magazyn | ryzyko | cicha utrata kopii przy limicie | IndexedDB (D11) | F3 |
+| B14 | Stoper / cardio w tle; powiadomienie przerwy | błąd | złe czasy, przegapiona przerwa | F4 | F4 |
+| B15 | Zmiana hostname/scheme WebView po wydaniu | ryzyko | utrata danych lokalnych | blokada w konfiguracji i test | F7.0 |
+| B16 | Nazwa pakietu `app.nextrep.spike` | decyzja | nazwa stała na zawsze | decyzja przed pierwszym AAB | F7.0 |
+| B17 | `webContentsDebuggingEnabled: true` | bezpieczeństwo | debug w wydaniu | wyłączyć w release | F7.0 |
+| B18 | Brak 12 testerów | ryzyko | brak dostępu do produkcji | rekrutacja od M1 | M1 |
+| B19 | Koszty (Supabase Pro, Vercel Pro, domena, SMTP, Play) | decyzja | blokada F6 | zgody kosztowe | F6 |
+| B20 | Decyzje STORE FIRST D1–D3, D6–D11 bez potwierdzenia | decyzje | blokady F5–F7 | sekcja F | F2–F6 |
+| B21 | Dług 4A.3 F4–F11 | dług | dotyczy starej sync | znika z v2 | F3 |
+| B22 | Podział FREE/PRO niespójny z D10 („Progres %” w FREE, niewyświetlane podpowiedzi) | zaległość | niezgodność produktu | F5 | F5 |
+| B23 | Serwerowe PRO — weryfikacja wdrożenia | zaległość | niepewny stan produkcji starej wersji | tylko odczyt, Twoja zgoda | F5 |
+| B24 | `getHistoricalBest` czyta „57,5” jako NaN, dropsety w rekordach | błąd | błędne rekordy | PE-E | F2 |
+| B25 | Ekran szczegółów ćwiczenia: przecinek = 0 kg | błąd (zachowany w A4.5) | zaniżone liczby | A5 | F3 |
+| B26 | Ostrzeżenia Supabase / RLS produkcji 1.0 | ryzyko | odrzucenie, wyciek | doradcy bez krytycznych | F6 |
+
+## C. Harmonogram (tydzień 1 = 12.10.2026)
+
+Jeden wykonawca; szacunek, nie zobowiązanie. Kolumna „równolegle” nie wydłuża ścieżki krytycznej.
+
+| Tydzień | Ścieżka krytyczna | Równolegle |
+| --- | --- | --- |
+| 1–2 (12–25.10) | F2.0: decyzje F-1…F-6; specyfikacja 4A.10; słowniki Standaryzacji; F2.3 partia 1 | PE-B start; design D1 (komponenty) |
+| 3–4 (26.10–8.11) | F2.4: schemat v2 lokalnie (PGlite), `nextrep_push`, `sync_seq`, RLS, testy; F2.3 partie 2–3 | PE-C, PE-E; F4 start (powiadomienia, stoper, pliki); M1 lista oczekujących |
+| 5–6 (9–22.11) | F2.5 atlas w `exercise_catalog` (lokalnie); F3.1 UUID, magazyn (IndexedDB), kolejka v2 | F2.3 partie 4–6; D2 Dashboard i aktywny trening; F4 lista kontrolna S22 |
+| 7–9 (23.11–13.12) | F3.2 sync v2 + harness S1–S26; F3.3 usunięcie migracji; konto OTP, offline; 4A.10; „Połącz dane” | PE-D (partie) po atlasie; D3 pozostałe ekrany; decyzje kosztowe (nextrep-dev) |
+| 10–12 (14.12–3.01) | F3.4 PE-F, PE-G, PE-H; F3.5 wdrożenie designu; **A5 (osobna bramka)** | F6.1 dokumenty prawne, strona usuwania konta; Play Console (D1) |
+| 13–14 (4–17.01) | F5 Billing + RevenueCat, model uprawnień FREE/PRO/PRO+, usunięcie lokalnego PRO; F7.0 AAB, tor wewnętrzny | F6.2 produkcja 1.0 (Supabase Pro, SMTP, domena, Edge Functions), monitoring; M2 kampania przedpremierowa |
+| 15 (18–24.01) | stabilizacja, regresja pełna, raport przedpremierowy | rekrutacja testerów domknięta |
+| 16–17 (25.01–7.02) | F7.1 test zamknięty 14 dni (12+ testerów), poprawki | M2 trwa |
+| 18 (8–14.02) | wniosek o produkcję, ocena Google (do 7 dni) | karta sklepu final |
+| 19 (15–21.02) | **Publikacja 1.0** z rozkładem procentowym | M3 kampania po publikacji |
+| 20–22 | rezerwa (opóźnienia atlasu, odrzucenie, poprawki) | utrzymanie (sekcja E) |
+
+Etapy designu: D1 komponenty (tyg. 1–3) → D2 Dashboard + aktywny trening (tyg. 4–6) → D3 pozostałe
+ekrany i stany (tyg. 7–10) → D4 wdrożenie i zasoby marki (tyg. 10–12, w F3.5).
+Etapy Progress Engine: PE-B/C/E (tyg. 1–5, bez zależności) → PE-D (po atlasie, tyg. 7–9) → PE-F/G/H
+(F3.4) → A5 (koniec F3, osobna akceptacja).
+Plany: szablony 1.0 po pierwszych partiach atlasu (tyg. 5–8), walidacja w F2 tools, w aplikacji w F3.
+
+## D. Warunki wejścia
+
+### D.1 Wejście do testu wewnętrznego (tor wewnętrzny)
+
+- [ ] Wszystkie testy automatyczne zielone; harness synchronizacji S1–S26 zielony.
+- [ ] Atlas 1.0 kompletny w zakresie 1.0 (0 błędów walidatora), szablony planów na nowych id.
+- [ ] Brak kodu migracji starych danych i ścieżek darmowego PRO.
+- [ ] F4 zaliczone na S22 (NR-S1-01, NR-S1-02 zamknięte).
+- [ ] AAB podpisany, Play App Signing, ostateczna nazwa pakietu, `webContentsDebuggingEnabled: false`, stały hostname/scheme.
+- [ ] Backend testowy 1.0 z RLS i testami RLS każdej tabeli.
+
+### D.2 Wejście do testu zamkniętego (beta)
+
+- [ ] Funkcjonalnie kompletna 1.0: PE-01–PE-32 zielone, A5 zaakceptowane, nowy design wdrożony.
+- [ ] Billing: zakup, odnowienie, anulowanie, przywrócenie, wygaśnięcie u testera licencji.
+- [ ] Produkcja 1.0: Supabase Pro, kopie zapasowe, SMTP z domeny, Edge Functions, doradcy bez krytycznych.
+- [ ] Polityka prywatności, regulamin, strona usuwania konta online; Data safety, deklaracja zdrowotna, IARC wypełnione.
+- [ ] Monitoring błędów działa (zdarzenie testowe widoczne), bez danych osobowych.
+- [ ] ≥ 15 testerów zapisanych (rezerwa ponad 12).
+
+### D.3 Wniosek o produkcję i publikacja
+
+- [ ] 14 dni testu zamkniętego z ≥ 12 testerami bez przerwy.
+- [ ] Brak błędów krytycznych z testu i raportu przedpremierowego; Android Vitals bez przekroczeń progów.
+- [ ] Konto dla recenzenta Google; uczciwe opisy PRO i cen (ceny z RevenueCat).
+- [ ] Plan wyłączenia starej wersji (STORE FIRST D9) zatwierdzony; Twoje dane ze starej wersji wyeksportowane.
+- [ ] Rozkład procentowy (np. 10% → 50% → 100%) i kryteria zatrzymania (sekcja E).
+
+## E. Po premierze: utrzymanie, monitoring, PRO+
+
+**Pierwsze 4 tygodnie.**
+
+| Okres | Działanie |
+| --- | --- |
+| Dni 1–7 | codzienny przegląd: awarie, Android Vitals, błędy synchronizacji (push 4xx/5xx, konflikty, kolejki > 24 h), webhooki płatności, opinie w Play; rozkład 10% → 50% → 100% tylko przy braku błędów krytycznych |
+| Tydzień 2–4 | wydania poprawkowe co tydzień; kopia zapasowa bazy sprawdzona (odtworzenie na dev); przegląd kosztów |
+| Kryteria zatrzymania rozkładu | wskaźnik awarii powyżej progu Play, utrata danych, błędne uprawnienie PRO, 5xx Data API |
+
+**Monitoring stały:** błędy (F-4), Android Vitals, panel zdrowia synchronizacji (admin), płatności
+(RevenueCat + webhook), reklamy (jeśli D3), analityka produktowa (aktywacja, retencja D1/D7/D30,
+konwersja do PRO), lejek marketingowy (zapisy → instalacje → konta → PRO).
+
+**PRO+ AI Coach — warunki startu prac:** 1.0 opublikowane; kampania M3 rozpoczęta; co najmniej
+uzgodniona liczba aktywnych użytkowników i dane o retencji (próg do decyzji); stabilne Android Vitals;
+Twoja osobna zgoda. Etapy: E1 specyfikacja (zakres coachingu, źródło faktów = silnik PE i raporty,
+bezpieczeństwo treści zdrowotnych, zgody i polityka prywatności, koszty modelu); E2 prototyp na
+koncie testowym; E3 beta PRO+ dla części użytkowników; E4 wydanie. Wcześniej (w 1.0) tylko poziom
+`pro_plus` w modelu uprawnień, bez funkcji.
+
+**iOS:** po stabilizacji Androida (STORE FIRST: ok. 3–5 tygodni, Mac z Xcode, App Store Connect,
+RevenueCat dla Apple).
+
+## F. Decyzje do podjęcia
+
+| # | Decyzja | Rekomendacja | Blokuje |
+| --- | --- | --- | --- |
+| F-1 | Treść ustaleń Etapu 4A.10 („Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”) | przekaż dokument lub podsumowanie; dopiszę specyfikację | F3 |
+| F-2 | Narzędzie designu: Google Stitch czy Claude Design (`DESIGN.md` §17) | potwierdzić jedno; zaktualizować `DESIGN_STATUS.md` | D1–D4 |
+| F-3 | Zakres NEXTREP Reporting Engine poza PE-F/PE-G | spisać listę raportów 1.0 albo potwierdzić, że = PE-F + PE-G | PE-G |
+| F-4 | Monitoring błędów: Crashlytics czy Sentry | Crashlytics (Android Vitals i Firebase w jednym) albo Sentry (web + Android jednym SDK); do Twojej decyzji | F6 |
+| F-5 | Los kodu 4A.4 / F-5 w 1.0 | usunąć przy czystym starcie (STORE FIRST); nie wdrażać SQL F-5 na produkcję | F3 |
+| F-6 | Poprawka przecinka w starej synchronizacji na `main` (B02) | tylko jeśli chcesz chronić bieżące dane przed 1.0; inaczej eksport przed wyłączeniem | — |
+| F-7 | STORE FIRST D1 (konto Play), D2 (ceny), D3 (reklamy), D6 (Supabase Pro), D7 (domena), D8 (Vercel), D9 (stara wersja), D10 (admin w Androidzie), D11 (IndexedDB) | potwierdzić albo zmienić; rekomendacje w dokumencie STORE FIRST | F3–F7 |
+| F-8 | Nazwa pakietu 1.0 (zamiast `app.nextrep.spike`) | np. `app.nextrep`; stała na zawsze | F7.0 |
+| F-9 | Próg użytkowników do startu PRO+ | do ustalenia po M3 | E |
+| F-10 | Zgoda kosztowa na `nextrep-dev` | po F2.4 lokalnym | F2.5/F3 |
+
+---
+
+*Ten plan nie uruchamia żadnych prac. Kolejny krok implementacyjny wymaga Twojej osobnej zgody.*
