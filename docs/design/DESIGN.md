@@ -264,3 +264,31 @@ Implementation handoff:
 ## 17. Design workflow update (2026-10-10)
 
 Claude Design is the selected visual exploration environment with UI/UX Pro Max skill if actually available. Approved screenshots and this file provide visual guidance. The existing PWA and its training/progression/data architecture must not be modified during visual exploration. Start with shared foundations, then Dashboard and Active Workout, and review each screen before accepting it. Existing app icon remains unchanged. Prior Google Stitch workflow notes are historical, not a mandate to use Stitch.
+
+## 18. Brand Assets — approved (2026-10-11)
+
+Official supplied transparent PNG assets:
+- NEXTREP Symbol: standalone geometric N.
+- NEXTREP Logotype: geometric N plus NEXTREP wordmark.
+
+Both assets are immutable: preserve the supplied artwork, proportions, geometry, gradient, colors, alpha transparency and original file bytes. Do not redraw, regenerate or apply effects to the artwork itself.
+
+Placement:
+- Logotype: splash, onboarding, login, Dashboard header, NEXTREP PRO, About, exported reports.
+- Symbol: compact top bar where appropriate, square slots, static loading state and report footers.
+- Neither logo is required in the Active Workout header; the centered training timer takes priority.
+- Stacked logo variant is not approved pending separate review.
+- Existing production PWA app icon remains unchanged; neither asset automatically replaces it.
+
+Sizing and clear space:
+- Clear-space unit X = one quarter of visible artwork height, measured from the actual artwork rather than the PNG canvas; account for uneven built-in transparent margins.
+- Minimum displayed logotype image size: 90 × 36 px; below this, use the Symbol.
+- Minimum displayed Symbol image size: 24 × 24 px; below this, use the existing app icon or a suitable standard UI icon.
+- Preserve aspect ratio and adequate clear space. Verify legibility in the final context.
+
+Background and glow:
+- Preferred background #090909; other sufficiently dark approved surfaces may be used after contrast verification.
+- Optional subtle orange ambient glow is a separate background layer behind the logo, never a filter or modification of the logo artwork. This clarifies §6.
+- Contrast statement of 4.25:1 on #090909 was reported by Claude Design and has not been independently verified here; validate on final rendered screens.
+
+Older opaque-on-black logos from the production app are reference-only within the design project. Any replacement of production brand assets is a separate implementation decision requiring explicit approval.
