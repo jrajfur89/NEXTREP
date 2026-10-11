@@ -58,6 +58,8 @@ export const LATERALITIES = ["bilateral", "unilateral", "alternating"];
 export const CONFIDENCE_LEVELS = ["verified", "high", "low", "unknown"];
 
 const ROLE_COUNTS = { working: true, dropset: true, warmup: false, skipped: false };
+// kg sums are rounded to 1 g so that the order of sets never changes a total (float addition)
+const roundKg = (x) => Math.round(x * 1000) / 1000;
 
 // ---- parsing ----------------------------------------------------------------------------------
 function parseNonNegative(value) {
@@ -163,7 +165,7 @@ export function normalizeLoad(set, model) {
 
   const kgApplies = hasClassicKg(m);
   let volumeKg = 0;
-  if (kgApplies && counts) volumeKg = m.confidence === "unknown" ? null : externalKg * reps * (perSide ? 2 : 1);
+  if (kgApplies && counts) volumeKg = m.confidence === "unknown" ? null : roundKg(externalKg * reps * (perSide ? 2 : 1));
 
   const rirBounds = parseRirBounds(s.rir);
   const rirKnown = rirBounds != null;
@@ -238,7 +240,7 @@ export function exerciseTotals(sets, model) {
     t.reps += n.reps;
     t.repsAllSides += n.repsAllSides;
     t.seconds += n.seconds;
-    if (t.volumeKg !== null) t.volumeKg = n.volumeKg === null ? null : t.volumeKg + n.volumeKg;
+    if (t.volumeKg !== null) t.volumeKg = n.volumeKg === null ? null : roundKg(t.volumeKg + n.volumeKg);
     if (!n.rirKnown) t.rirMissingSets++;
     if (n.progress && n.isLoaded) t.topExternalKg = Math.max(t.topExternalKg ?? 0, n.externalKg);
     if (n.progress && n.assistKg != null) t.minAssistKg = t.minAssistKg == null ? n.assistKg : Math.min(t.minAssistKg, n.assistKg);
@@ -266,7 +268,7 @@ export function sessionTotals(session, resolveModel) {
     out.repsAllSides += t.repsAllSides;
     out.seconds += t.seconds;
     if (t.volumeStatus !== "none" && t.workingSets > 0) statuses.add(t.volumeStatus);
-    if (t.volumeKg != null) out.volumeKg += t.volumeKg;
+    if (t.volumeKg != null) out.volumeKg = roundKg(out.volumeKg + t.volumeKg);
   }
   if (statuses.has("unavailable")) out.volumeStatus = "partial";
   else if (statuses.has("estimated")) out.volumeStatus = "estimated";
