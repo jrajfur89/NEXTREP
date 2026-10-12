@@ -9,11 +9,11 @@
 //      the release metadata (decision C01-4) is generated from the validated file;
 //   2. bundle src/nr1/main.jsx with esbuild in memory (no CDN; React from npm). A guard plugin
 //      refuses any forbidden import while resolving (old app, legacy engine adapters, Supabase);
-//   3. boundaries (tools/check-nr1-boundaries.mjs): the real dependency graph (metafile) and the
-//      bundle text — no old data model, no Supabase address or key, no protected project;
+//   3. boundaries (tools/check-nr1-boundaries.mjs): the real dependency graph (metafile) of the app
+//      AND of every module of src/nr1/ (also those the app does not import yet), and the bundle text — no old data model, no Supabase address or key, no protected project;
 //   4. write dist-nr1/ (index.html, assets/app.js, atlas-release.json) and .build-nr1/.
 // It never reads a Supabase configuration and never writes into dist/ (the old app's build).
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve, relative, sep } from "node:path";
 import { build } from "esbuild";
@@ -124,6 +124,25 @@ try {
 }
 const appJs = result.outputFiles.find((f) => f.path.endsWith("app.js")).text;
 
+// every module of src/nr1/ is checked too — also those the app does not import yet (contracts,
+// domain), so a forbidden dependency cannot hide in code that is not on the screen
+const listModules = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
+  const p = resolve(dir, d.name);
+  return d.isDirectory() ? listModules(p) : /\.(m?js|jsx)$/.test(d.name) ? [p] : [];
+});
+const modules = listModules(resolve(ROOT, "src/nr1")).sort();
+let modulesResult;
+try {
+  modulesResult = await build({
+    absWorkingDir: ROOT, entryPoints: modules, bundle: true, write: false, metafile: true, outdir: resolve(workDir, "modules"),
+    format: "esm", platform: "browser", target: ["chrome100", "safari15"], jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' },
+    nodePaths: [resolve(ROOT, "node_modules")], plugins: [guardPlugin], logLevel: "silent",
+  });
+} catch (e) {
+  const msgs = (e.errors || []).map((m) => `  ✗ ${m.text}${m.location ? ` (${m.location.file}:${m.location.line})` : ""}`).join("\n");
+  fail(`modules of src/nr1/ failed the dependency check:\n${msgs || e.message}`);
+}
+
 // ---- 3. boundaries ----------------------------------------------------------------------------
 let shell = readFileSync(shellPath, "utf8");
 const MARKER = "<!-- NR1_APP: the app script is added here by tools/build-nr1.mjs -->";
@@ -131,6 +150,8 @@ if (shell.split(MARKER).length !== 2) fail("src/nr1/index.html: app marker not f
 const html = shell.replace(MARKER, '<script defer src="./assets/app.js"></script>');
 const violations = [
   ...checkMetafile(result.metafile, { entry: rel(entry) }),
+  ...checkMetafile(modulesResult.metafile, { entries: modules.map(rel) }),
+  ...modulesResult.outputFiles.flatMap((f) => checkBundleText(f.text, { atlas, file: `modules/${rel(f.path).split("/").pop()}` })),
   ...checkBundleText(appJs, { atlas, file: "assets/app.js" }),
   ...checkBundleText(html, { atlas, file: "index.html" }),
 ];
@@ -145,7 +166,8 @@ writeFileSync(resolve(outDir, "assets/app.js"), appJs);
 writeFileSync(resolve(outDir, "index.html"), html);
 writeFileSync(resolve(outDir, "atlas-release.json"), JSON.stringify(release, null, 2) + "\n");
 writeFileSync(resolve(workDir, "metafile.json"), JSON.stringify(result.metafile));
-writeFileSync(resolve(workDir, "build-info.json"), JSON.stringify({ entry: rel(entry), atlasPath: rel(atlasPath), outDir: rel(outDir) }, null, 2) + "\n");
+writeFileSync(resolve(workDir, "metafile-modules.json"), JSON.stringify(modulesResult.metafile));
+writeFileSync(resolve(workDir, "build-info.json"), JSON.stringify({ entry: rel(entry), modules: modules.map(rel), atlasPath: rel(atlasPath), outDir: rel(outDir) }, null, 2) + "\n");
 if (!existsSync(resolve(outDir, "index.html"))) fail("index.html not written");
 
 const appSha = createHash("sha256").update(appJs).digest("hex");

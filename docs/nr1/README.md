@@ -1,6 +1,6 @@
 # NEXTREP 1.0 (`src/nr1/`) — aplikacja oddzielona od dotychczasowej
 
-Stan: **N0 — szkielet i separacja architektury** (12.10.2026). Podstawa: raport C01 i decyzje
+Stan: **N1 — kontrakt silnika i encje v2** (12.10.2026; N0 — szkielet i separacja architektury). Podstawa: raport C01 i decyzje
 C01-1–C01-7 (rejestr: `docs/roadmap/DECISIONS_1_0.md`, sekcja 1b).
 
 NEXTREP 1.0 nie jest jeszcze aplikacją produkcyjną. Wersja deweloperska nie służy do zapisywania
@@ -12,15 +12,19 @@ treningów: nie ma konta, synchronizacji ani backendu i nie korzysta z danych do
 | --- | --- |
 | `src/nr1/index.html` | powłoka strony 1.0 (CSP: `connect-src 'none'` — brak sieci w N0) |
 | `src/nr1/main.jsx` | wejście aplikacji; w N0 ekran „NEXTREP 1.0 — wersja deweloperska” z metadanymi wydania atlasu |
+| `src/nr1/domain/` (N1) | encje v2 i operacje: `entity.js` (UUID, wersja, tombstony), `ordering.js` (pięć list z `position`), `superset.js`, `list-ops.js`, `plan.js`, `workout.js` |
+| `src/nr1/contracts/` (N1) | kontrakty: `constants.js`, `exercise-ref.js`, `set.js`, `plan-goal.js`, `workout.js`, `engine-input.js` — opis w `docs/nr1/CONTRACTS.md` |
 | `tools/build-nr1.mjs` | build 1.0: walidacja atlasu, bundel w pamięci, kontrola granic, zapis do `dist-nr1/` |
 | `tools/check-nr1-boundaries.mjs` | reguły granic architektury i kontrola gotowego buildu (CLI) |
 | `tests/nr1/n0.test.mjs`, `tests/nr1/fixtures/entries/` | testy akceptacyjne N0 i wejścia testowe granic |
+| `tests/nr1/n1-*.test.mjs`, `tests/nr1/helpers.mjs` | testy N1 (encje, superserie, kontrakty, wejście silnika, porównanie starego bundla) |
+| `tests/unit/engine-rir.test.mjs` | regresja `parseRirBounds` po wydzieleniu (stare CI) |
 | `.github/workflows/nr1.yml` | osobne CI 1.0 (bez konfiguracji Supabase) |
 | `dist-nr1/`, `.build-nr1/` | wynik buildu (ignorowane przez git) |
 
 Stara aplikacja (`src/app/`, `index.html`, `tools/build-web.mjs`, `android/`, workflow Android S1)
 pozostaje zamrożona do N12 (C01-7). Docelowy układ katalogów `src/nr1/` (contracts, domain, catalog,
-store, workout, features, ui, platform, sync) powstaje w kolejnych etapach, nie w N0.
+store, workout, features, ui, platform, sync) powstaje w kolejnych etapach; w N1 doszły `domain/` i `contracts/`.
 
 ## Komendy
 
@@ -39,11 +43,13 @@ Opcje buildu (używane przez testy): `--out <katalog>`, `--work <katalog>`, `--a
 ## Zasady izolacji (sprawdzane automatycznie)
 
 1. **Zależności z prawdziwego grafu** (metafile esbuild, nie wyszukiwanie tekstu): w bundlu mogą być
-   tylko `src/nr1/**`, moduł wydania atlasu, dozwolone moduły `src/engine/` (`load.js`,
+   tylko `src/nr1/**`, moduł wydania atlasu, dozwolone moduły `src/engine/` (`rir.js`, `load.js`,
    `atlas-schema.js`, `atlas-validate.js`, `load-snapshot.js`, `muscle-work.js`) i pakiety `react`,
    `react-dom`, `scheduler`. Zakazane: `src/app/`, `legacy-progression.js`, `load-legacy-map.js`,
    `volume.js`, `src/engine/index.js`, `@supabase/*`, `tools/`, `db/`, `docs/`. Zakazany import jest
    odrzucany już przy rozwiązywaniu (z nazwą pliku i importu), także gdy jest przechodni.
+   Od N1 kontrola obejmuje graf aplikacji ORAZ osobno każdy moduł `src/nr1/` (także te, których ekran
+   jeszcze nie importuje, np. `domain/` i `contracts/`).
 2. **Treść bundla:** brak adresów i kluczy Supabase, brak projektów chronionych (produkcja,
    `nextrep-f5-test`), brak kluczy starego modelu danych (`trainapp_*`, `nextrep_*`, `legacy_id`,
    `user_data`), brak `localStorage` i `sessionStorage`, brak identyfikatorów 68 ćwiczeń starego atlasu
@@ -55,7 +61,12 @@ Opcje buildu (używane przez testy): `--out <katalog>`, `--work <katalog>`, `--a
    0 odwołań do `localStorage`, `sessionStorage`, sieci i IndexedDB oraz nienaruszone stare dane.
 5. **Zamrożenie starej aplikacji:** test porównuje z punktem audytu `7d13f74` katalogi `src/app/`,
    `android/`, `db/`, `docs/sql/`, pliki `index.html`, `tools/build-web.mjs`, `capacitor.config.json`,
-   `vercel.json`, workflow Android S1 i starsze moduły silnika — różnica musi być pusta.
+   `vercel.json`, workflow Android S1 oraz `load-legacy-map.js`, `volume.js`, `index.js` — różnica musi
+   być pusta. `legacy-progression.js` może różnić się WYŁĄCZNIE wydzieleniem `parseRirBounds` (N1),
+   sprawdzanym mechanicznie.
+6. **Stara aplikacja po N1:** zminifikowany `app.js` starej aplikacji zmienił bajty tylko przez inną
+   kolejność funkcji (zaakceptowane). `tests/nr1/n1-old-bundle.test.mjs` dowodzi, że bundel bez
+   minifikacji jest identyczny z `db38ae8` poza miejscem przeniesionej funkcji.
 
 Naruszenie dowolnej reguły zatrzymuje build, zanim cokolwiek zostanie zapisane.
 
@@ -72,24 +83,20 @@ Naruszenie dowolnej reguły zatrzymuje build, zanim cokolwiek zostanie zapisane.
   publikuje Batch 01.
 - W N0 aplikacja dostaje tylko metadane wydania; katalog ćwiczeń to etap N3.
 
-## Status N0
+## Status
 
-Zakres N0-A–N0-F zrealizowany; wyniki w raporcie N0 i w CI `nr1.yml`.
+**N0** — zakończone (`db38ae8`): osobna aplikacja, build, granice, CI.
 
-**Ustalenie N0 (warunek wstępny N1):** `src/engine/load.js` importuje `parseRirBounds` z
-`legacy-progression.js`. Dlatego dziś żaden dozwolony moduł silnika (`load.js` i wszystkie, które go
-importują) nie przechodzi kontroli granic — stary silnik trafiłby do bundla przechodnio. N0 nie
-zmienia wspólnego silnika (ekran N0 go nie używa). Test `imports-load-transitive.jsx` potwierdza, że
-kontrola wykrywa tę zależność.
+**N1** — kontrakt silnika i encje v2:
 
-## Następny etap: N1 (wymaga osobnego zlecenia)
+1. `parseRirBounds` wydzielone do `src/engine/rir.js`; `legacy-progression.js` je importuje i eksportuje
+   jak dotąd; `load.js` nie zależy już od starego silnika, więc dozwolone moduły silnika przechodzą
+   kontrolę granic.
+2. Encje v2, kolejność, superserie, operacje planu i treningu, kontrakty — `docs/nr1/CONTRACTS.md`.
+3. Bez IndexedDB, interfejsu, backendu i migracji.
 
-1. Usunięcie zależności `load.js` → `legacy-progression.js` (np. `parseRirBounds` w osobnym czystym
-   module silnika) bez zmiany zachowania starej aplikacji: 729 testów zielonych, bundel starej
-   aplikacji sprawdzony.
-2. `src/nr1/contracts/`: kontrakt wejścia silnika (trening, ćwiczenie treningu ze snapshotem, seria,
-   cele planu) — czyste dane.
-3. `src/nr1/domain/`: encje v2 (UUID, `position`, `version`, `deleted_at`), operacje kolejności i
-   superserii.
-4. Kryteria: testy własności (przenumerowanie rodzeństwa, ciągłość superserii, tombstony); PE-03,
-   PE-04 i PE-18 liczone przez `load.js` na kontrakcie; kontrola granic dalej zielona.
+## Następny etap: N2 (wymaga osobnego zlecenia)
+
+Magazyn IndexedDB (O-10) w `src/nr1/store/`: baza `nextrep1`, repozytoria encji N1, obsługa błędu
+pojemności (T-32), dziennik operacji; `fake-indexeddb` tylko w testach (C01-6). Jeden zapisany rekord
+planu (lista planów i stan planu trzymają dziś kopie — `withPlan` / `refreshPlan`).

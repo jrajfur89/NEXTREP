@@ -69,16 +69,16 @@ function packageOf(p) {
 
 // Every input of the bundle must be: the entry, a file of src/nr1/, an allowed engine module, an
 // allowed package, or the virtual atlas release module.
-export function checkMetafile(metafile, { entry }) {
+export function checkMetafile(metafile, { entry, entries = [] }) {
   const violations = [];
-  const entryRel = rel(resolve(ROOT, entry));
+  const entryRels = new Set([entry, ...entries].filter(Boolean).map((e) => rel(resolve(ROOT, e))));
   for (const input of Object.keys(metafile.inputs || {})) {
     if (input.startsWith(`${ATLAS_RELEASE_MODULE.split(":")[0]}:`)) continue; // virtual namespace
     const abs = resolve(ROOT, input);
     const p = rel(abs);
     const reason = forbiddenPathReason(abs);
     if (reason) { violations.push({ rule: "DEPENDENCY", file: p, message: `Niedozwolona zależność: ${reason}` }); continue; }
-    const ok = p === entryRel || p.startsWith("src/nr1/") || p.startsWith("src/engine/") || packageOf(p);
+    const ok = entryRels.has(p) || p.startsWith("src/nr1/") || p.startsWith("src/engine/") || packageOf(p);
     if (!ok) violations.push({ rule: "DEPENDENCY", file: p, message: "Plik spoza src/nr1/, dozwolonego silnika i dozwolonych pakietów" });
   }
   return violations;
@@ -146,8 +146,11 @@ if (isMain) {
   }
   const info = JSON.parse(readFileSync(infoPath, "utf8"));
   const atlas = JSON.parse(readFileSync(resolve(ROOT, info.atlasPath), "utf8"));
+  const modulesMetaPath = resolve(work, "metafile-modules.json");
+  if (!existsSync(modulesMetaPath)) { console.error(`[check-nr1] brak ${rel(modulesMetaPath)} — najpierw: node tools/build-nr1.mjs`); process.exit(1); }
   const violations = [
     ...checkMetafile(JSON.parse(readFileSync(metaPath, "utf8")), { entry: info.entry }),
+    ...checkMetafile(JSON.parse(readFileSync(modulesMetaPath, "utf8")), { entries: info.modules || [] }),
     ...checkBundleText(readFileSync(appPath, "utf8"), { atlas, file: rel(appPath) }),
     ...checkBundleText(readFileSync(resolve(dist, "index.html"), "utf8"), { atlas, file: rel(resolve(dist, "index.html")) }),
   ];
@@ -156,5 +159,6 @@ if (isMain) {
     process.exit(1);
   }
   const inputs = Object.keys(JSON.parse(readFileSync(metaPath, "utf8")).inputs).length;
-  console.log(`[check-nr1] OK — ${inputs} plików w grafie zależności, bundel bez niedozwolonych zależności, danych starej aplikacji i konfiguracji backendu`);
+  const modules = (info.modules || []).length;
+  console.log(`[check-nr1] OK — ${inputs} plików w grafie zależności aplikacji, ${modules} modułów src/nr1/ sprawdzonych osobno, bundel bez niedozwolonych zależności, danych starej aplikacji i konfiguracji backendu`);
 }
