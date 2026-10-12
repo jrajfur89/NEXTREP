@@ -1,5 +1,10 @@
 # NEXTREP 1.0 (`src/nr1/`) — aplikacja oddzielona od dotychczasowej
 
+> **Zawieszone decyzją K01-1 (12.10.2026) — zachowane, nierozwijane.** NEXTREP 1.0 powstaje przez rozwój
+> istniejącej aplikacji `src/app/` (`DECISIONS_1_0.md` §1c, MASTER PLAN v3 sekcja K). Katalog `src/nr1/`,
+> jego build i CI zostają jako rezultat N0–N1; kontrakty (`CONTRACTS.md`) są wzorcem reguł dla zmian
+> w `src/app/`. Etapy N2 i dalsze nie zostaną rozpoczęte bez nowego polecenia. Opis niżej jest stanem z N1.
+
 Stan: **N1 — kontrakt silnika i encje v2** (12.10.2026; N0 — szkielet i separacja architektury). Podstawa: raport C01 i decyzje
 C01-1–C01-7 (rejestr: `docs/roadmap/DECISIONS_1_0.md`, sekcja 1b).
 
@@ -95,8 +100,10 @@ Naruszenie dowolnej reguły zatrzymuje build, zanim cokolwiek zostanie zapisane.
 2. Encje v2, kolejność, superserie, operacje planu i treningu, kontrakty — `docs/nr1/CONTRACTS.md`.
 3. Bez IndexedDB, interfejsu, backendu i migracji.
 
-## Następny etap: N2 (wymaga osobnego zlecenia)
+## Dalsze etapy
 
-Magazyn IndexedDB (O-10) w `src/nr1/store/`: baza `nextrep1`, repozytoria encji N1, obsługa błędu
-pojemności (T-32), dziennik operacji; `fake-indexeddb` tylko w testach (C01-6). Jeden zapisany rekord
-planu (lista planów i stan planu trzymają dziś kopie — `withPlan` / `refreshPlan`).
+Wstrzymane decyzją K01-1. Planowany wcześniej N2 (magazyn IndexedDB w `src/nr1/store/`) nie jest
+realizowany; magazyn istniejącej aplikacji to decyzja O-27.
+
+Zamrożenie starej aplikacji (zasada 5 wyżej, C01-7) zostało zastąpione przez K01-1; test zamrożenia
+zostaje do etapu AT2, który go zdejmuje w swoim zakresie.

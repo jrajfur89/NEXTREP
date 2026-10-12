@@ -244,7 +244,7 @@ przycisk bez zmian.
 ## 8. Zależności i etap
 
 - Wymaga: schemat v2 i `nextrep_push` (F2.4), klient na v2 (F3), IndexedDB (O-10), wtyczki Filesystem i
-  Share (F4), projekt ekranów (Stitch, D3), backend testowy (decyzja otwarta, rejestr decyzji).
+  Share (F4), projekt ekranów (Claude Design, faza 3), backend testowy (decyzja otwarta, rejestr decyzji).
 - Etap wdrożenia: F3 (logika, ekrany), F4 (pliki natywne). Priorytet P1, z elementami P0: Z1–Z4, Z7.
 
 ## 9. Pytania otwarte

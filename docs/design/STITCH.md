@@ -1,5 +1,8 @@
 # NEXTREP — STITCH WORKFLOW
 
+> **Historical (K01-2, 2026-10-12).** NEXTREP UX/UI is designed exclusively in Claude Design
+> (`DESIGN.md` §17, `decisions/2026-10-12-design-tool-claude-design.md`). This file is kept as history only.
+
 ## Purpose
 
 Google Stitch is the primary visual design environment for NEXTREP.

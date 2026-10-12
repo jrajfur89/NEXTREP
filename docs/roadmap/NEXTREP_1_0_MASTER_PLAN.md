@@ -1,8 +1,13 @@
 # NEXTREP 1.0 — MASTER PLAN (audyt kompletności)
 
-Wersja 2 · 11.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** (przyjęta 11.10.2026; kierunki O-10, O-17, O-18,
-O-21 z 11.10 w `DECISIONS_1_0.md` §1a; wcześniej przyjęta z zastrzeżeniem
-uzupełnienia decyzji i specyfikacji)
+Wersja 3 · 12.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** po korekcie K01
+(decyzje K01-1–K01-5 w `DECISIONS_1_0.md` §1c). **Sekcja K ma pierwszeństwo przed resztą dokumentu**;
+sekcje 1–3 i A–E pozostają audytem stanu i wymagań, a etapy F2.4/F3–F7 z wersji 2 są przypisane do faz
+sekcji K.
+
+Zmiany w wersji 3: sekcja K (strategia K01, etapy integracji atlasu AT1–AT6, fazy 1–5, nowy harmonogram
+i prognoza); harmonogram z wersji 2 (sekcja C) zastąpiony; design w Claude Design (K01-2) zamiast Google
+Stitch (F-2); N0–N1 (`src/nr1/`) jako zachowany, nierozwijany rezultat.
 
 Zmiany w wersji 2: decyzje F-1–F-10 z 11.10.2026 (rejestr: `DECISIONS_1_0.md`); specyfikacja 4A.10
 (`SPEC_4A10_MOJE_DANE.md`); mapa Reporting Engine (`REPORTING_ENGINE_MAP.md`); konflikt narzędzi designu
@@ -13,6 +18,86 @@ weryfikacja identyfikatora pakietu. Sekcja F przeniesiona do rejestru decyzji.
 Ten dokument zbiera w jednym miejscu wszystko, co ustalono dla NEXTREP 1.0, i porównuje to z tym,
 co faktycznie jest w kodzie i w testach. Nie zmienia żadnej decyzji produktowej. Tam, gdzie ustalenia
 są sprzeczne albo niepełne, zapisuje to jako kwestię do decyzji (sekcja F).
+
+---
+
+## K. Korekta K01 (12.10.2026) — strategia, etapy i harmonogram
+
+### K.1 Strategia
+
+- NEXTREP 1.0 to **istniejąca aplikacja `src/app/`** (`index.html`, build `tools/build-web.mjs`), rozwijana
+  do publikacji w Google Play. Ekranów nie budujemy od nowa (K01-1, K01-3).
+- `src/nr1/` (N0 szkielet, N1 kontrakty i encje v2) zostaje w repozytorium, nierozwijany. Jego reguły
+  (`docs/nr1/CONTRACTS.md`: kolejność list, superserie, RIR, przecinek, snapshot) są wzorcem dla zmian
+  w `src/app/`; moduły silnika `src/engine/` (`rir.js`, `load.js`, `load-snapshot.js`, `muscle-work.js`,
+  `atlas-*.js`) są wspólne.
+- UX/UI wyłącznie w **Claude Design** (K01-2); `DESIGN.md` z `main` jest źródłem wartości.
+- Czysty start danych (STORE FIRST): bez migracji starych planów, historii i identyfikatorów ćwiczeń;
+  bez mapowania starego atlasu (68) na nowy.
+- PRO+ (AI Coach) poza 1.0 (F-9, K01-3).
+
+### K.2 Zasady etapów (K01-4)
+
+1. Jeden etap = jeden zakres opisany z góry: pliki, zachowanie, czego etap NIE robi.
+2. Start etapu wymaga Twojej osobnej zgody; zgoda na etap nie obejmuje następnego.
+3. Każdy etap kończy się: testami automatycznymi (stare i nowe), buildem testowym działającej aplikacji
+   do sprawdzenia na telefonie i raportem odbioru. Następny etap startuje po akceptacji.
+4. Etap nie zmienia zakresu projektu; potrzeba takiej zmiany zatrzymuje etap i wraca jako propozycja
+   decyzji (zasada zakresu, `DECISIONS_1_0.md` §1c).
+5. Bez zmian `main`, produkcyjnego Supabase, `nextrep-f5-test` i produkcyjnej konfiguracji Vercel;
+   push tylko na `release/1.0`.
+
+### K.3 Fazy i etapy
+
+| Faza (K01-5) | Etap | Zakres | Czego etap nie robi |
+| --- | --- | --- | --- |
+| 1. Działający NEXTREP | K02 | korekta dokumentacji (ten dokument, rejestr decyzji, `docs/nr1/README.md`, dokumenty designu, `DESIGN.md` z `main`) | kod, konfiguracja |
+| 2. Atlas i plany | AT1 | publikacja zatwierdzonej partii Batch 01 w `src/atlas/atlas.json` (dane; procedura w raporcie K01, sekcja 4) | zmiany aplikacji, schematu atlasu, `issuedIds` |
+| | AT2 | atlas widoczny w działającej aplikacji jako katalog tylko do odczytu (adapter `atlas.json` → kształt ćwiczenia `src/app/`); zdjęcie testu zamrożenia `src/app/` (C01-7); build testowy wg O-26 | plany, trening, historia, synchronizacja — bez zmian |
+| | AT3 | czysty start: nowy magazyn lokalny, wyłączone migracje i odczyt starych danych, brak zasiewu `DEFAULT_EXERCISES`; katalog z atlasu + ćwiczenia prywatne jako źródło dla planów i treningu | snapshot, statystyki, gotowe plany |
+| | AT4 | snapshot modelu obciążenia (`buildLoadSnapshot`) przy dodaniu ćwiczenia do treningu; historia i podsumowania czytają snapshot; stare wzory F1.6 do bramki A5 | zmiana wzorów na ekranach (A5) |
+| | AT5 | ćwiczenia prywatne z polami modelu (rodzaj obciążenia, strona, liczenie powtórzeń, mięśnie; „nie wiem” → `external_unknown`) | |
+| | AT6 | gotowe plany: `src/atlas/plan-templates.json` + walidator (C01-5), budowa planów na id atlasu; treść planów od Ciebie | |
+| | PE | PE-B, PE-C, PE-E w silniku (bez ekranów), równolegle do AT; zakres w 1.0: O-25 | |
+| 3. Design | DS1 | projekty w Claude Design (Twoja praca; może iść od razu, równolegle do fazy 2) | |
+| | DS2 | wdrażanie zaakceptowanych ekranów w `src/app/`, ekran po ekranie; test wizualny aktualizowany per ekran | zmiana logiki |
+| | A5 | bramka: ekrany przechodzą na wzory `load.js`; PE-D, PE-F/G/H (raporty) z nowymi ekranami statystyk | |
+| 4. Synchronizacja, monetyzacja, Google Play | SY | nowy projekt Supabase (O-24), synchronizacja wg O-23, konto (OTP, usuwanie konta), 4A.10 wg SPEC, magazyn wg O-27 | |
+| | AN | Android: ostateczny identyfikator (O-11), funkcje natywne (F4: eksport, powiadomienie przerwy, stoper w tle), Crashlytics (F-4, O-14), ustawienia wydania (B15–B17) | |
+| | MO | reklamy (AdMob + UMP, O-03), PRO i płatności (Billing / RevenueCat, O-02, O-04), usunięcie lokalnego PRO (B12) | PRO+ |
+| | GP | dokumenty i deklaracje Google Play: polityka prywatności, regulamin, strona usuwania konta, Data safety, deklaracja zdrowotna, IARC, karta sklepu (O-12) | |
+| 5. Publikacja | P | tor wewnętrzny (warunki D.1), test zamknięty 14 dni (D.2), wniosek o produkcję (D.3) | |
+
+Prace bez kodu, które nie zmieniają kolejności (konto Google Play, rekrutacja testerów, szkice dokumentów
+prawnych, projekty w Claude Design, partie atlasu), mogą iść od razu, bo wyznaczają terminy faz 4–5.
+
+### K.4 Harmonogram i prognoza (tydzień 1 = 12.10.2026)
+
+Jeden wykonawca; szacunek, nie zobowiązanie. Wariant podstawowy: ścisła kolejność K01-5 (synchronizacja
+po wdrożeniu designu).
+
+| Tydzień | Faza / etap | Równolegle (bez kodu albo bez zależności) |
+| --- | --- | --- |
+| 1 (12–18.10) | K02; AT1 po otrzymaniu pliku Batch 01; decyzja O-26 | partie atlasu; DS1 start; decyzja O-01 (konto Play) |
+| 2–3 (19.10–1.11) | AT2, AT3 | PE-B; partie atlasu; DS1 |
+| 4–5 (2–15.11) | AT4, AT5 | PE-C, PE-E; partie atlasu; DS1; decyzje O-23, O-24, O-25 |
+| 6–8 (16.11–6.12) | AT6 (wymaga treści planów i wystarczającej liczby ćwiczeń, O-29) | ostatnie partie atlasu; DS1 domknięte; szkice GP |
+| 9–13 (7.12–10.01) | DS2 + A5 + PE-D/F/G/H (z przerwą świąteczną) | rekrutacja testerów; konto Play i aplikacja w Play Console |
+| 14–17 (11.01–7.02) | SY (nowy projekt, synchronizacja, konto OTP, 4A.10) | AN |
+| 18–19 (8–21.02) | MO, GP, tor wewnętrzny (D.1) | AN domknięte |
+| 20–21 (22.02–7.03) | test zamknięty 14 dni (D.2) | poprawki |
+| 22 (8–14.03) | wniosek o produkcję, ocena Google (do 7 dni) | karta sklepu final |
+
+**Prognoza (wariant podstawowy):** publikacja ok. **połowy marca 2027**, rezerwa do **początku kwietnia
+2027**.
+
+**Wariant O-28** (synchronizacja równolegle z DS2 od tygodnia 9): faza 4 kończy się ok. 24.01, test
+zamknięty 25.01–7.02, publikacja ok. **połowy lutego 2027** (rezerwa do początku marca). Wymaga Twojej
+decyzji, bo odchodzi od ścisłej kolejności K01-5.
+
+Ścieżka krytyczna: treść atlasu i planów (O-29) → DS2 → SY → MO → test zamknięty 14 dni → ocena Google.
+Terminy decyzji: O-26 do 18.10 (przed AT2); O-01 do 31.10 (konto Play, testerzy); O-23, O-24, O-25 do 15.11;
+O-02/O-03/O-04 do 6.12 (przed MO).
 
 ---
 
@@ -69,14 +154,13 @@ wdrożony tylko na `nextrep-f5-test`, nie na produkcji (`docs/sql/README.md`). D
    w APK prowadzą na `https://localhost`. Brak polityki prywatności, regulaminu i strony WWW usuwania konta.
 9. **Monitoring i marketing:** brak w kodzie. F-4: Crashlytics (zgodność z Capacitor 8 deklarowana, test
    buildu przed przyjęciem); propozycja monitoringu synchronizacji w §2.11. Brak analityki i listy oczekujących.
-10. **Design:** fundamenty DONE, komponenty i ekrany w większości TODO. F-2: ekrany w Google Stitch;
-    `DESIGN.md` §17 na `main` (Claude Design) jest z tym sprzeczny, a `release/1.0` ma starszą wersję
-    `DESIGN.md` — konflikty K1–K8 i propozycje zmian tekstu czekają na akceptację.
+10. **Design:** fundamenty DONE, komponenty i ekrany w większości TODO. K01-2 (12.10): UX/UI wyłącznie
+    w Claude Design, zgodnie z `DESIGN.md` §17 z `main`; aktualny `DESIGN.md` przeniesiony na
+    `release/1.0` w K02 (F-2 / Stitch zastąpione).
 11. **Nazwa:** w Google Play i App Store istnieją już aplikacje „NextRep” (rejestr decyzji, O-12).
 
-Szacunek: publikacja w Google Play ok. **tydzień 19–22 od dziś** (luty–marzec 2027), przy jednym
-wykonawcy, terminowym dostarczaniu treści atlasu i szybkich decyzjach. Ścieżka krytyczna: treść
-atlasu → F3 (klient na v2) → F5 (Billing) → test zamknięty 14 dni → ocena Google.
+Szacunek (v3, po K01): sekcja K.4 — publikacja ok. połowy marca 2027 w wariancie podstawowym,
+ok. połowy lutego 2027 w wariancie O-28. Szacunek z wersji 2 (tydzień 19–22) jest nieaktualny.
 
 ---
 
@@ -129,7 +213,8 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 - **Zależności:** F2 (atlas, snapshot), backend testowy bez `nextrep-dev` (F-10: brak zgody; O-13),
   SPEC 4A.10 (F-1).
 - **Kryteria odbioru:** sekcja 3.4.
-- **Priorytet i etap:** P0 · F2.4 (schemat v2 lokalnie) → F3 (klient na v2).
+- **Priorytet i etap:** P0 · faza 4, etap SY (sekcja K); zakres (poprawiona obecna synchronizacja czy pełne
+  v2 w `src/app/`) — O-23.
 
 ### 2.3 Uproszczenie danych z Etapu 4A.10: „Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”
 
@@ -146,7 +231,7 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 - **Przetestowane:** stare mechanizmy: kopia przed wczytaniem chmury (4A.3), izolacja (4A.2); eksport
   w APK ❌ (NR-S1-01). Nowe: nic.
 - **Brakuje:** implementacja; szczegółowa specyfikacja kosza i retencji kopii (O-17 pkt 5); akceptacja
-  listy typów „Zachowaj obie” i testów T-20–T-32 (`COVERAGE_S_T.md`, O-22); projekt ekranów w Stitch.
+  listy typów „Zachowaj obie” i testów T-20–T-32 (`COVERAGE_S_T.md`, O-22); projekt ekranów w Claude Design.
 - **Zależności:** F2.4 (schemat v2), F3, F4 (Filesystem, Share), IndexedDB (O-10, przyjęte), O-13 (backend testowy).
 - **Kryteria odbioru:** scenariusze T-01–T-19 (SPEC §6) i S1–S28 zielone; bramka „Zapisz dane w chmurze”
   (SPEC §7) spełniona przed betą.
@@ -170,26 +255,27 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 - **Kryteria odbioru:** cały atlas: 0 błędów walidatora, ostrzeżenia przejrzane; każdy wpis z modelem,
   lateralnością i liczeniem powtórzeń; 8 szablonów planów walidowanych na nowych identyfikatorach;
   atlas offline w paczce aplikacji.
-- **Priorytet i etap:** P0 · F2.3 (partie, równolegle) → F3 (atlas w aplikacji).
+- **Priorytet i etap:** P0 · F2.3 (partie, równolegle) → AT1–AT6 (sekcja K): atlas jako katalog
+  istniejącej aplikacji, snapshot, ćwiczenia prywatne, gotowe plany.
 
 ### 2.5 Finalny design i dokumentacja marki
 
 - **Ustalenia:** `DESIGN.md` na `main` (kolory, typografia, odstępy, promienie, efekty — DONE), kierunek
   aktywnego treningu (§15), fotografia (§16), zasoby marki: Logotype i Symbol niezmienne (§18, 11.10).
-  F-2 (11.10): ekrany w **Google Stitch**, `DESIGN.md` = zasady, Claude = implementacja; wartości bez
-  zmian. Konflikty z §17 (Claude Design) i ze `STITCH.md` (tylko Inter, a §3 ma Barlow Condensed) oraz
-  starsza wersja `DESIGN.md` na `release/1.0`: `docs/design/decisions/2026-10-11-design-tool-google-stitch.md`.
+  K01-2 (12.10): ekrany w **Claude Design**, `DESIGN.md` = zasady, Claude = implementacja w `src/app/`;
+  wartości bez zmian (`docs/design/decisions/2026-10-12-design-tool-claude-design.md`). F-2 (Stitch)
+  zastąpiona; analiza konfliktów z 11.10 zostaje jako historia.
 - **Stan w kodzie:** obecny wygląd aplikacji (Tailwind, ciemny motyw), stare logo w aplikacji;
   nowe zasoby marki nie są wdrożone (wymaga osobnej zgody). `DESIGN_STATUS.md`: komponenty poza
   przyciskami i kartami TODO; ekrany „not yet designed”; prototyp i przekazanie do implementacji TODO.
 - **Przetestowane:** test wizualny chroni OBECNY wygląd (20 ekranów); nowego designu nie ma czego testować.
 - **Brakuje:** komponenty, 9–10 ekranów, stany puste/błędów, ekrany nowych funkcji (4A.10, PRO/PRO+,
   zakupy, zgody, usuwanie konta, onboarding), grafiki sklepu, ikona aplikacji 1.0.
-- **Zależności:** O-21 (zmiany tekstu dokumentów designu, w tym przeniesienie aktualnego `DESIGN.md`
-  na `release/1.0`), projekt Stitch, PE-F/G/H (nowe ekrany statystyk, raportu, treningu), F3 (dane v2).
+- **Zależności:** projekty w Claude Design (DS1), PE-F/G/H i A5 (nowe ekrany statystyk, raportu,
+  treningu), atlas w aplikacji (AT2–AT4).
 - **Kryteria odbioru:** każdy ekran zaakceptowany i opisany w `docs/design/`; wdrożenie bez zmian logiki;
   nowe wzorce wizualne w teście wizualnym; kontrast sprawdzony na urządzeniu.
-- **Priorytet i etap:** P1 · D1–D4 (sekcja C) równolegle z F2–F3; wdrożenie w F3.5.
+- **Priorytet i etap:** P1 · faza 3 (DS1 równolegle od tygodnia 1, DS2 po fazie 2; sekcja K).
 
 ### 2.6 Progress Engine 2.0 i NEXTREP Reporting Engine
 
@@ -503,7 +589,7 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | B05 | Dokumenty statusu nieaktualne (4A.4 „NOT STARTED”, liczby testów) | dokumentacja | mylący stan | aktualizacja po akceptacji tego planu | F2 |
 | B06 | 4A.10 odtworzone, nie oryginalne | ryzyko | pominięcie ustaleń, których nie ma w źródłach | przegląd SPEC 4A.10, P1–P6 | F2 |
 | B07 | Reporting Engine: RE-1–RE-6 otwarte | luka | niejasny zakres raportów | O-20 | F2 |
-| B08 | Dokumenty designu sprzeczne z F-2 (§17, `STITCH.md`); starszy `DESIGN.md` na `release/1.0` | sprzeczność | implementacja według nieaktualnych wartości | O-21 (zmiany tekstu 1–6) | przed D1 |
+| B08 | Dokumenty designu sprzeczne z narzędziem; starszy `DESIGN.md` na `release/1.0` | sprzeczność | implementacja według nieaktualnych wartości | K01-2: `DESIGN.md` z `main` (K02); `STITCH.md` historyczny; pozostałe wzmianki o Stitch w `DESIGN.md` §12, §14 — propozycja tekstu w decyzji z 12.10 | K02 / DS1 |
 | B09 | Crashlytics: brak testu buildu, brak wersji web, nieczytelne stosy JS | ryzyko | luki w monitoringu | O-14, O-15; spike po zgodzie | F6 |
 | B10 | Treść atlasu (390) i słowniki | ścieżka krytyczna | opóźnienie F3, PE-D/F | partie tygodniowe od tygodnia 1 | F2.3 |
 | B11 | Linki e-mail w APK → `https://localhost` | bloker | brak rejestracji / resetu w APK | OTP | F3 |
@@ -526,30 +612,11 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | B28 | Backend testowy bez `nextrep-dev` | decyzja | brak E2E na prawdziwym backendzie w F3 | O-13 | F3 |
 | B29 | Logowanie offline — rozstrzygnięte (O-18) | zamknięte w dokumentach | — | implementacja i T-28 w F3 | F3 |
 
-## C. Harmonogram (tydzień 1 = 12.10.2026)
+## C. Harmonogram
 
-Jeden wykonawca; szacunek, nie zobowiązanie. Kolumna „równolegle” nie wydłuża ścieżki krytycznej.
-
-| Tydzień | Ścieżka krytyczna | Równolegle |
-| --- | --- | --- |
-| 1–2 (12–25.10) | F2.0: decyzje F-0–F-10 ✅ (11.10), kierunki O-10, O-17, O-18 ✅ (11.10); akceptacja O-21, O-22; szczegóły kosza i retencji (O-17); O-20; słowniki Standaryzacji; F2.3 partia 1 | PE-B start (po zgodzie); design D1 (komponenty) w Stitch |
-| 3–4 (26.10–8.11) | F2.4: schemat v2 lokalnie (PGlite), `nextrep_push`, `sync_seq`, RLS, testy; F2.3 partie 2–3 | PE-C, PE-E; F4 start (powiadomienia, stoper, pliki); M1 lista oczekujących |
-| 5–6 (9–22.11) | F2.5 atlas w `exercise_catalog` (lokalnie); F3.1 UUID, magazyn (IndexedDB), kolejka v2 | F2.3 partie 4–6; D2 Dashboard i aktywny trening; F4 lista kontrolna S22 |
-| 7–9 (23.11–13.12) | F3.2 sync v2 + harness S1–S28 + diagnostyka; F3.3 usunięcie migracji (F-5); konto OTP, offline; 4A.10 | PE-D (partie) po atlasie; D3 pozostałe ekrany; backend testowy (O-13) najpóźniej na start F3.2 |
-| 10–12 (14.12–3.01) | F3.4 PE-F, PE-G, PE-H; F3.5 wdrożenie designu; **A5 (osobna bramka)** | F6.1 dokumenty prawne, strona usuwania konta; Play Console (D1) |
-| 13–14 (4–17.01) | F5 Billing + RevenueCat, model uprawnień FREE/PRO/PRO+, usunięcie lokalnego PRO; F7.0 AAB, tor wewnętrzny | F6.2 produkcja 1.0 (plan Supabase wg O-05, SMTP, domena, Edge Functions), Crashlytics (O-14) i panel synchronizacji; M2 kampania przedpremierowa |
-| 15 (18–24.01) | stabilizacja, regresja pełna, raport przedpremierowy | rekrutacja testerów domknięta |
-| 16–17 (25.01–7.02) | F7.1 test zamknięty 14 dni (12+ testerów), poprawki | M2 trwa |
-| 18 (8–14.02) | wniosek o produkcję, ocena Google (do 7 dni) | karta sklepu final |
-| 19 (15–21.02) | **Publikacja 1.0** z rozkładem procentowym | M3 kampania po publikacji |
-| 20–22 | rezerwa (opóźnienia atlasu, odrzucenie, poprawki) | utrzymanie (sekcja E) |
-
-Etapy designu (Google Stitch, F-2): D0 uzgodnienie dokumentów (O-21) → D1 komponenty (tyg. 1–3) → D2
-Dashboard + aktywny trening (tyg. 4–6) → D3 pozostałe ekrany i stany, w tym 4A.10 (tyg. 7–10) → D4
-wdrożenie i zasoby marki (tyg. 10–12, w F3.5).
-Etapy Progress Engine: PE-B/C/E (tyg. 1–5, bez zależności) → PE-D (po atlasie, tyg. 7–9) → PE-F/G/H
-(F3.4) → A5 (koniec F3, osobna akceptacja).
-Plany: szablony 1.0 po pierwszych partiach atlasu (tyg. 5–8), walidacja w F2 tools, w aplikacji w F3.
+Harmonogram z wersji 2 (F2.0–F7, design D0–D4 w Google Stitch, publikacja w tygodniu 19) został
+zastąpiony 12.10.2026 przez sekcję K.4 (decyzje K01-1–K01-5). Wersja 2 jest w historii git
+(`81e1d4b`, `7d13f74`).
 
 ## D. Warunki wejścia
 
@@ -606,10 +673,12 @@ RevenueCat dla Apple).
 
 ## F. Decyzje
 
-Rejestr decyzji (podjętych i otwartych) jest w `DECISIONS_1_0.md`. Stan 11.10.2026: F-0–F-10 podjęte;
-przyjęte kierunki O-10, O-17, O-18, O-21 (propozycja gotowa); otwarte pozostałe pozycje O-01–O-22 (koszty i wybory biznesowe STORE FIRST, identyfikator pakietu, nazwa, backend testowy,
-Firebase, monitoring web, analityka, pytania 4A.10 i Reporting Engine, logowanie offline, próg PRO+,
-zmiany tekstu dokumentów designu).
+Rejestr decyzji (podjętych i otwartych) jest w `DECISIONS_1_0.md`. Stan 12.10.2026: F-0–F-11, C01, K01-1–K01-5
+podjęte (F-2, O-21, C01-1, C01-7 zastąpione przez K01); przyjęte kierunki O-10, O-17, O-18; otwarte
+O-01–O-09, O-11–O-17, O-19, O-20, O-22–O-29 (koszty i wybory biznesowe STORE FIRST, identyfikator pakietu,
+nazwa, backend testowy, Firebase, monitoring web, analityka, pytania 4A.10 i Reporting Engine, próg PRO+,
+zakres synchronizacji, nowy projekt Supabase, zakres Progress Engine, buildy testowe etapów, magazyn,
+równoległość faz 3–4, minimalny atlas).
 
 ---
 

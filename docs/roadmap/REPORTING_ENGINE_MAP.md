@@ -78,7 +78,7 @@ graph LR
   PEF --> A5
   PEG --> A5
   PEH --> A5
-  DES[Design: ekrany Stitch] --> PEF
+  DES[Design: ekrany Claude Design] --> PEF
   DES --> PEG
   DES --> PEH
 ```

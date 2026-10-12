@@ -1,6 +1,10 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 3 · 12.10.2026 · gałąź `release/1.0`
+Wersja 4 · 12.10.2026 · gałąź `release/1.0`
+
+Zmiany w wersji 4: decyzje K01-1–K01-5 (sekcja 1c) — powrót do rozwoju istniejącej aplikacji
+`src/app/`, Claude Design jako jedyne narzędzie UX/UI, integracja etapami, kolejność priorytetów.
+Decyzje zastąpione przez K01 zostają w rejestrze z adnotacją (historia decyzji).
 
 Zmiany w wersji 3: decyzje C01-1–C01-7 (sekcja 1b) i ustalenie N0.
 
@@ -17,7 +21,7 @@ gdy padła wprost od Ciebie. Rekomendacja w dokumencie nie jest decyzją. Ten pl
 | --- | --- | --- | --- |
 | F-0 | `NEXTREP_1_0_MASTER_PLAN.md` przyjęty jako baza planowania, z zastrzeżeniem uzupełnienia decyzji i specyfikacji | MASTER PLAN v2 | przyjęta |
 | F-1 | 4A.10 odtworzyć jako trzy obszary („Moje dane”, „Przenoszenie danych”, „Kopie i odzyskiwanie”), z zasadami bezpieczeństwa starego systemu; w v2 automatyczna synchronizacja i łączenie po UUID; „Zapisz dane w chmurze” usuwane dopiero po bezpiecznym zastąpieniu | `SPEC_4A10_MOJE_DANE.md` (pytania P1–P6 otwarte) | przyjęta |
-| F-2 | Google Stitch — projektowanie ekranów; `DESIGN.md` — zasady wizualne; Claude — implementacja. Najpierw wskazać konflikt z §17, bez zmiany wartości Design Systemu | `docs/design/decisions/2026-10-11-design-tool-google-stitch.md` (konflikty K1–K8, zmiany tekstu do akceptacji). Zastępuje kierunek z §17 (10.10) | przyjęta; zmiany tekstu otwarte |
+| F-2 | Google Stitch — projektowanie ekranów; `DESIGN.md` — zasady wizualne; Claude — implementacja. Najpierw wskazać konflikt z §17, bez zmiany wartości Design Systemu | `docs/design/decisions/2026-10-11-design-tool-google-stitch.md` (konflikty K1–K8, zmiany tekstu do akceptacji). Zastępuje kierunek z §17 (10.10) | **zastąpiona przez K01-2 (12.10)** |
 | F-3 | Reporting Engine szerszy niż PE-F i PE-G: progresja, regresja, objętość, rekordy, trendy, stagnacja, realizacja planu, rekomendacje; mapa zależności z PE bez zgadywania statusu | `REPORTING_ENGINE_MAP.md` (pytania RE-1–RE-6 otwarte) | przyjęta |
 | F-4 | Monitoring Androida: Crashlytics, pod warunkiem potwierdzenia zgodności ze stosem Capacitor; propozycja monitoringu synchronizacji | MASTER PLAN §2.11 (weryfikacja zgodności i propozycja) | przyjęta warunkowo; warunek: test na buildzie (sekcja 3) |
 | F-5 | Kod 4A.4 / F-5 usuwany w 1.0; SQL F-5 nie trafia na produkcję; wymagane zachowania gościa i konta przez model v2 | MASTER PLAN §2.2, §3; SPEC 4A.10 §4.1 | przyjęta |
@@ -35,23 +39,41 @@ gdy padła wprost od Ciebie. Rekomendacja w dokumencie nie jest decyzją. Ten pl
 | O-10 | **IndexedDB** jako docelowy główny magazyn danych treningowych, z obsługą błędów i ograniczeń pojemności | SPEC 4A.10 §5.1, §8; MASTER PLAN (D11 → przyjęte); test T-32 (propozycja) | szczegóły warstwy magazynu i limitów — projekt w F3 |
 | O-17 | (1) domyślnie nie nadpisujemy danych; (2) zastąpienie danych wymaga **zweryfikowanej** kopii i jawnego potwierdzenia; (3) dane gościa mogą zostać wyczyszczone dopiero po **potwierdzonym przeniesieniu i synchronizacji**; (4) „Zachowaj obie” tylko tam, gdzie bezpieczne kopiowanie z nowym UUID nie narusza spójności; (5) kosz i retencja kopii wymagają szczegółowej specyfikacji | SPEC 4A.10 Z2, Z3, §4.1, §4.4, §9; testy T-29–T-31 (propozycja) | P1 (kosz) i P4 (retencja) — do szczegółowej specyfikacji; lista typów dla „Zachowaj obie” (propozycja w SPEC §4.4) |
 | O-18 | Zapisana, wcześniej uwierzytelniona sesja umożliwia **dostęp offline do lokalnych danych właściwego konta**. Nowe logowanie wymaga internetu. Zmiana konta bez potwierdzonej tożsamości nie może ujawnić danych innego konta | SPEC 4A.10 P6 (rozstrzygnięte), MASTER PLAN S24, B29; test T-28 (propozycja). Zastępuje wcześniejszą zasadę „gość + komunikat” dla sesji zapisanej | szczegóły wygaśnięcia sesji offline — projekt w F3 |
-| O-21 | Przygotować propozycję sześciu poprawek tekstu; Stitch pozostaje głównym workflow; wartości Design Systemu bez zmian bez Twojej zgody | `docs/design/decisions/2026-10-11-design-docs-text-proposal.md` (z kontrolą niezmiennika wartości) | akceptacja poprawek 1–6 |
+| O-21 | Przygotować propozycję sześciu poprawek tekstu; Stitch pozostaje głównym workflow; wartości Design Systemu bez zmian bez Twojej zgody | `docs/design/decisions/2026-10-11-design-docs-text-proposal.md` (z kontrolą niezmiennika wartości) | **zastąpiony przez K01-2 (12.10)**: poprawki 1–4 i 6 nieaktualne; poprawka 5 (aktualny `DESIGN.md` z `main` na `release/1.0`, bez zmiany wartości) wykonana w K02 |
 
 ## 1b. Decyzje C01 — separacja architektury (zatwierdzone 12.10.2026, zlecenie N0)
 
-| # | Decyzja | Skutek |
-| --- | --- | --- |
-| C01-1 | NEXTREP 1.0 powstaje w `src/nr1/`, obok starej aplikacji | `docs/nr1/README.md` |
-| C01-2 | Deweloperski identyfikator Androida: `app.nextrep.dev` | osobny projekt natywny (etap N9); nie przesądza O-11 |
-| C01-3 | Bramka A5 = akceptacja właściciela przed pierwszym ekranem z wynikami Progress Engine 2.0 | etap N8 |
-| C01-4 | `issuedIds` zostaje w `atlas.json`; metadane wydania generuje build | `tools/build-nr1.mjs` (N0); dokumentacja F2 zgodna z tą decyzją |
-| C01-5 | Szablony planów w osobnym `src/atlas/plan-templates.json`, z własnym walidatorem | etap późniejszy (nie w N0) |
-| C01-6 | `fake-indexeddb` wyłącznie jako zależność testowa; bez nowej biblioteki produkcyjnej do IndexedDB na start | N2 |
-| C01-7 | Stara aplikacja na `release/1.0` zamrożona do N12 | test zamrożenia w `tests/nr1/n0.test.mjs` |
+| # | Decyzja | Skutek | Status po K01 |
+| --- | --- | --- | --- |
+| C01-1 | NEXTREP 1.0 powstaje w `src/nr1/`, obok starej aplikacji | `docs/nr1/README.md` | **zastąpiona przez K01-1** |
+| C01-2 | Deweloperski identyfikator Androida: `app.nextrep.dev` | osobny projekt natywny (etap N9); nie przesądza O-11 | do ponownej oceny (O-26) |
+| C01-3 | Bramka A5 = akceptacja właściciela przed pierwszym ekranem z wynikami Progress Engine 2.0 | etap N8 | **zmieniona przez K01-1**: A5 wraca do pierwotnego znaczenia — przełączenie istniejących ekranów na wzory `load.js`, osobna akceptacja |
+| C01-4 | `issuedIds` zostaje w `atlas.json`; metadane wydania generuje build | `tools/build-nr1.mjs` (N0); dokumentacja F2 zgodna z tą decyzją | obowiązuje (także dla `src/app/`) |
+| C01-5 | Szablony planów w osobnym `src/atlas/plan-templates.json`, z własnym walidatorem | etap późniejszy (nie w N0) | obowiązuje (etap AT6) |
+| C01-6 | `fake-indexeddb` wyłącznie jako zależność testowa; bez nowej biblioteki produkcyjnej do IndexedDB na start | N2 | do ponownej oceny razem z zakresem O-10 w `src/app/` (O-27) |
+| C01-7 | Stara aplikacja na `release/1.0` zamrożona do N12 | test zamrożenia w `tests/nr1/n0.test.mjs` | **zastąpiona przez K01-1**; test zamrożenia zostaje do pierwszego etapu zmieniającego `src/app/` (AT2), który go zdejmuje w swoim zakresie |
 
 Ustalenie N0: `src/engine/load.js` importuje `parseRirBounds` z `legacy-progression.js`, więc nowe moduły
 silnika ciągną stary silnik przechodnio. Usunięcie tej zależności jest pierwszym krokiem N1
 (`docs/nr1/README.md`).
+
+## 1c. Decyzje K01 — korekta strategii (12.10.2026)
+
+Źródło: zlecenie K01 i raport „NEXTREP 1.0 — K01: korekta strategii i integracja atlasu”; K01-1–K01-3
+zatwierdzone 12.10.2026, K01-4 i K01-5 podane wprost w tej samej akceptacji.
+
+| # | Decyzja | Skutek dla wcześniejszych decyzji |
+| --- | --- | --- |
+| K01-1 | Anulujemy budowę nowego interfejsu w `src/nr1/`. NEXTREP 1.0 = rozwój istniejącej aplikacji `src/app/` (`index.html`). `src/nr1/` zostaje w repozytorium jako zachowany rezultat N0–N1, nierozwijany bez nowego polecenia | C01-1 i C01-7 zastąpione; C01-3 wraca do pierwotnego znaczenia A5; C01-4 i C01-5 obowiązują; C01-2 i C01-6 do ponownej oceny (O-26, O-27) |
+| K01-2 | UX/UI projektowane wyłącznie w Claude Design | F-2 (Stitch) i O-21 zastąpione; `DESIGN.md` §17 z `main` obowiązuje; `docs/design/decisions/2026-10-12-design-tool-claude-design.md` |
+| K01-3 | Cel: jak najszybsza publikacja pełnowartościowego 1.0 w Google Play bez ponownego tworzenia ekranów; PRO+ (AI Coach) poza 1.0 | potwierdza STORE FIRST (10.10) i F-9 |
+| K01-4 | Integracja etapami, zaczynając od atlasu. Każdy etap ma własny zakres, osobną zgodę na start, kryteria odbioru i osobne testowanie w działającej aplikacji. Nie wdrażamy B1–B8 naraz | MASTER PLAN v3 §K; zasada zakresu niżej |
+| K01-5 | Kolejność priorytetów: działający NEXTREP → nowy atlas i plany → dopracowany design → synchronizacja, monetyzacja i wymagania Google Play → publikacja | harmonogram MASTER PLAN v3 §K.4 |
+
+**Zasada zakresu (z K01-4).** Decyzja architektoniczna, propozycja w raporcie ani zmiana w dokumencie
+technicznym nie zmienia zakresu projektu. Zmiana zakresu (co budujemy, w której aplikacji, w jakiej
+kolejności) wymaga osobnej, nazwanej decyzji właściciela w tym rejestrze. Jeśli etap ujawni potrzebę
+takiej zmiany, etap zatrzymuje się i wraca z propozycją decyzji.
 
 ## 2. Decyzje otwarte
 
@@ -77,8 +99,15 @@ silnika ciągną stary silnik przechodnio. Usunięcie tej zależności jest pier
 | ~~O-18~~ | Logowanie offline | — | — | **przyjęte 11.10** (sekcja 1a) |
 | O-19 | Próg użytkowników do startu PRO+ | biznes | sekcja E | z danych po publikacji (F-9) |
 | O-20 | Reporting Engine: RE-1–RE-6 (eksport raportu, raport tygodniowy, realizacja planu na poziomie planu, wykresy FREE, „Progres %”, etykiety statusów) | produkt | PE-F, PE-G | `REPORTING_ENGINE_MAP.md` §5 |
-| O-21 | Design: akceptacja propozycji poprawek 1–6 | dokumentacja | D0, D1 | propozycja gotowa (sekcja 1a) |
+| ~~O-21~~ | Design: akceptacja propozycji poprawek 1–6 | — | — | **zastąpione przez K01-2** (sekcja 1c) |
 | O-22 | Pokrycie scenariuszy: akceptacja nowych testów T-20–T-32, nowego brzmienia S20 i sposobu obsługi duplikatu S3 = T-10 | testy | F3 | `COVERAGE_S_T.md` |
+| O-23 | Zakres synchronizacji w 1.0: poprawiona obecna synchronizacja (przecinek, `position`) czy pełny schemat v2 STORE FIRST w `src/app/` | technika / termin | faza 4 (SY) | MASTER PLAN v3 §K.3 |
+| O-24 | Nowy projekt Supabase dla 1.0 (koszt; łączy się z O-05 i O-13) | koszt | faza 4 (SY) | czysty start bez dotykania produkcji i `nextrep-f5-test` |
+| O-25 | Zakres Progress Engine w 1.0 (które z PE-B–PE-H) i termin bramki A5 | produkt | faza 2–3 | |
+| O-26 | Identyfikator i środowisko buildów testowych etapów AT (np. `app.nextrep.dev`, tryb gościa bez backendu do fazy 4), tak by obecny APK testowy (`app.nextrep.spike` + `nextrep-f5-test`) się nie zmienił | technika | AT2 | ponowna ocena C01-2 |
+| O-27 | Magazyn w `src/app/`: zakres O-10 (IndexedDB) w istniejącej aplikacji i termin | technika | faza 4 | ponowna ocena C01-6 |
+| O-28 | Czy synchronizacja (faza 4) może iść równolegle z wdrażaniem designu (faza 3) — skraca termin o ok. 4 tygodnie, odchodzi od ścisłej kolejności K01-5 | termin | harmonogram | MASTER PLAN v3 §K.4 |
+| O-29 | Minimalny zakres atlasu i gotowych planów na publikację 1.0 (liczba ćwiczeń, które plany) | produkt | AT6, test zamknięty | tempo partii jest ścieżką krytyczną |
 
 ## 3. F-4: zgodność Crashlytics ze stosem Capacitor (stan weryfikacji)
 
@@ -122,4 +151,5 @@ Wniosek: `app.nextrep` jest poprawnym kandydatem. Przed zatwierdzeniem potrzebne
 | Progress Engine | D1–D14 (10.10), PE-01–PE-32 jako kryteria odbioru | „Progress Engine 2.0: audyt i specyfikacja” |
 | PE-A | P1–P4 (w tym uniwersalny silnik bez ręcznego przeglądu 68 ćwiczeń); A4.5 z pełną równoważnością; kolejność A4.5 → F2 → A5 | dokumenty F1 / A4.5 |
 | F2 | F2-1 (zastąpione), F2-2 (bez projektu i kosztów), F2-3 (A5 na końcu F3 z osobną bramką), F2-4 (snapshot obowiązkowy, brak = usterka z ostrzeżeniem), F2-5 (jawna korekta z historią) | „F2: projekt struktury atlasu” v2 |
+| K01 | powrót do `src/app/`, Claude Design, integracja etapami, kolejność priorytetów | sekcja 1c |
 | Atlas | treść wyłącznie z zatwierdzonych partii „Standaryzacji ćwiczeń NextRep”; K2 (pola techniczne proponuję per partia), K3 (warianty z własnym id), K4 (wiele mięśni głównych z różnych grup); walidator v2 pkt 1–5 | `docs/atlas/README.md`, dokument F2 |

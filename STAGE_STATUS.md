@@ -1,5 +1,9 @@
 # NEXTREP — STAGE STATUS
 
+> **Dokument historyczny (stan sprzed października 2026).** Aktualny stan i plan NEXTREP 1.0:
+> `docs/roadmap/NEXTREP_1_0_MASTER_PLAN.md` (v3, sekcja K) i `docs/roadmap/DECISIONS_1_0.md`. Wpisy o
+> Google Stitch są nieaktualne — UX/UI wyłącznie w Claude Design (K01-2, 12.10.2026).
+
 > Centralna tablica statusu projektu NEXTREP.
 > Szczegółowe zasady i specyfikacje znajdują się w dokumentach domenowych.
 

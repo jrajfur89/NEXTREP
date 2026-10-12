@@ -2,6 +2,9 @@
 
 Date: 2026-10-11
 
+> **Status: Superseded (K01-2, 12.10.2026)** — UX/UI wyłącznie w Claude Design:
+> `2026-10-12-design-tool-claude-design.md`. Treść poniżej zostaje jako historia decyzji.
+
 ## Context
 
 Decyzja F-2 (11.10.2026, po audycie MASTER PLAN): **Google Stitch** jest głównym narzędziem

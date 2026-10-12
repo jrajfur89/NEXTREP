@@ -1,5 +1,8 @@
 # NEXTREP 1.0 — kontrakty i encje v2 (N1)
 
+> Po K01-1 (12.10.2026) `src/nr1/` jest zachowany i nierozwijany; reguły z tego dokumentu są wzorcem dla
+> zmian w istniejącej aplikacji `src/app/` (MASTER PLAN v3 sekcja K).
+
 Stan: N1, 12.10.2026. Czyste funkcje w `src/nr1/domain/` i `src/nr1/contracts/`; bez magazynu,
 interfejsu, backendu i migracji. Podstawa: C01, STORE FIRST (schemat v2), atlas F2 (snapshot),
 Progress Engine 2.0 (D1–D14, PE-01–PE-32).

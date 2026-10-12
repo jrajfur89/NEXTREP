@@ -2,7 +2,8 @@
 
 Date: 2026-10-11
 
-Status: **Proposed — czeka na akceptację. Żadna z poprawek nie jest wykonana.**
+Status: **Superseded (K01-2, 12.10.2026).** Poprawki 1–4 i 6 nieaktualne; poprawka 5 (przeniesienie
+`DESIGN.md` z `main`) wykonana w K02. Aktualna decyzja: `2026-10-12-design-tool-claude-design.md`.
 
 ## Context
 

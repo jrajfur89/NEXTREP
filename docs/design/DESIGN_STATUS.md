@@ -1,5 +1,9 @@
 # NEXTREP — DESIGN STATUS
 
+> **Update 2026-10-12 (K01-2):** design tool is Claude Design only; Stitch items below are historical.
+> Approved since 2026-10-03: `DESIGN.md` §15 active workout, §16 photography (2026-10-10), §18 brand assets
+> (2026-10-11). Next: DS1 — screens of the existing app in Claude Design (MASTER PLAN v3, section K).
+
 Last updated: 2026-10-03
 
 ## Current phase

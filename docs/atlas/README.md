@@ -1,6 +1,7 @@
 # NEXTREP 1.0 — atlas ćwiczeń: pliki, walidacja, import partii
 
-Stan: F2.1–F2.2 (11.10.2026). Atlas w repozytorium jest pusty (`src/atlas/atlas.json`, wydanie 0).
+Stan: F2.1–F2.2 (11.10.2026); integracja z aplikacją po K01 (12.10.2026). Atlas w repozytorium jest
+pusty (`src/atlas/atlas.json`, wydanie 0).
 Treść atlasu (ćwiczenia, nazwy, rodziny, warianty, słowniki sprzętu i mięśni) pochodzi wyłącznie
 z zatwierdzonych partii „Standaryzacji ćwiczeń NextRep”. Pola techniczne (typ pomiaru, model
 obciążenia, liczba przyrządów, lateralność, liczenie powtórzeń, krok ciężaru) są proponowane dla
@@ -19,7 +20,21 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `docs/atlas/nextrep-atlas-batch-template.xlsx` | pusty szablon partii |
 | `docs/atlas/przyklad/` | partia syntetyczna (dane TEST) i jej raport importu |
 | `tools/import-atlas-batch.mjs` | sprawdzenie partii i raport; zapis atlasu tylko z `--write` |
-| `tools/build-nr1.mjs` | NEXTREP 1.0: walidacja atlasu przy buildzie (błąd blokuje build) i generowanie metadanych wydania (C01-4); `issuedIds` pozostaje w `atlas.json` |
+| `tools/build-nr1.mjs` | walidacja atlasu przy buildzie `src/nr1/` (błąd blokuje build) i generowanie metadanych wydania (C01-4); `issuedIds` pozostaje w `atlas.json`. Po K01 zostaje jako dodatkowa kontrola atlasu w CI |
+
+## Atlas w aplikacji (K01, etapy AT1–AT6)
+
+NEXTREP 1.0 to istniejąca aplikacja `src/app/` (K01-1). Atlas trafia do niej etapami, każdy z osobną
+zgodą i testem (MASTER PLAN v3, sekcja K):
+
+| Etap | Zakres |
+| --- | --- |
+| AT1 | publikacja zatwierdzonej partii Batch 01 w `src/atlas/atlas.json` (tylko dane) |
+| AT2 | katalog tylko do odczytu w aplikacji (adapter `atlas.json` → kształt ćwiczenia `src/app/`) |
+| AT3 | czysty start: katalog z atlasu + ćwiczenia prywatne jako źródło planów i treningu; bez starego atlasu 68 ćwiczeń i bez mapowania identyfikatorów |
+| AT4 | snapshot modelu obciążenia w treningu (`buildLoadSnapshot`), historia liczona ze snapshotu |
+| AT5 | ćwiczenia prywatne z polami modelu |
+| AT6 | gotowe plany w `src/atlas/plan-templates.json` z własnym walidatorem (C01-5) |
 
 ## Przebieg partii
 
