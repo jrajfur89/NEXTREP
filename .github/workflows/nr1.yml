@@ -1,0 +1,46 @@
+name: NEXTREP 1.0 (nr1) — build, atlas, boundaries, tests
+
+# Separate from the Android S1 workflow (android-s1-apk.yml stays unchanged).
+# No Supabase configuration at all: NEXTREP 1.0 has no backend until decision O-13.
+on:
+  push:
+    branches: [release/1.0]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nr1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nr1:
+    name: NEXTREP 1.0 — atlas, build, granice, testy N0
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # the N0 freeze test compares the old app with the audit point 7d13f74
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd tests && npm ci
+      - name: Atlas validation (validator error = failure)
+        run: node tools/build-nr1.mjs --check-atlas
+      - name: Build NEXTREP 1.0 (dist-nr1/)
+        run: node tools/build-nr1.mjs
+      - name: Architecture boundaries (dependency graph + bundle)
+        run: node tools/check-nr1-boundaries.mjs
+      - name: N0 tests
+        working-directory: tests
+        run: npm run test:nr1
+      - name: Upload the NEXTREP 1.0 web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextrep-1.0-dev-web
+          path: dist-nr1/
+          retention-days: 7

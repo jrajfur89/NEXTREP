@@ -6,7 +6,10 @@
   "scripts": {
     "web:build": "node tools/build-web.mjs",
     "android:sync": "node tools/build-web.mjs && npx cap sync android",
-    "check:split": "node tools/check-split.mjs"
+    "check:split": "node tools/check-split.mjs",
+    "nr1:build": "node tools/build-nr1.mjs",
+    "nr1:check": "node tools/check-nr1-boundaries.mjs",
+    "nr1:atlas": "node tools/build-nr1.mjs --check-atlas"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",

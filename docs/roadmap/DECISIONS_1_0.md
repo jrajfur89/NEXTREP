@@ -1,6 +1,8 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 2 · 11.10.2026 · gałąź `release/1.0`
+Wersja 3 · 12.10.2026 · gałąź `release/1.0`
+
+Zmiany w wersji 3: decyzje C01-1–C01-7 (sekcja 1b) i ustalenie N0.
 
 Zmiany w wersji 2: kierunki O-10, O-17, O-18, O-21 (decyzje z 11.10.2026, po commicie `81e1d4b`);
 MASTER PLAN v2 przyjęty jako aktualna podstawa planowania.
@@ -34,6 +36,22 @@ gdy padła wprost od Ciebie. Rekomendacja w dokumencie nie jest decyzją. Ten pl
 | O-17 | (1) domyślnie nie nadpisujemy danych; (2) zastąpienie danych wymaga **zweryfikowanej** kopii i jawnego potwierdzenia; (3) dane gościa mogą zostać wyczyszczone dopiero po **potwierdzonym przeniesieniu i synchronizacji**; (4) „Zachowaj obie” tylko tam, gdzie bezpieczne kopiowanie z nowym UUID nie narusza spójności; (5) kosz i retencja kopii wymagają szczegółowej specyfikacji | SPEC 4A.10 Z2, Z3, §4.1, §4.4, §9; testy T-29–T-31 (propozycja) | P1 (kosz) i P4 (retencja) — do szczegółowej specyfikacji; lista typów dla „Zachowaj obie” (propozycja w SPEC §4.4) |
 | O-18 | Zapisana, wcześniej uwierzytelniona sesja umożliwia **dostęp offline do lokalnych danych właściwego konta**. Nowe logowanie wymaga internetu. Zmiana konta bez potwierdzonej tożsamości nie może ujawnić danych innego konta | SPEC 4A.10 P6 (rozstrzygnięte), MASTER PLAN S24, B29; test T-28 (propozycja). Zastępuje wcześniejszą zasadę „gość + komunikat” dla sesji zapisanej | szczegóły wygaśnięcia sesji offline — projekt w F3 |
 | O-21 | Przygotować propozycję sześciu poprawek tekstu; Stitch pozostaje głównym workflow; wartości Design Systemu bez zmian bez Twojej zgody | `docs/design/decisions/2026-10-11-design-docs-text-proposal.md` (z kontrolą niezmiennika wartości) | akceptacja poprawek 1–6 |
+
+## 1b. Decyzje C01 — separacja architektury (zatwierdzone 12.10.2026, zlecenie N0)
+
+| # | Decyzja | Skutek |
+| --- | --- | --- |
+| C01-1 | NEXTREP 1.0 powstaje w `src/nr1/`, obok starej aplikacji | `docs/nr1/README.md` |
+| C01-2 | Deweloperski identyfikator Androida: `app.nextrep.dev` | osobny projekt natywny (etap N9); nie przesądza O-11 |
+| C01-3 | Bramka A5 = akceptacja właściciela przed pierwszym ekranem z wynikami Progress Engine 2.0 | etap N8 |
+| C01-4 | `issuedIds` zostaje w `atlas.json`; metadane wydania generuje build | `tools/build-nr1.mjs` (N0); dokumentacja F2 zgodna z tą decyzją |
+| C01-5 | Szablony planów w osobnym `src/atlas/plan-templates.json`, z własnym walidatorem | etap późniejszy (nie w N0) |
+| C01-6 | `fake-indexeddb` wyłącznie jako zależność testowa; bez nowej biblioteki produkcyjnej do IndexedDB na start | N2 |
+| C01-7 | Stara aplikacja na `release/1.0` zamrożona do N12 | test zamrożenia w `tests/nr1/n0.test.mjs` |
+
+Ustalenie N0: `src/engine/load.js` importuje `parseRirBounds` z `legacy-progression.js`, więc nowe moduły
+silnika ciągną stary silnik przechodnio. Usunięcie tej zależności jest pierwszym krokiem N1
+(`docs/nr1/README.md`).
 
 ## 2. Decyzje otwarte
 

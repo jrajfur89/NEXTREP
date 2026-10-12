@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- NEXTREP 1.0 (N0): no network at all — no backend until decision O-13, no CDN. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="nextrep-app" content="nr1" />
+    <meta name="theme-color" content="#090909" />
+    <title>NEXTREP 1.0 — wersja deweloperska</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; min-height: 100%; background: #090909; color: #f5f5f5; }
+      body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- NR1_APP: the app script is added here by tools/build-nr1.mjs -->
+  </body>
+</html>

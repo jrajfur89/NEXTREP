@@ -19,6 +19,7 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `docs/atlas/nextrep-atlas-batch-template.xlsx` | pusty szablon partii |
 | `docs/atlas/przyklad/` | partia syntetyczna (dane TEST) i jej raport importu |
 | `tools/import-atlas-batch.mjs` | sprawdzenie partii i raport; zapis atlasu tylko z `--write` |
+| `tools/build-nr1.mjs` | NEXTREP 1.0: walidacja atlasu przy buildzie (błąd blokuje build) i generowanie metadanych wydania (C01-4); `issuedIds` pozostaje w `atlas.json` |
 
 ## Przebieg partii
 
