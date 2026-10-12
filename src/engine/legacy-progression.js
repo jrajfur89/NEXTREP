@@ -3,6 +3,9 @@
 // Supabase. Progress Engine 2.0 (PE-A…PE-H) replaces these step by step; screens import from
 // src/engine/index.js only.
 
+// parseRirBounds lives in ./rir.js since N1 (shared with NEXTREP 1.0 without the legacy engine).
+import { parseRirBounds } from "./rir.js";
+
 // Parses a free-typed weight field, tolerating Polish comma decimals ("57,5") as well as dots,
 // and passing through values that are already plain numbers (from older saved sessions).
 function toNumber(val) {
@@ -21,20 +24,6 @@ function parseRepRange(str) {
   const parsed = nums.map((n) => Number(n.replace(",", ".")));
   if (parsed.length === 1) return { min: parsed[0], max: parsed[0] };
   return { min: Math.min(...parsed), max: Math.max(...parsed) };
-}
-
-// Parses an RIR value (new-style range string like "0-1"/"2", or legacy numeric RIR from
-// older saved data) into {lo, hi} bounds used for comparisons in the progression engine.
-function parseRirBounds(rir) {
-  if (rir === null || rir === undefined || rir === "") return null;
-  if (typeof rir === "number") return { lo: rir, hi: rir };
-  const s = String(rir).trim();
-  if (s === "2") return { lo: 2, hi: 3 }; // "2" = "2 or more" reserve
-  const m = s.match(/^(\d+)\s*-\s*(\d+)$/);
-  if (m) return { lo: Number(m[1]), hi: Number(m[2]) };
-  const n = Number(s);
-  if (!Number.isNaN(n)) return { lo: n, hi: n };
-  return null;
 }
 
 // Overall target range for an exercise = union across all its planned series (min of mins,

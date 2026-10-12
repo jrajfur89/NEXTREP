@@ -18,7 +18,7 @@
 // Inputs accept today's set shape ({ weight, reps, duration, rir, setType: "normal"|"dropset",
 // done }) and the planned v2 shape ({ loadKg, assistKg, setType: "warmup"|"working"|"dropset",
 // status: "done"|"skipped" }). Stored data is only read, never changed.
-import { parseRirBounds } from "./legacy-progression.js";
+import { parseRirBounds } from "./rir.js";
 
 // Version of the volume formula. v2 stores it next to any persisted volume (decision P3).
 export const VOLUME_FORMULA_VERSION = 1;

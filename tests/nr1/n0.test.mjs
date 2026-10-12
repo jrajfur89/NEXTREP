@@ -197,11 +197,18 @@ describe("N0-C / N0-D: boundaries are enforced on real dependencies and on the b
     assert.ok(!inputs.some((i) => /legacy|volume\.js|src\/app\/|src\/engine\//.test(i)));
   });
 
-  test("transitive dependencies are detected: src/engine/load.js → legacy-progression.js is refused (N0 finding, N1 prerequisite)", () => {
-    const r = build(["--entry", fixture("imports-load-transitive.jsx")]);
-    assert.notEqual(r.status, 0, r.text);
-    assert.match(r.stderr, /legacy-progression\.js[\s\S]*src\/engine\/load\.js/);
-    assert.ok(!existsSync(r.out));
+  test("allowed since N1: the approved pure engine modules — load.js no longer pulls the legacy engine", () => {
+    const r = build(["--entry", fixture("allowed-engine-modules.jsx")]);
+    assert.equal(r.status, 0, r.text);
+    const inputs = Object.keys(JSON.parse(readFileSync(join(r.work, "metafile.json"), "utf8")).inputs);
+    for (const f of ["rir.js", "load.js", "load-snapshot.js", "atlas-validate.js", "atlas-schema.js", "muscle-work.js"]) assert.ok(inputs.includes(`src/engine/${f}`), f);
+    assert.ok(!inputs.some((i) => /legacy-progression|load-legacy-map|volume\.js|src\/engine\/index\.js|src\/app\//.test(i)), inputs.join(", "));
+  });
+
+  test("transitive dependencies are still refused (legacy engine reached through another file)", () => {
+    const r = build(["--entry", fixture("imports-engine-index.jsx")]);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /src\/engine\/index\.js/);
   });
 
   test("a Supabase setting for NEXTREP 1.0 is refused (no backend in N0)", () => {
@@ -289,7 +296,7 @@ describe("N0-F: frozen old app and environments (C01-7)", () => {
   test(`no change since ${FREEZE_REF} in the old app, its build, Android project, Supabase-related config and S1 workflow`, () => {
     const paths = [
       "src/app", "index.html", "tools/build-web.mjs", "android", "capacitor.config.json", "vercel.json",
-      ".github/workflows/android-s1-apk.yml", "src/engine/legacy-progression.js", "src/engine/load-legacy-map.js",
+      ".github/workflows/android-s1-apk.yml", "src/engine/load-legacy-map.js",
       "src/engine/volume.js", "src/engine/index.js", "db", "docs/sql",
     ];
     let diff;
@@ -299,5 +306,17 @@ describe("N0-F: frozen old app and environments (C01-7)", () => {
       assert.fail(`git diff against ${FREEZE_REF} failed (shallow clone?): ${e.message}`);
     }
     assert.equal(diff.trim(), "", diff);
+  });
+
+  test("legacy-progression.js differs from the freeze point ONLY by the N1 extraction of parseRirBounds", () => {
+    const frozen = execFileSync("git", ["show", `${FREEZE_REF}:src/engine/legacy-progression.js`], { cwd: ROOT, encoding: "utf8" });
+    const block = frozen.match(/\/\/ Parses an RIR value[^\n]*\n\/\/ older saved data[^\n]*\nfunction parseRirBounds\(rir\) \{\n(?: {2}.*\n)+?\}\n\n/);
+    assert.ok(block, "the original block exists at the freeze point");
+    const header = frozen.indexOf("\n\n") + 2;
+    const expected = (frozen.slice(0, header) + "// parseRirBounds lives in ./rir.js since N1 (shared with NEXTREP 1.0 without the legacy engine).\nimport { parseRirBounds } from \"./rir.js\";\n\n" + frozen.slice(header)).replace(block[0], "");
+    assert.equal(readFileSync(resolve(ROOT, "src/engine/legacy-progression.js"), "utf8"), expected);
+    // the moved block is in rir.js unchanged (exported)
+    const rir = readFileSync(resolve(ROOT, "src/engine/rir.js"), "utf8");
+    assert.ok(rir.includes(block[0].trimEnd().replace("function parseRirBounds", "export function parseRirBounds")));
   });
 });
