@@ -2,7 +2,7 @@
 // SYNTHETIC data only (tests/fixtures/atlas/synthetic.mjs). ExcelJS comes from tests/ packages.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -170,8 +170,11 @@ describe("batch problems and the report", () => {
 describe("command-line tools (need the root packages; skipped where only tests/ is installed)", () => {
   const hasRoot = existsSync(join(root, "node_modules/exceljs"));
   test("import-atlas-batch: report only by default, --write only without errors", { skip: !hasRoot && "root packages not installed" }, async () => {
+    // An independent empty atlas (release 0): the importer is tested on its own base, not on the
+    // repository atlas, whose release grows with every approved batch.
     const base = join(dir, "atlas.json");
-    execFileSync("cp", [join(root, "src/atlas/atlas.json"), base]);
+    writeFileSync(base, JSON.stringify(emptyAtlas(), null, 2) + "\n");
+    const repoAtlasBefore = readFileSync(join(root, "src/atlas/atlas.json"), "utf8");
     const bad = await batchFile("cli-bad.xlsx", { ...firstBatch(), exercises: firstBatch().exercises.map((e, i) => (i === 0 ? { ...e, primaryMuscles: [] } : e)) });
     let code = 0;
     try { execFileSync(process.execPath, [join(root, "tools/import-atlas-batch.mjs"), bad, "--base", base, "--write"], { stdio: "pipe" }); } catch (e) { code = e.status; }
@@ -183,15 +186,34 @@ describe("command-line tools (need the root packages; skipped where only tests/ 
     assert.equal(JSON.parse(readFileSync(base, "utf8")).atlasVersion, 0, "report-only by default");
     execFileSync(process.execPath, [join(root, "tools/import-atlas-batch.mjs"), good, "--base", base, "--write"], { stdio: "pipe" });
     assert.equal(JSON.parse(readFileSync(base, "utf8")).atlasVersion, 1);
+    assert.equal(readFileSync(join(root, "src/atlas/atlas.json"), "utf8"), repoAtlasBefore, "the repository atlas is never touched by the importer test");
   });
 });
 
 describe("the repository atlas", () => {
-  test("src/atlas/atlas.json is the empty release 0 (no real exercises imported yet) and valid", async () => {
+  test("src/atlas/atlas.json is valid: 0 validator errors, format 1, approved release number", async () => {
     const a = JSON.parse(readFileSync(join(root, "src/atlas/atlas.json"), "utf8"));
-    assert.deepEqual(a, emptyAtlas());
+    assert.equal(a.formatVersion, emptyAtlas().formatVersion);
+    assert.ok(Number.isInteger(a.atlasVersion) && a.atlasVersion >= 0, "atlasVersion is a non-negative integer");
     const { validateAtlas } = await import("../../src/engine/atlas-validate.js");
-    assert.equal(validateAtlas(a).ok, true);
+    const r = validateAtlas(a);
+    assert.deepEqual(r.issues.filter((i) => i.level === "error").map((i) => i.code), []);
+    assert.equal(r.ok, true);
+  });
+  test("exercises and issuedIds agree: unique ids, every exercise issued, every issued id still present", () => {
+    const a = JSON.parse(readFileSync(join(root, "src/atlas/atlas.json"), "utf8"));
+    const exerciseIds = a.exercises.map((e) => e.exerciseId);
+    assert.equal(new Set(exerciseIds).size, exerciseIds.length, "exerciseId unique");
+    assert.equal(new Set(a.issuedIds).size, a.issuedIds.length, "issuedIds unique");
+    assert.deepEqual([...exerciseIds].sort(), [...a.issuedIds].sort(), "issued ids = exercises (ids are archived, never removed)");
+    const familyIds = a.families.map((f) => f.familyId);
+    assert.equal(new Set(familyIds).size, familyIds.length, "familyId unique");
+  });
+  test("no synthetic identifiers (test_ / test.) anywhere in the repository atlas", () => {
+    const a = JSON.parse(readFileSync(join(root, "src/atlas/atlas.json"), "utf8"));
+    const d = a.dictionaries;
+    const ids = [...a.exercises.map((e) => e.exerciseId), ...a.issuedIds, ...a.families.map((f) => f.familyId), ...[...d.equipment, ...d.muscles, ...d.variantAttributes].map((v) => v.code)];
+    assert.deepEqual(ids.filter((id) => /^test[._]/.test(id)), []);
   });
   test("no synthetic test code leaks into the repository atlas, and no app file uses the atlas yet", () => {
     assert.doesNotMatch(readFileSync(join(root, "src/atlas/atlas.json"), "utf8"), /test[._]/);
