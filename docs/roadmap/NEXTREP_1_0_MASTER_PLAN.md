@@ -1,9 +1,13 @@
 # NEXTREP 1.0 — MASTER PLAN (audyt kompletności)
 
-Wersja 3 · 12.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** po korekcie K01
+Wersja 3.1 · 13.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** po korekcie K01
 (decyzje K01-1–K01-5 w `DECISIONS_1_0.md` §1c). **Sekcja K ma pierwszeństwo przed resztą dokumentu**;
 sekcje 1–3 i A–E pozostają audytem stanu i wymagań, a etapy F2.4/F3–F7 z wersji 2 są przypisane do faz
 sekcji K.
+
+Zmiany w wersji 3.1 (13.10.2026): O-28 rozstrzygnięte — wariant równoległy (przygotowanie synchronizacji
+równolegle z designem) jest podstawowym scenariuszem harmonogramu K.4; termin publikacji opisany jako
+prognoza, nie zobowiązanie. Wariant ścisły z wersji 3 zostaje w K.4 jako porównanie.
 
 Zmiany w wersji 3: sekcja K (strategia K01, etapy integracji atlasu AT1–AT6, fazy 1–5, nowy harmonogram
 i prognoza); harmonogram z wersji 2 (sekcja C) zastąpiony; design w Claude Design (K01-2) zamiast Google
@@ -73,31 +77,38 @@ prawnych, projekty w Claude Design, partie atlasu), mogą iść od razu, bo wyzn
 
 ### K.4 Harmonogram i prognoza (tydzień 1 = 12.10.2026)
 
-Jeden wykonawca; szacunek, nie zobowiązanie. Wariant podstawowy: ścisła kolejność K01-5 (synchronizacja
-po wdrożeniu designu).
+**Termin publikacji jest prognozą, nie zatwierdzonym zobowiązaniem.** Celem pozostaje możliwie szybkie
+wydanie stabilnej aplikacji w Google Play; prognoza zmienia się razem z tempem atlasu, decyzjami i wynikami
+testów. Jeden wykonawca.
 
-| Tydzień | Faza / etap | Równolegle (bez kodu albo bez zależności) |
+Scenariusz podstawowy (O-28, 13.10.2026): przygotowanie synchronizacji (specyfikacja, schemat, testy lokalne)
+i prace w Claude Design idą równolegle do fazy 2. Każde wdrożenie i każda integracja w `src/app/` — także
+synchronizacji i ekranów — to osobny etap z osobną zgodą i testami (K.2).
+
+| Tydzień | Etapy (każdy z osobną zgodą) | Równolegle: przygotowanie i prace bez kodu |
 | --- | --- | --- |
-| 1 (12–18.10) | K02; AT1 po otrzymaniu pliku Batch 01; decyzja O-26 | partie atlasu; DS1 start; decyzja O-01 (konto Play) |
-| 2–3 (19.10–1.11) | AT2, AT3 | PE-B; partie atlasu; DS1 |
-| 4–5 (2–15.11) | AT4, AT5 | PE-C, PE-E; partie atlasu; DS1; decyzje O-23, O-24, O-25 |
-| 6–8 (16.11–6.12) | AT6 (wymaga treści planów i wystarczającej liczby ćwiczeń, O-29) | ostatnie partie atlasu; DS1 domknięte; szkice GP |
-| 9–13 (7.12–10.01) | DS2 + A5 + PE-D/F/G/H (z przerwą świąteczną) | rekrutacja testerów; konto Play i aplikacja w Play Console |
-| 14–17 (11.01–7.02) | SY (nowy projekt, synchronizacja, konto OTP, 4A.10) | AN |
-| 18–19 (8–21.02) | MO, GP, tor wewnętrzny (D.1) | AN domknięte |
-| 20–21 (22.02–7.03) | test zamknięty 14 dni (D.2) | poprawki |
-| 22 (8–14.03) | wniosek o produkcję, ocena Google (do 7 dni) | karta sklepu final |
+| 1 (12–18.10) | K02 ✅ (`1ed73f3`); AT1 po otrzymaniu pliku Batch 01 | decyzja O-26; partie atlasu; DS1 start; decyzja O-01 (konto Play) |
+| 2–3 (19.10–1.11) | AT2, AT3 | PE-B; DS1; SY: decyzje O-23, O-24 i specyfikacja zakresu |
+| 4–5 (2–15.11) | AT4, AT5; PE-C, PE-E | DS1; SY: schemat i testy lokalne; decyzja O-25 |
+| 6–8 (16.11–6.12) | AT6 (wymaga treści planów, O-29) | ostatnie partie atlasu; DS1 domknięte; SY przygotowane do integracji; szkice GP |
+| 9–13 (7.12–10.01) | DS2 + A5 + PE-D/F/G/H; integracja SY w `src/app/` (konto OTP, 4A.10) — z przerwą świąteczną | AN; rekrutacja testerów; aplikacja w Play Console |
+| 14–15 (11–24.01) | MO, GP, AN domknięte; tor wewnętrzny (D.1) | karta sklepu |
+| 16–17 (25.01–7.02) | test zamknięty 14 dni (D.2) | poprawki |
+| 18 (8–14.02) | wniosek o produkcję, ocena Google (do 7 dni) | |
 
-**Prognoza (wariant podstawowy):** publikacja ok. **połowy marca 2027**, rezerwa do **początku kwietnia
+**Prognoza (scenariusz podstawowy):** publikacja ok. **połowy lutego 2027**, rezerwa do **początku marca
 2027**.
 
-**Wariant O-28** (synchronizacja równolegle z DS2 od tygodnia 9): faza 4 kończy się ok. 24.01, test
-zamknięty 25.01–7.02, publikacja ok. **połowy lutego 2027** (rezerwa do początku marca). Wymaga Twojej
-decyzji, bo odchodzi od ścisłej kolejności K01-5.
+**Porównanie — wariant ścisły z wersji 3** (synchronizacja dopiero po wdrożeniu designu): publikacja
+ok. połowy marca 2027, rezerwa do początku kwietnia 2027. Po O-28 nie jest scenariuszem podstawowym.
 
-Ścieżka krytyczna: treść atlasu i planów (O-29) → DS2 → SY → MO → test zamknięty 14 dni → ocena Google.
-Terminy decyzji: O-26 do 18.10 (przed AT2); O-01 do 31.10 (konto Play, testerzy); O-23, O-24, O-25 do 15.11;
-O-02/O-03/O-04 do 6.12 (przed MO).
+Ryzyko scenariusza podstawowego: w tygodniach 9–13 wdrażanie designu i integracja synchronizacji idą
+jednocześnie przy jednym wykonawcy; przy opóźnieniu pierwszeństwo ma kolejność K01-5 (design przed
+synchronizacją), co przesuwa prognozę w stronę wariantu ścisłego.
+
+Ścieżka krytyczna: treść atlasu i planów (O-29) → DS2 i integracja SY → MO → test zamknięty 14 dni →
+ocena Google. Terminy decyzji: O-26 do 18.10 (przed AT2); O-01 do 31.10 (konto Play, testerzy); O-23, O-24
+do 1.11 (przygotowanie SY); O-25 do 15.11; O-02/O-03/O-04 do 6.12 (przed MO).
 
 ---
 
@@ -159,8 +170,8 @@ wdrożony tylko na `nextrep-f5-test`, nie na produkcji (`docs/sql/README.md`). D
     `release/1.0` w K02 (F-2 / Stitch zastąpione).
 11. **Nazwa:** w Google Play i App Store istnieją już aplikacje „NextRep” (rejestr decyzji, O-12).
 
-Szacunek (v3, po K01): sekcja K.4 — publikacja ok. połowy marca 2027 w wariancie podstawowym,
-ok. połowy lutego 2027 w wariancie O-28. Szacunek z wersji 2 (tydzień 19–22) jest nieaktualny.
+Prognoza (v3.1, po O-28): sekcja K.4 — publikacja ok. połowy lutego 2027, rezerwa do początku marca;
+to prognoza, nie zatwierdzony termin. Szacunek z wersji 2 (tydzień 19–22) jest nieaktualny.
 
 ---
 
@@ -673,12 +684,12 @@ RevenueCat dla Apple).
 
 ## F. Decyzje
 
-Rejestr decyzji (podjętych i otwartych) jest w `DECISIONS_1_0.md`. Stan 12.10.2026: F-0–F-11, C01, K01-1–K01-5
-podjęte (F-2, O-21, C01-1, C01-7 zastąpione przez K01); przyjęte kierunki O-10, O-17, O-18; otwarte
-O-01–O-09, O-11–O-17, O-19, O-20, O-22–O-29 (koszty i wybory biznesowe STORE FIRST, identyfikator pakietu,
+Rejestr decyzji (podjętych i otwartych) jest w `DECISIONS_1_0.md`. Stan 13.10.2026: F-0–F-11, C01, K01-1–K01-5
+podjęte (F-2, O-21, C01-1, C01-7 zastąpione przez K01); O-28 rozstrzygnięte 13.10; przyjęte kierunki
+O-10, O-17, O-18; otwarte O-01–O-09, O-11–O-17, O-19, O-20, O-22–O-27, O-29 (koszty i wybory biznesowe STORE FIRST, identyfikator pakietu,
 nazwa, backend testowy, Firebase, monitoring web, analityka, pytania 4A.10 i Reporting Engine, próg PRO+,
 zakres synchronizacji, nowy projekt Supabase, zakres Progress Engine, buildy testowe etapów, magazyn,
-równoległość faz 3–4, minimalny atlas).
+minimalny atlas).
 
 ---
 

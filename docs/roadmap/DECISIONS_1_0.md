@@ -1,6 +1,9 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 4 · 12.10.2026 · gałąź `release/1.0`
+Wersja 5 · 13.10.2026 · gałąź `release/1.0`
+
+Zmiany w wersji 5: O-28 rozstrzygnięte (13.10.2026) — przygotowanie synchronizacji i prace w Claude Design
+mogą przebiegać równolegle; wdrożenie i integracja wymagają osobnej zgody i testów (sekcja 1c).
 
 Zmiany w wersji 4: decyzje K01-1–K01-5 (sekcja 1c) — powrót do rozwoju istniejącej aplikacji
 `src/app/`, Claude Design jako jedyne narzędzie UX/UI, integracja etapami, kolejność priorytetów.
@@ -70,6 +73,8 @@ zatwierdzone 12.10.2026, K01-4 i K01-5 podane wprost w tej samej akceptacji.
 | K01-4 | Integracja etapami, zaczynając od atlasu. Każdy etap ma własny zakres, osobną zgodę na start, kryteria odbioru i osobne testowanie w działającej aplikacji. Nie wdrażamy B1–B8 naraz | MASTER PLAN v3 §K; zasada zakresu niżej |
 | K01-5 | Kolejność priorytetów: działający NEXTREP → nowy atlas i plany → dopracowany design → synchronizacja, monetyzacja i wymagania Google Play → publikacja | harmonogram MASTER PLAN v3 §K.4 |
 
+| O-28 | (13.10.2026) Przygotowanie synchronizacji i prace w Claude Design mogą przebiegać równolegle; kolejność priorytetów K01-5 nie zakazuje równoległej pracy nad niezależnymi obszarami. Wdrożenie i integracja (w tym synchronizacji i ekranów w `src/app/`) wymagają osobnej zgody oraz testów | harmonogram MASTER PLAN v3.1 §K.4: wariant równoległy jest podstawowy; K01-4 i zasada zakresu bez zmian |
+
 **Zasada zakresu (z K01-4).** Decyzja architektoniczna, propozycja w raporcie ani zmiana w dokumencie
 technicznym nie zmienia zakresu projektu. Zmiana zakresu (co budujemy, w której aplikacji, w jakiej
 kolejności) wymaga osobnej, nazwanej decyzji właściciela w tym rejestrze. Jeśli etap ujawni potrzebę
@@ -106,7 +111,7 @@ takiej zmiany, etap zatrzymuje się i wraca z propozycją decyzji.
 | O-25 | Zakres Progress Engine w 1.0 (które z PE-B–PE-H) i termin bramki A5 | produkt | faza 2–3 | |
 | O-26 | Identyfikator i środowisko buildów testowych etapów AT (np. `app.nextrep.dev`, tryb gościa bez backendu do fazy 4), tak by obecny APK testowy (`app.nextrep.spike` + `nextrep-f5-test`) się nie zmienił | technika | AT2 | ponowna ocena C01-2 |
 | O-27 | Magazyn w `src/app/`: zakres O-10 (IndexedDB) w istniejącej aplikacji i termin | technika | faza 4 | ponowna ocena C01-6 |
-| O-28 | Czy synchronizacja (faza 4) może iść równolegle z wdrażaniem designu (faza 3) — skraca termin o ok. 4 tygodnie, odchodzi od ścisłej kolejności K01-5 | termin | harmonogram | MASTER PLAN v3 §K.4 |
+| ~~O-28~~ | Równoległość synchronizacji i designu | — | — | **rozstrzygnięte 13.10** (sekcja 1c) |
 | O-29 | Minimalny zakres atlasu i gotowych planów na publikację 1.0 (liczba ćwiczeń, które plany) | produkt | AT6, test zamknięty | tempo partii jest ścieżką krytyczną |
 
 ## 3. F-4: zgodność Crashlytics ze stosem Capacitor (stan weryfikacji)
@@ -151,5 +156,5 @@ Wniosek: `app.nextrep` jest poprawnym kandydatem. Przed zatwierdzeniem potrzebne
 | Progress Engine | D1–D14 (10.10), PE-01–PE-32 jako kryteria odbioru | „Progress Engine 2.0: audyt i specyfikacja” |
 | PE-A | P1–P4 (w tym uniwersalny silnik bez ręcznego przeglądu 68 ćwiczeń); A4.5 z pełną równoważnością; kolejność A4.5 → F2 → A5 | dokumenty F1 / A4.5 |
 | F2 | F2-1 (zastąpione), F2-2 (bez projektu i kosztów), F2-3 (A5 na końcu F3 z osobną bramką), F2-4 (snapshot obowiązkowy, brak = usterka z ostrzeżeniem), F2-5 (jawna korekta z historią) | „F2: projekt struktury atlasu” v2 |
-| K01 | powrót do `src/app/`, Claude Design, integracja etapami, kolejność priorytetów | sekcja 1c |
+| K01 | powrót do `src/app/`, Claude Design, integracja etapami, kolejność priorytetów; O-28 (praca równoległa) | sekcja 1c |
 | Atlas | treść wyłącznie z zatwierdzonych partii „Standaryzacji ćwiczeń NextRep”; K2 (pola techniczne proponuję per partia), K3 (warianty z własnym id), K4 (wiele mięśni głównych z różnych grup); walidator v2 pkt 1–5 | `docs/atlas/README.md`, dokument F2 |
