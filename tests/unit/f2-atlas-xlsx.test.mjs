@@ -215,14 +215,20 @@ describe("the repository atlas", () => {
     const ids = [...a.exercises.map((e) => e.exerciseId), ...a.issuedIds, ...a.families.map((f) => f.familyId), ...[...d.equipment, ...d.muscles, ...d.variantAttributes].map((v) => v.code)];
     assert.deepEqual(ids.filter((id) => /^test[._]/.test(id)), []);
   });
-  test("no synthetic test code leaks into the repository atlas, and no app file uses the atlas yet", () => {
+  test("no synthetic test code leaks into the repository atlas; the app reads the atlas only through the AT2 catalog", () => {
     assert.doesNotMatch(readFileSync(join(root, "src/atlas/atlas.json"), "utf8"), /test[._]/);
-    let app = "";
-    try {
-      app = execFileSync("git", ["grep", "-l", "-e", "atlas-validate", "-e", "load-snapshot", "-e", "muscle-work", "-e", "src/atlas", "--", "src/app", "src/engine/index.js"], { cwd: root, encoding: "utf8" }).trim();
-    } catch {
-      app = ""; // git grep exits 1 when nothing matches
-    }
-    assert.equal(app, "");
+    const grep = (patterns, paths) => {
+      try {
+        return execFileSync("git", ["grep", "--untracked", "-l", ...patterns.flatMap((p) => ["-e", p]), "--", ...paths], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean).sort();
+      } catch {
+        return []; // git grep exits 1 when nothing matches
+      }
+    };
+    // AT2: atlas.json enters the app through one engine module only (the nr1 build reads it separately)
+    assert.deepEqual(grep(["atlas.json", "src/atlas"], ["src/app", "src/engine"]), ["src/engine/atlas-release.js"]);
+    // the app does not use the validator, the snapshot or the muscle-work engine yet (later stages)
+    assert.deepEqual(grep(["atlas-validate", "load-snapshot", "muscle-work"], ["src/app", "src/engine/index.js"]), []);
+    // the engine entry exposes only the read-only release on top of the old engine
+    assert.deepEqual(grep(["atlas-release"], ["src/engine/index.js"]), ["src/engine/index.js"]);
   });
 });

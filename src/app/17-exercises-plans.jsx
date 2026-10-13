@@ -18,6 +18,7 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail 
   const [sheet, setSheet] = useState(null); // 'category' | 'equipment' | null
   const [editing, setEditing] = useState(null); // exercise object or "new"
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [atlasOpen, setAtlasOpen] = useState(false); // AT2: read-only „Atlas ćwiczeń”
 
   const searching = query.trim().length > 0;
   const browsing = !searching && categoryFilter === "Wszystkie";
@@ -64,6 +65,15 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail 
     updateExercises((prev) => prev.filter((e) => e.id !== id));
   };
 
+  const openAtlas = () => {
+    try {
+      window.history.pushState({ trainapp: true }, "", "");
+    } catch {}
+    setAtlasOpen(true);
+  };
+  const closeAtlas = useCallback(() => setAtlasOpen(false), []);
+  if (atlasOpen) return <AtlasCatalogView onClose={closeAtlas} onNavigate={onNavigate} />;
+
   return (
     <div className="min-h-screen bg-app-depth font-body pb-28">
       <FontStyles />
@@ -94,6 +104,8 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail 
             <FilterTrigger label="Sprzęt" value={equipmentFilter} onClick={() => setSheet("equipment")} />
           </div>
         )}
+
+        {browsing && <AtlasCatalogEntry onOpen={openAtlas} />}
 
         {browsing ? (
           <div className="mt-4">

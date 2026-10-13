@@ -292,12 +292,17 @@ describe("N0-F: runtime isolation (jsdom)", () => {
 });
 
 // ---- 5. the old app and existing environments stay untouched ----------------------------------
-describe("N0-F: frozen old app and environments (C01-7)", () => {
-  test(`no change since ${FREEZE_REF} in the old app, its build, Android project, Supabase-related config and S1 workflow`, () => {
+// C01-7 (old app frozen) was replaced by K01-1 (12.10.2026): NEXTREP 1.0 is the existing app. Since
+// AT2 the old app changes stage by stage; every stage proves its own scope (AT2: below). Everything
+// else stays frozen at the C01 audit point.
+const AT1_REF = "368bf2d"; // AT1: atlas Batch 01 published — the last commit before AT2
+const AT2_APP_FILES = ["src/app/00-imports.jsx", "src/app/17-exercises-plans.jsx", "src/app/17b-atlas-catalog.jsx", "src/app/ORDER.json"];
+describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
+  test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
-      "src/app", "index.html", "tools/build-web.mjs", "android", "capacitor.config.json", "vercel.json",
+      "index.html", "tools/build-web.mjs", "android", "capacitor.config.json", "vercel.json",
       ".github/workflows/android-s1-apk.yml", "src/engine/load-legacy-map.js",
-      "src/engine/volume.js", "src/engine/index.js", "db", "docs/sql",
+      "src/engine/volume.js", "db", "docs/sql",
     ];
     let diff;
     try {
@@ -306,6 +311,34 @@ describe("N0-F: frozen old app and environments (C01-7)", () => {
       assert.fail(`git diff against ${FREEZE_REF} failed (shallow clone?): ${e.message}`);
     }
     assert.equal(diff.trim(), "", diff);
+  });
+
+  test(`AT2 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files`, () => {
+    const changed = execFileSync("git", ["diff", "--name-only", AT1_REF, "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
+      .split("\n").filter(Boolean);
+    const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
+      .split("\n").filter(Boolean);
+    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f));
+    assert.deepEqual(outside, [], "src/app files changed outside AT2");
+    // ORDER.json: the old order plus exactly one new file after 17-exercises-plans.jsx
+    const before = JSON.parse(execFileSync("git", ["show", `${AT1_REF}:src/app/ORDER.json`], { cwd: ROOT, encoding: "utf8" }));
+    const now = JSON.parse(readFileSync(resolve(ROOT, "src/app/ORDER.json"), "utf8"));
+    const i = before.indexOf("17-exercises-plans.jsx");
+    assert.deepEqual(now, [...before.slice(0, i + 1), "17b-atlas-catalog.jsx", ...before.slice(i + 1)]);
+    // 00-imports.jsx: only the one import of the atlas release is added
+    const imports0 = execFileSync("git", ["show", `${AT1_REF}:src/app/00-imports.jsx`], { cwd: ROOT, encoding: "utf8" });
+    const added = '// AT2: the approved atlas release — read ONLY by the catalog adapter (17b-atlas-catalog.jsx)\nimport { ATLAS_RELEASE } from "@nextrep-engine";\n';
+    const anchor = '  draftVolume,\n} from "@nextrep-engine";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added));
+    // the atlas release is read only in the catalog file
+    const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
+    assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx"]);
+  });
+
+  test(`src/engine/index.js = ${FREEZE_REF} plus only the AT2 re-export of the atlas release`, () => {
+    const frozen = execFileSync("git", ["show", `${FREEZE_REF}:src/engine/index.js`], { cwd: ROOT, encoding: "utf8" });
+    const expected = frozen + '// AT2: the approved atlas release (read-only), shown by the catalog „Atlas ćwiczeń”.\nexport * from "./atlas-release.js";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/engine/index.js"), "utf8"), expected);
   });
 
   test("legacy-progression.js differs from the freeze point ONLY by the N1 extraction of parseRirBounds", () => {

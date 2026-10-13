@@ -64,6 +64,8 @@ import {
   exerciseDetailVolume,
   draftVolume,
 } from "@nextrep-engine";
+// AT2: the approved atlas release — read ONLY by the catalog adapter (17b-atlas-catalog.jsx)
+import { ATLAS_RELEASE } from "@nextrep-engine";
 
 
 

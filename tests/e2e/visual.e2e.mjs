@@ -60,10 +60,19 @@ const STEPS = [
   ["20-dashboard-after", async (p) => click(p, "Start", { exact: true })],
 ];
 
-async function walk(dist) {
+// Intended changes approved stage by stage (K01-4). On these screens the element added by the stage is
+// taken out of the layout (display: none) before the compared screenshot, so the rest of the screen
+// must still equal the reference build pixel by pixel; the element itself must exist in the build
+// under test, and the screen WITH it is saved to e2e/.out/<name>.with-change.png for review.
+const INTENDED = {
+  "17-exercises": { stage: "AT2", selector: '[data-testid="atlas-entry"]' }, // tile „Atlas ćwiczeń”
+};
+
+async function walk(dist, { underTest = false } = {}) {
   const { server, url } = await serve(dist);
   const app = await openApp({ fixedTime: FIXED_TIME });
   const shots = new Map();
+  const withChange = new Map();
   try {
     await app.page.goto(url);
     for (const [name, action] of STEPS) {
@@ -74,19 +83,28 @@ async function walk(dist) {
       }
       await app.page.waitForTimeout(700);
       await app.page.evaluate(() => document.fonts.ready);
+      const intended = INTENDED[name];
+      if (intended && underTest) {
+        const count = await app.page.locator(intended.selector).count();
+        if (count !== 1) throw new Error(`step ${name}: ${intended.stage} element ${intended.selector} found ${count} times (expected 1)`);
+        withChange.set(name, await app.page.screenshot({ animations: "disabled", caret: "hide" }));
+        await app.page.addStyleTag({ content: `${intended.selector}{display:none !important}` });
+        await app.page.waitForTimeout(200);
+      }
       shots.set(name, await app.page.screenshot({ animations: "disabled", caret: "hide" }));
+      if (intended && underTest) await app.page.evaluate((sel) => { for (const st of document.querySelectorAll("style")) if (st.textContent.startsWith(sel)) st.remove(); }, intended.selector);
     }
   } finally {
     await app.browser.close();
     server.close();
   }
-  return { shots, errors: app.errors };
+  return { shots, withChange, errors: app.errors };
 }
 
 describe("visual: build under test vs reference build", { concurrency: false }, () => {
   test("every screen matches the reference pixel by pixel", async (t) => {
     const ref = await walk(process.env.E2E_REF_DIST);
-    const cur = await walk(process.env.E2E_DIST);
+    const cur = await walk(process.env.E2E_DIST, { underTest: true });
     rmSync(OUT, { recursive: true, force: true });
     mkdirSync(OUT, { recursive: true });
     if (process.env.E2E_UPDATE_SCREENSHOTS === "1") {
@@ -108,7 +126,9 @@ describe("visual: build under test vs reference build", { concurrency: false }, 
         writeFileSync(join(OUT, `${name}.diff.png`), PNG.sync.write(out));
       }
     }
-    t.diagnostic(`${ref.shots.size} screens compared`);
+    for (const [name, buf] of cur.withChange) writeFileSync(join(OUT, `${name}.with-change.png`), buf);
+    assert.deepEqual([...cur.withChange.keys()], Object.keys(INTENDED), "every intended change was found");
+    t.diagnostic(`${ref.shots.size} screens compared; intended changes (element hidden for the comparison): ${Object.keys(INTENDED).join(", ")}`);
     assert.equal(ref.shots.size, STEPS.length);
     assert.deepEqual(diffs, []);
     assert.deepEqual(cur.errors.filter((e) => e.startsWith("pageerror")), []);

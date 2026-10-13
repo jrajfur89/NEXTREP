@@ -1,9 +1,11 @@
 // N1 — the old app after moving parseRirBounds to src/engine/rir.js.
 // The minified bundle of the old app changes its bytes only because esbuild orders the moved
 // function differently (accepted in the N1 authorisation). This test proves it rigorously: the
-// UNMINIFIED bundles of the old app at db38ae8 (before N1) and of the working tree are identical
-// once the one moved function (and the module comment esbuild puts above it) is taken out — and that
-// function is byte-identical in both.
+// UNMINIFIED bundles of the old app at db38ae8 (before N1) and at the end of N1 (0591c47) are
+// identical once the one moved function (and the module comment esbuild puts above it) is taken out —
+// and that function is byte-identical in both. Since AT2 (K01-1) the app changes on purpose, so this
+// proof is checked on the N1 end commit, not on the working tree (as tools/check-split.mjs does for F1);
+// later changes are proved by their own tests.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -15,6 +17,7 @@ import { build } from "esbuild";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const REF = "db38ae8";
+const N1_END = "0591c47";
 
 async function unminifiedOldApp(root) {
   const order = JSON.parse(readFileSync(resolve(root, "src/app/ORDER.json"), "utf8"));
@@ -33,13 +36,16 @@ async function unminifiedOldApp(root) {
 
 const FN = /function parseRirBounds\(rir\) \{\n(?: {2}.*\n)+?\}\n/;
 
-test(`old app: unminified bundle = ${REF} except the placement of the moved parseRirBounds`, async () => {
+test(`old app: unminified bundle at ${N1_END} = ${REF} except the placement of the moved parseRirBounds`, async () => {
   const dir = mkdtempSync(join(tmpdir(), "n1-old-"));
+  const dirN1 = mkdtempSync(join(tmpdir(), "n1-end-"));
   try {
-    execFileSync("bash", ["-c", `git -C "${ROOT}" archive ${REF} src | tar -x -C "${dir}"`]);
-    symlinkSync(resolve(ROOT, "node_modules"), join(dir, "node_modules")); // same packages, same relative paths
+    for (const [ref, d] of [[REF, dir], [N1_END, dirN1]]) {
+      execFileSync("bash", ["-c", `git -C "${ROOT}" archive ${ref} src | tar -x -C "${d}"`]);
+      symlinkSync(resolve(ROOT, "node_modules"), join(d, "node_modules")); // same packages, same relative paths
+    }
     const before = await unminifiedOldApp(dir);
-    const after = await unminifiedOldApp(ROOT);
+    const after = await unminifiedOldApp(dirN1);
     const fb = before.match(FN);
     const fa = after.match(FN);
     assert.ok(fb && fa, "parseRirBounds present in both bundles");
@@ -52,5 +58,6 @@ test(`old app: unminified bundle = ${REF} except the placement of the moved pars
     assert.notEqual(after, before, "the placement did change (otherwise this test proves nothing)");
   } finally {
     rmSync(dir, { recursive: true, force: true });
+    rmSync(dirN1, { recursive: true, force: true });
   }
 });
