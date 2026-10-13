@@ -1,12 +1,973 @@
 {
   "formatVersion": 1,
-  "atlasVersion": 0,
+  "atlasVersion": 1,
   "dictionaries": {
-    "equipment": [],
-    "muscles": [],
-    "variantAttributes": []
+    "equipment": [
+      {
+        "code": "barbell",
+        "labelPl": "Sztanga",
+        "role": "load",
+        "loadModels": [
+          "barbell_total"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "dumbbell",
+        "labelPl": "Hantel",
+        "role": "load",
+        "loadModels": [
+          "dumbbell_pair",
+          "dumbbell_single"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "rack",
+        "labelPl": "Stojaki",
+        "role": "support",
+        "loadModels": [],
+        "status": "active"
+      },
+      {
+        "code": "bench",
+        "labelPl": "Ławka",
+        "role": "support",
+        "loadModels": [],
+        "status": "active"
+      },
+      {
+        "code": "pullup_bar",
+        "labelPl": "Drążek",
+        "role": "support",
+        "loadModels": [],
+        "status": "active"
+      },
+      {
+        "code": "resistance_band_assist",
+        "labelPl": "Guma asystująca",
+        "role": "assist",
+        "loadModels": [
+          "assisted"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "mat",
+        "labelPl": "Mata",
+        "role": "support",
+        "loadModels": [],
+        "status": "active"
+      },
+      {
+        "code": "weight_belt",
+        "labelPl": "Pas do podwieszania ciężaru",
+        "role": "support",
+        "loadModels": [],
+        "status": "active"
+      },
+      {
+        "code": "weight_plates",
+        "labelPl": "Talerze/krążki obciążeniowe",
+        "role": "load",
+        "loadModels": [
+          "bodyweight_plus"
+        ],
+        "status": "active"
+      }
+    ],
+    "muscles": [
+      {
+        "code": "pectoralis_major",
+        "labelPl": "Piersiowy większy",
+        "statsGroup": "chest",
+        "status": "active"
+      },
+      {
+        "code": "latissimus_dorsi",
+        "labelPl": "Najszerszy grzbietu",
+        "statsGroup": "back",
+        "status": "active"
+      },
+      {
+        "code": "trapezius",
+        "labelPl": "Czworoboczny",
+        "statsGroup": "back",
+        "status": "active"
+      },
+      {
+        "code": "erector_spinae",
+        "labelPl": "Prostowniki grzbietu",
+        "statsGroup": "back",
+        "status": "active"
+      },
+      {
+        "code": "deltoid_anterior",
+        "labelPl": "Naramienny przedni",
+        "statsGroup": "shoulders",
+        "status": "active"
+      },
+      {
+        "code": "deltoid_lateral",
+        "labelPl": "Naramienny środkowy",
+        "statsGroup": "shoulders",
+        "status": "active"
+      },
+      {
+        "code": "deltoid_posterior",
+        "labelPl": "Naramienny tylny",
+        "statsGroup": "shoulders",
+        "status": "active"
+      },
+      {
+        "code": "biceps_brachii",
+        "labelPl": "Dwugłowy ramienia",
+        "statsGroup": "biceps",
+        "status": "active"
+      },
+      {
+        "code": "brachialis",
+        "labelPl": "Ramienny",
+        "statsGroup": "biceps",
+        "status": "active"
+      },
+      {
+        "code": "triceps_brachii",
+        "labelPl": "Trójgłowy ramienia",
+        "statsGroup": "triceps",
+        "status": "active"
+      },
+      {
+        "code": "brachioradialis",
+        "labelPl": "Ramienno-promieniowy",
+        "statsGroup": "forearms",
+        "status": "active"
+      },
+      {
+        "code": "rectus_abdominis",
+        "labelPl": "Prosty brzucha",
+        "statsGroup": "abs",
+        "status": "active"
+      },
+      {
+        "code": "transversus_abdominis",
+        "labelPl": "Poprzeczny brzucha",
+        "statsGroup": "abs",
+        "status": "active"
+      },
+      {
+        "code": "obliques",
+        "labelPl": "Skośne brzucha",
+        "statsGroup": "abs",
+        "status": "active"
+      },
+      {
+        "code": "quadriceps",
+        "labelPl": "Czworogłowy uda",
+        "statsGroup": "quads",
+        "status": "active"
+      },
+      {
+        "code": "biceps_femoris",
+        "labelPl": "Dwugłowy uda",
+        "statsGroup": "hamstrings_glutes",
+        "status": "active"
+      },
+      {
+        "code": "gluteus_maximus",
+        "labelPl": "Pośladkowy wielki",
+        "statsGroup": "hamstrings_glutes",
+        "status": "active"
+      },
+      {
+        "code": "adductor_magnus",
+        "labelPl": "Przywodziciel wielki",
+        "statsGroup": "hamstrings_glutes",
+        "status": "active"
+      },
+      {
+        "code": "hip_flexors",
+        "labelPl": "Zginacze biodra",
+        "statsGroup": "quads",
+        "status": "active"
+      }
+    ],
+    "variantAttributes": [
+      {
+        "code": "position.back_rack",
+        "labelPl": "Sztanga na plecach",
+        "dimension": "position",
+        "status": "active"
+      },
+      {
+        "code": "position.front_rack",
+        "labelPl": "Sztanga z przodu",
+        "dimension": "position",
+        "status": "active"
+      },
+      {
+        "code": "execution.conventional",
+        "labelPl": "Martwy ciąg klasyczny",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "angle.flat",
+        "labelPl": "Ławka pozioma",
+        "dimension": "angle",
+        "status": "active"
+      },
+      {
+        "code": "position.standing",
+        "labelPl": "Pozycja stojąca",
+        "dimension": "position",
+        "status": "active"
+      },
+      {
+        "code": "grip.pronated",
+        "labelPl": "Nachwyt",
+        "dimension": "grip",
+        "status": "active"
+      },
+      {
+        "code": "position.bench_supported",
+        "labelPl": "Podparcie o ławkę",
+        "dimension": "position",
+        "status": "active"
+      },
+      {
+        "code": "laterality.unilateral",
+        "labelPl": "Jednostronnie, na stronę",
+        "dimension": "laterality",
+        "laterality": "unilateral",
+        "repsCounting": "per_side",
+        "status": "active"
+      },
+      {
+        "code": "execution.bodyweight",
+        "labelPl": "Bez dodatkowego ciężaru",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.weighted",
+        "labelPl": "Z dodatkowym ciężarem",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.band_assisted",
+        "labelPl": "Asysta gumy",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.stationary",
+        "labelPl": "W miejscu",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.no_supination",
+        "labelPl": "Bez aktywnej supinacji",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.forearm_plank",
+        "labelPl": "Podpór na przedramionach",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.hanging_knee_raise",
+        "labelPl": "Unoszenie kolan w zwisie",
+        "dimension": "execution",
+        "status": "active"
+      }
+    ]
   },
-  "families": [],
-  "exercises": [],
-  "issuedIds": []
+  "families": [
+    {
+      "familyId": "squat",
+      "namePl": "Przysiad",
+      "status": "active"
+    },
+    {
+      "familyId": "deadlift",
+      "namePl": "Martwy ciąg",
+      "status": "active"
+    },
+    {
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie leżąc",
+      "status": "active"
+    },
+    {
+      "familyId": "overhead_press",
+      "namePl": "Wyciskanie nad głowę",
+      "status": "active"
+    },
+    {
+      "familyId": "row",
+      "namePl": "Wiosłowanie",
+      "status": "active"
+    },
+    {
+      "familyId": "pullup",
+      "namePl": "Podciąganie",
+      "status": "active"
+    },
+    {
+      "familyId": "lunge",
+      "namePl": "Wykroki",
+      "status": "active"
+    },
+    {
+      "familyId": "biceps_curl",
+      "namePl": "Uginanie przedramion",
+      "status": "active"
+    },
+    {
+      "familyId": "plank",
+      "namePl": "Plank",
+      "status": "active"
+    },
+    {
+      "familyId": "leg_raise",
+      "namePl": "Unoszenie nóg i kolan",
+      "status": "active"
+    }
+  ],
+  "exercises": [
+    {
+      "exerciseId": "squat_barbell_back",
+      "scope": "system",
+      "familyId": "squat",
+      "namePl": "Przysiad ze sztangą na plecach",
+      "aliasesPl": [
+        "Back squat",
+        "Przysiad tylny"
+      ],
+      "variantAttributes": [
+        "position.back_rack"
+      ],
+      "equipment": [
+        "barbell",
+        "rack"
+      ],
+      "primaryMuscles": [
+        "quadriceps",
+        "gluteus_maximus"
+      ],
+      "secondaryMuscles": [
+        "adductor_magnus",
+        "erector_spinae"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj stabilny tułów; prowadź kolana zgodnie z kierunkiem stóp. Dobierz głębokość do kontroli ruchu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "squat_barbell_front",
+      "scope": "system",
+      "familyId": "squat",
+      "namePl": "Przysiad ze sztangą trzymaną z przodu",
+      "aliasesPl": [
+        "Front squat",
+        "Przysiad przedni"
+      ],
+      "variantAttributes": [
+        "position.front_rack"
+      ],
+      "equipment": [
+        "barbell",
+        "rack"
+      ],
+      "primaryMuscles": [
+        "quadriceps",
+        "gluteus_maximus"
+      ],
+      "secondaryMuscles": [
+        "erector_spinae",
+        "rectus_abdominis"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj sztangę z przodu barków i stabilną pozycję tułowia; dobierz chwyt do mobilności.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "deadlift_barbell_conventional",
+      "scope": "system",
+      "familyId": "deadlift",
+      "namePl": "Martwy ciąg klasyczny ze sztangą",
+      "aliasesPl": [
+        "Conventional deadlift",
+        "Martwy ciąg klasyczny"
+      ],
+      "variantAttributes": [
+        "execution.conventional"
+      ],
+      "equipment": [
+        "barbell"
+      ],
+      "primaryMuscles": [
+        "gluteus_maximus",
+        "biceps_femoris"
+      ],
+      "secondaryMuscles": [
+        "quadriceps",
+        "erector_spinae",
+        "trapezius"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj sztangę blisko nóg i stabilny kręgosłup; prostuj biodra i kolana bez szarpania.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "bench_press_barbell_flat",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie sztangi leżąc na ławce poziomej",
+      "aliasesPl": [
+        "Bench press",
+        "Wyciskanie sztangi na ławce płaskiej"
+      ],
+      "variantAttributes": [
+        "angle.flat"
+      ],
+      "equipment": [
+        "barbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Stabilnie oprzyj stopy i tułów, kontroluj opuszczanie sztangi; przy ciężkich seriach korzystaj z asekuracji.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "bench_press_dumbbell_pair_flat",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantli leżąc na ławce poziomej",
+      "aliasesPl": [
+        "Dumbbell bench press",
+        "Wyciskanie hantli na ławce płaskiej"
+      ],
+      "variantAttributes": [
+        "angle.flat"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Kontroluj tor hantli, stabilność łopatek i nadgarstków; unikaj gwałtownego pogłębiania zakresu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "overhead_press_barbell_standing",
+      "scope": "system",
+      "familyId": "overhead_press",
+      "namePl": "Wyciskanie sztangi nad głowę stojąc",
+      "aliasesPl": [
+        "Overhead press",
+        "OHP stojąc"
+      ],
+      "variantAttributes": [
+        "position.standing"
+      ],
+      "equipment": [
+        "barbell"
+      ],
+      "primaryMuscles": [
+        "deltoid_anterior",
+        "deltoid_lateral"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "trapezius"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Napnij brzuch i pośladki; wyciskaj nad głowę bez nadmiernego przeprostu lędźwi.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "row_barbell_bent_over_pronated",
+      "scope": "system",
+      "familyId": "row",
+      "namePl": "Wiosłowanie sztangą nachwytem w opadzie tułowia",
+      "aliasesPl": [
+        "Barbell row",
+        "Wiosłowanie sztangą nachwytem"
+      ],
+      "variantAttributes": [
+        "grip.pronated"
+      ],
+      "equipment": [
+        "barbell"
+      ],
+      "primaryMuscles": [
+        "latissimus_dorsi",
+        "trapezius"
+      ],
+      "secondaryMuscles": [
+        "biceps_brachii",
+        "deltoid_posterior",
+        "erector_spinae"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj stabilny opad tułowia i kontroluj fazę opuszczania; unikaj szarpania plecami.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "row_dumbbell_single_bench_supported",
+      "scope": "system",
+      "familyId": "row",
+      "namePl": "Wiosłowanie hantlem jednorącz z podparciem o ławkę",
+      "aliasesPl": [
+        "One-arm dumbbell row",
+        "Wiosłowanie hantlem z podparciem"
+      ],
+      "variantAttributes": [
+        "position.bench_supported",
+        "laterality.unilateral"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "latissimus_dorsi"
+      ],
+      "secondaryMuscles": [
+        "biceps_brachii",
+        "trapezius",
+        "deltoid_posterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_single",
+      "implements": 1,
+      "laterality": "unilateral",
+      "repsCounting": "per_side",
+      "loadIncrementKg": null,
+      "tipsPl": "Podeprzyj się o ławkę; prowadź hantel ku biodru. Wykonaj tyle samo powtórzeń na stronę.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "pullup_pronated_bodyweight",
+      "scope": "system",
+      "familyId": "pullup",
+      "namePl": "Podciąganie na drążku nachwytem",
+      "aliasesPl": [
+        "Pull-up",
+        "Podciąganie nachwytem"
+      ],
+      "variantAttributes": [
+        "grip.pronated",
+        "execution.bodyweight"
+      ],
+      "equipment": [
+        "pullup_bar"
+      ],
+      "primaryMuscles": [
+        "latissimus_dorsi"
+      ],
+      "secondaryMuscles": [
+        "biceps_brachii",
+        "brachialis",
+        "trapezius"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Podciągaj się bez gwałtownego bujania. Szerokość chwytu zmienia mechanikę, nie izoluje pojedynczego mięśnia.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "pullup_pronated_weighted",
+      "scope": "system",
+      "familyId": "pullup",
+      "namePl": "Podciąganie na drążku nachwytem z dodatkowym obciążeniem",
+      "aliasesPl": [
+        "Weighted pull-up",
+        "Podciąganie z dodatkowym ciężarem"
+      ],
+      "variantAttributes": [
+        "grip.pronated",
+        "execution.weighted"
+      ],
+      "equipment": [
+        "pullup_bar",
+        "weight_plates",
+        "weight_belt"
+      ],
+      "primaryMuscles": [
+        "latissimus_dorsi"
+      ],
+      "secondaryMuscles": [
+        "biceps_brachii",
+        "brachialis",
+        "trapezius"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight_plus",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Zamocuj dodatkowy ciężar bezpiecznie; zapisuj tylko dodane kg, bez masy ciała.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "pullup_pronated_band_assisted",
+      "scope": "system",
+      "familyId": "pullup",
+      "namePl": "Podciąganie na drążku nachwytem z asystą gumy",
+      "aliasesPl": [
+        "Band-assisted pull-up",
+        "Podciąganie z asystą gumy"
+      ],
+      "variantAttributes": [
+        "grip.pronated",
+        "execution.band_assisted"
+      ],
+      "equipment": [
+        "pullup_bar",
+        "resistance_band_assist"
+      ],
+      "primaryMuscles": [
+        "latissimus_dorsi"
+      ],
+      "secondaryMuscles": [
+        "biceps_brachii",
+        "brachialis",
+        "trapezius"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "assisted",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Bezpiecznie zamocuj gumę. Jej kolor i klasa są informacją orientacyjną, nie dokładnym pomiarem kg asysty.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "lunge_dumbbell_pair_stationary",
+      "scope": "system",
+      "familyId": "lunge",
+      "namePl": "Wykroki w miejscu z hantlami",
+      "aliasesPl": [
+        "Stationary dumbbell lunges",
+        "Wykroki z hantlami w miejscu"
+      ],
+      "variantAttributes": [
+        "execution.stationary",
+        "laterality.unilateral"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "primaryMuscles": [
+        "quadriceps",
+        "gluteus_maximus"
+      ],
+      "secondaryMuscles": [
+        "biceps_femoris",
+        "adductor_magnus"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "unilateral",
+      "repsCounting": "per_side",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj stabilność bioder i kolan; zapisuj powtórzenia na nogę, niezależnie od kolejności.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "curl_dumbbell_pair_standing",
+      "scope": "system",
+      "familyId": "biceps_curl",
+      "namePl": "Uginanie przedramion z hantlami stojąc",
+      "aliasesPl": [
+        "Dumbbell curl",
+        "Uginanie ramion z hantlami stojąc"
+      ],
+      "variantAttributes": [
+        "position.standing",
+        "execution.no_supination"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "primaryMuscles": [
+        "biceps_brachii",
+        "brachialis"
+      ],
+      "secondaryMuscles": [
+        "brachioradialis"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Kontroluj pracę łokci i tułowia; jeden wpisany cykl oznacza ruch każdą ręką. Supinacja to osobny wariant w Batch 02.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "plank_forearm",
+      "scope": "system",
+      "familyId": "plank",
+      "namePl": "Plank na przedramionach",
+      "aliasesPl": [
+        "Forearm plank",
+        "Deska na przedramionach"
+      ],
+      "variantAttributes": [
+        "execution.forearm_plank"
+      ],
+      "equipment": [
+        "mat"
+      ],
+      "primaryMuscles": [
+        "rectus_abdominis",
+        "transversus_abdominis"
+      ],
+      "secondaryMuscles": [
+        "obliques",
+        "gluteus_maximus"
+      ],
+      "measurementType": "time",
+      "loadModel": "time",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj stabilny tułów i miednicę, oddychaj swobodnie; zapisuj czas w sekundach.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    },
+    {
+      "exerciseId": "hanging_knee_raise",
+      "scope": "system",
+      "familyId": "leg_raise",
+      "namePl": "Unoszenie kolan w zwisie na drążku",
+      "aliasesPl": [
+        "Hanging knee raise",
+        "Unoszenie kolan w zwisie"
+      ],
+      "variantAttributes": [
+        "execution.hanging_knee_raise"
+      ],
+      "equipment": [
+        "pullup_bar"
+      ],
+      "primaryMuscles": [
+        "rectus_abdominis"
+      ],
+      "secondaryMuscles": [
+        "hip_flexors",
+        "obliques"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Kontroluj unoszenie kolan i podwijaj miednicę; bez tego zginacze biodra mogą dominować.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-F2.3-BATCH01-2026-10-12",
+      "correction": null,
+      "entryRev": 1,
+      "introducedIn": 1,
+      "changedIn": 1
+    }
+  ],
+  "issuedIds": [
+    "squat_barbell_back",
+    "squat_barbell_front",
+    "deadlift_barbell_conventional",
+    "bench_press_barbell_flat",
+    "bench_press_dumbbell_pair_flat",
+    "overhead_press_barbell_standing",
+    "row_barbell_bent_over_pronated",
+    "row_dumbbell_single_bench_supported",
+    "pullup_pronated_bodyweight",
+    "pullup_pronated_weighted",
+    "pullup_pronated_band_assisted",
+    "lunge_dumbbell_pair_stationary",
+    "curl_dumbbell_pair_standing",
+    "plank_forearm",
+    "hanging_knee_raise"
+  ]
 }
