@@ -22,7 +22,7 @@ Stan sprawdzony 11.10.2026:
 | PE-A | normalizacja obciążenia, objętość, sumy sesji | `src/engine/load.js`, `volume.js`, `load-legacy-map.js`; testy `pe-a-*` (37 + 19 + 9 + 13 + 7) | ✅ w kodzie i testach; ekrany nadal na wzorach F1.6 (A4.5) |
 | PE-B | `analyzeExercisePerformance` | brak w `src/engine/` (grep) | brak kodu |
 | PE-C | `nextSessionTargets`, `adjustTargetsAfterSet`, szablony tekstów | brak | brak kodu |
-| PE-D | `weeklyMuscleWorkload`, `comparabilityOf` | brak; jest `muscle-work.js` (przydział pracy partii ze snapshotu, F2) | brak kodu PE-D; fundament partii ✅ (testy F2) |
+| PE-D | `weeklyMuscleWorkload`, `comparabilityOf` | brak; jest `muscle-work.js` (przydział pracy partii ze snapshotu, F2) | brak kodu PE-D; fundament partii ✅ (testy F2); od 17.10 partie = węzły hierarchii AT3-D16, agregacja AT3-D17 (AT3.2); cardio poza partiami i poza statusami PE-B — osobne statystyki czasu i dystansu (AT3-D19); ocena czasu cardio tylko przy tym samym `exerciseId` i identycznym dystansie (P1) |
 | PE-E | `detectRecords` | brak | brak kodu |
 | PE-F | ekran statystyk, aktywne plany, archiwum | brak | brak kodu |
 | PE-G | raport: podsumowanie trenera, Najlepsze momenty, zakładki, „Na następny trening” | brak | brak kodu |

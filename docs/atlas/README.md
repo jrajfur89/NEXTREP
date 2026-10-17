@@ -15,7 +15,8 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `src/engine/atlas-schema.js` | kształt atlasu i słowniki techniczne (modele, lateralność, 10 grup, typy pomiaru) |
 | `src/engine/atlas-validate.js` | walidator (reguły M, V, I, T, S poniżej) |
 | `src/engine/load-snapshot.js` | kontrakt snapshotu modelu obciążenia w treningu (silnik = klient = baza) |
-| `src/engine/muscle-work.js` | praca partii: pełna dla grup głównych, osobno pomocnicza, bez sumowania |
+| `src/engine/muscle-work.js` | praca partii na 10 grupach (F2); w AT3.2 zastępowana agregacją węzłów hierarchii (AT3-D17) |
+| `src/atlas/navigation.json` | (od AT3.2) wspólna hierarchia nawigacji i statystyk z `hierarchyVersion` (AT3-D16); jeszcze nie istnieje |
 | `db/v2-draft/001_load_snapshot.sql` | SZKIC schematu v2 z kontraktu; nie jest migracją, nigdzie nie uruchomiony |
 | `docs/atlas/nextrep-atlas-batch-template.xlsx` | pusty szablon partii |
 | `docs/atlas/przyklad/` | partia syntetyczna (dane TEST) i jej raport importu |
@@ -34,12 +35,12 @@ NEXTREP 1.0 to istniejąca aplikacja `src/app/` (K01-1), a atlas jest jej jedyny
 | AT2 ✅ | katalog tylko do odczytu w aplikacji (`fbc0cdb`); jedyny import `atlas.json`: `src/engine/atlas-release.js` |
 | AT3.0 | decyzje AT3, specyfikacja produktowa, harmonogram (dokumentacja) |
 | AT3.1 | projekt UI w Claude Design |
-| AT3.2 | resolver, indeks, wyszukiwanie, fasety, mapa partii `src/atlas/navigation.json` z walidatorem (bez zmiany schematu atlasu) |
+| AT3.2 | resolver, indeks, wyszukiwanie, fasety; hierarchia `src/atlas/navigation.json` z walidatorem, snapshot v2, agregacja węzłów; kontrakt cardio w silniku (czas i dystans); kształt schematu atlasu bez zmian, reguła M1 bez wymogu mięśni dla cardio (O-30) |
 | AT3.3 | czysty start S1, chmura w S1 wyłączona do SY |
 | AT3.4 | atlas jedynym źródłem planów i treningu; obowiązkowy snapshot modelu obciążenia (`buildLoadSnapshot`) od tego etapu |
 | AT3.5 | model ćwiczeń prywatnych (UUID, pola modelu atlasu) |
 | AT3.6a–d | katalog i filtry, karta szczegółów, wspólny mechanizm wyboru, formularz prywatnego ćwiczenia |
-| AT3.7 | statystyki i progresja ze snapshotu, bramka A5 |
+| AT3.7 | statystyki kategorii, podpartii, mięśni i cardio; progresja ze snapshotu, bramka A5 |
 | AT3.8 | gotowe plany w `src/atlas/plan-templates.json` z własnym walidatorem (C01-5) |
 
 ## Przebieg partii
@@ -57,12 +58,12 @@ Błąd blokuje import; ostrzeżenie i informacja idą do oceny.
 
 | Reguła | Kody | Poziom |
 | --- | --- | --- |
-| M1 co najmniej jeden mięsień główny | `PRIMARY_MUSCLE_REQUIRED` | błąd |
+| M1 co najmniej jeden mięsień główny (od AT3.2c tylko ćwiczenia z `measurementType` innym niż `cardio`; mięśnie cardio opcjonalne, O-30; ta sama reguła dla ćwiczeń prywatnych i snapshotu `ws_primary_muscle`, B2) | `PRIMARY_MUSCLE_REQUIRED` | błąd |
 | M2 mięsień ze słownika, aktywny | `MUSCLE_UNKNOWN`, `DICT_VALUE_ARCHIVED` | błąd |
 | M3 bez powtórzeń; nie główny i pomocniczy naraz | `MUSCLE_DUPLICATE`, `MUSCLE_PRIMARY_AND_SECONDARY` | błąd |
 | M4 każdy mięsień ma jedną z 10 grup | `MUSCLE_GROUP_INVALID` | błąd |
 | M5 dużo pracy głównej (> 3 mięśnie lub > 2 grupy) | `MANY_PRIMARY_MUSCLES` | ostrzeżenie |
-| M6 pomocniczy w grupie głównej nie zmienia jej statystyk | `SECONDARY_IN_PRIMARY_GROUP` | informacja |
+| M6 pomocniczy w grupie głównej nie zmienia jej statystyk (od AT3-D17 nieaktualne: praca pomocnicza zachowana osobno; reguła do przeglądu w AT3.2) | `SECONDARY_IN_PRIMARY_GROUP` | informacja |
 | V1 rodzina istnieje i jest aktywna | `FAMILY_UNKNOWN`, `FAMILY_ARCHIVED`, `FAMILY_ID_*`, `FAMILY_NAME_DUPLICATE` | błąd |
 | V2 bez duplikatów wariantu (rodzina + sprzęt + cechy) | `VARIANT_DUPLICATE` | błąd |
 | V3 inna interpretacja danych musi być widoczna w cechach | `VARIANT_INTERPRETATION_NOT_VISIBLE` | błąd |

@@ -1,9 +1,14 @@
 # NEXTREP 1.0 — MASTER PLAN (audyt kompletności)
 
-Wersja 3.2 · 17.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** po korekcie K01
+Wersja 3.3 · 17.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** po korekcie K01
 (decyzje K01-1–K01-5 w `DECISIONS_1_0.md` §1c). **Sekcja K ma pierwszeństwo przed resztą dokumentu**;
 sekcje 1–3 i A–E pozostają audytem stanu i wymagań, a etapy F2.4/F3–F7 z wersji 2 są przypisane do faz
 sekcji K.
+
+Zmiany w wersji 3.3 (17.10.2026, zamknięcie AT3-D1/D2): decyzje AT3-D16–AT3-D19 (`DECISIONS_1_0.md`
+§1e) — wspólna hierarchia nawigacji i statystyk, agregacja z osobną pracą pomocniczą, snapshot v2, pełne
+cardio (czas i dystans); O-30–O-33, P1–P3 i B2 rozstrzygnięte; zakres AT3.2 (AT3.2a–c), AT3.4, AT3.6a i AT3.7
+zaktualizowany. Prognoza publikacji bez zmian.
 
 Zmiany w wersji 3.2 (17.10.2026, etap AT3.0): etapy AT3–AT6 zastąpione planem AT3.0–AT3.8 (w tym
 AT3.6a–d) według decyzji AT3-D1–AT3-D15 (`DECISIONS_1_0.md` §1d); AT1 i AT2 zakończone; obowiązkowy
@@ -63,17 +68,17 @@ są sprzeczne albo niepełne, zapisuje to jako kwestię do decyzji (sekcja F).
 | 1. Działający NEXTREP | K02 | korekta dokumentacji (ten dokument, rejestr decyzji, `docs/nr1/README.md`, dokumenty designu, `DESIGN.md` z `main`) | kod, konfiguracja |
 | 2. Atlas i plany | AT1 ✅ | publikacja zatwierdzonej partii Batch 01 w `src/atlas/atlas.json` (`368bf2d`) | zmiany aplikacji, schematu atlasu, `issuedIds` |
 | | AT2 ✅ | atlas jako katalog tylko do odczytu w istniejącej aplikacji (`fbc0cdb`); S1 jako środowisko rozwoju (O-26) | plany, trening, historia, synchronizacja — bez zmian |
-| | AT3.0 | decyzje AT3-D1–AT3-D15 w rejestrze, ten harmonogram, `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`, ryzyko B30 (jeden commit dokumentacji) | kod |
+| | AT3.0 ✅ | decyzje AT3-D1–AT3-D15 w rejestrze, ten harmonogram, `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`, ryzyko B30 (jeden commit dokumentacji) | kod |
 | | AT3.1 | projekt UI w Claude Design (równolegle): katalog z partiami i filtrami, kafelek, karta szczegółów, wspólny mechanizm wyboru, formularz prywatnego ćwiczenia, stany puste | kod |
-| | AT3.2 | dane: resolver (id atlasu / UUID), indeks, wyszukiwanie bez polskich znaków, fasety, mapa partii z `navigation.json` + walidator (AT3-D1), jeden słownik nazw 10 grup (AT3-D2) | ekrany poza nazwami grup |
+| | AT3.2 | dane i silnik: AT3.2a resolver (id atlasu / UUID), indeks, wyszukiwanie bez polskich znaków, fasety; AT3.2b hierarchia `navigation.json` z `hierarchyVersion` + walidator (AT3-D16), snapshot v2 (AT3-D18), agregacja węzłów (AT3-D17); AT3.2c kontrakt cardio w silniku (AT3-D19: czas i dystans, M1 bez wymogu mięśni dla cardio, osobny blok sum); katalog AT2 na kategoriach i podpartiach | ekrany poza nazwami kategorii w katalogu AT2; obecne wzory objętości ekranów |
 | | AT3.3 | czysty start S1 (AT3-D3): nowa przestrzeń, bez zasiewu starego katalogu, wyłączone migracje i import starych kopii, chmura w S1 wyłączona do SY (AT3-D5) | usuwanie starych danych, zmiany `nextrep-f5-test` |
-| | AT3.4 | atlas jedynym źródłem w planach i treningu; **obowiązkowy snapshot** przy dodaniu ćwiczenia; grupy na obecnych ekranach ze snapshotu, stare mapy niewywoływane (AT3-D8); wycofanie starego katalogu, szablonów i kafli; UI przejściowe (AT3-D9); nowy E2E (AT3-D7) | ćwiczenia prywatne, nowy wygląd, zmiana wzorów objętości |
-| | AT3.5 | model ćwiczeń prywatnych (AT3-D6): UUID, pola modelu, resolver, snapshot prywatny, prosty formularz przejściowy | docelowy formularz, synchronizacja |
-| | AT3.6a | UI: katalog, partie, wyszukiwarka, filtry, kafelek, ostatnio używane, ulubione lokalnie (AT3-D14) | karta, wybór |
+| | AT3.4 | atlas jedynym źródłem w planach i treningu; **obowiązkowy snapshot v2** przy dodaniu ćwiczenia (także cardio); przejściowy wpis cardio tylko z czasem i dystansem (bez kcal i parametrów urządzeń, O-31); węzły hierarchii na obecnych ekranach ze snapshotu, stare mapy niewywoływane (AT3-D8); wycofanie starego katalogu, szablonów i kafli; UI przejściowe (AT3-D9); nowy E2E (AT3-D7) | ćwiczenia prywatne, nowy wygląd, zmiana wzorów objętości |
+| | AT3.5 | model ćwiczeń prywatnych (AT3-D6): UUID, pola modelu, resolver, snapshot prywatny, prosty formularz przejściowy; mięsień główny wymagany poza cardio (B2) | docelowy formularz, synchronizacja |
+| | AT3.6a | UI: katalog, 7 kategorii z podpartiami, wyszukiwarka, filtry, kafelek, ostatnio używane, ulubione lokalnie (AT3-D14) | karta, wybór |
 | | AT3.6b | UI: karta szczegółów; sekcje bez danych ukryte (AT3-D11–AT3-D13) | — |
 | | AT3.6c | UI: jeden mechanizm wyboru w katalogu, planie i treningu | — |
 | | AT3.6d | UI: formularz prywatnego ćwiczenia (podstawowy, zaawansowany, sugestie) | — |
-| | AT3.7 | silnik: statystyki partii ze snapshotu (praca główna i pomocnicza), progresja z modelu snapshotu, bramka A5 | nowe ekrany raportów (PE-F/G/H) |
+| | AT3.7 | ekrany: statystyki kategorii, podpartii i mięśni ze snapshotu v2 (praca główna i pomocnicza osobno, `hierarchyVersion`), statystyki i trendy cardio, progresja z modelu snapshotu, bramka A5 | nowe ekrany raportów (PE-F/G/H) |
 | | AT3.8 | gotowe plany: `plan-templates.json` + walidator (C01-5), plany na id atlasu (AT3-D4) | treść planów (od właściciela) |
 | | PE | PE-B, PE-C, PE-E w silniku (bez ekranów), równolegle do AT; zakres w 1.0: O-25 | |
 | 3. Design | DS1 | projekty w Claude Design (Twoja praca; może iść od razu, równolegle do fazy 2); dla atlasu = AT3.1 | |
@@ -100,7 +105,7 @@ synchronizacji i ekranów — to osobny etap z osobną zgodą i testami (K.2).
 
 | Tydzień | Etapy (każdy z osobną zgodą) | Równolegle: przygotowanie i prace bez kodu |
 | --- | --- | --- |
-| 1 (12–18.10) | K02 ✅ (`1ed73f3`); AT1 ✅ (`368bf2d`); AT2 ✅ (`fbc0cdb`); AT3.0 | O-26 ✅ (13.10); partie atlasu; DS1 start; decyzja O-01 (konto Play); lista partii nawigacyjnych w Standaryzacji (AT3-D1) |
+| 1 (12–18.10) | K02 ✅ (`1ed73f3`); AT1 ✅ (`368bf2d`); AT2 ✅ (`fbc0cdb`); AT3.0 | O-26 ✅ (13.10); partie atlasu; DS1 start; decyzja O-01 (konto Play); potwierdzenie hierarchii i 4 nowych kodów w Standaryzacji (AT3-D16); O-30–O-33 (cardio) ✅ (17.10) |
 | 2–3 (19.10–1.11) | AT3.2, AT3.3 | AT3.1 (Claude Design); PE-B; SY: decyzje O-23, O-24 i specyfikacja zakresu |
 | 4–5 (2–15.11) | AT3.4, AT3.5; PE-C, PE-E | AT3.1; SY: schemat i testy lokalne; decyzja O-25 |
 | 6–8 (16.11–6.12) | AT3.6a–d według gotowości projektów; AT3.7; AT3.8, gdy atlas i treść planów pozwolą (O-29) | ostatnie partie atlasu; SY przygotowane do integracji; szkice GP |
@@ -304,7 +309,7 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 
 ### 2.6 Progress Engine 2.0 i NEXTREP Reporting Engine
 
-- **Ustalenia:** D1–D14 i PE-01–PE-32 (10.10), P1–P4, K2–K4, praca partii (F2 v2 pkt 1), etapy PE-A–PE-H,
+- **Ustalenia:** D1–D14 i PE-01–PE-32 (10.10), P1–P4, K2–K4, praca partii (F2 v2 pkt 1; od 17.10 węzły hierarchii AT3-D16 i agregacja AT3-D17), etapy PE-A–PE-H,
   A5 jako ostatni krok F3 z osobną bramką. F-3 (11.10): Reporting Engine obejmuje progresję, regresję,
   objętość, rekordy, trendy, stagnację, realizację planu i rekomendacje — mapa obszarów, powierzchni
   i zależności: `REPORTING_ENGINE_MAP.md`.

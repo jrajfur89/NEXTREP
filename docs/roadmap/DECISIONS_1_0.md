@@ -1,6 +1,12 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 6 · 17.10.2026 · gałąź `release/1.0`
+Wersja 7 · 17.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+
+Zmiany w wersji 7: decyzje AT3-D16–AT3-D19 (sekcja 1e): wspólna hierarchia nawigacji i statystyk
+(zastępuje AT3-D1), zasady agregacji (zastępuje AT3-D2), snapshot v2, pełne cardio w NEXTREP 1.0; decyzje
+O-30–O-33 (cardio) zgłoszone jako otwarte i rozstrzygnięte przez właściciela 17.10.2026; P1–P3 i B2
+zatwierdzone 18.10.2026; specyfikacja atlasu
+w wersji 2.
 
 Zmiany w wersji 6: decyzje AT3-D1–AT3-D15 (sekcja 1d, etap AT3.0): nowy atlas jedynym źródłem ćwiczeń,
 trzy warstwy klasyfikacji, harmonogram AT3.0–AT3.8, obowiązkowy snapshot od AT3.4, ryzyko R-AT3-1
@@ -94,8 +100,8 @@ Engine. Specyfikacja: `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`; harmonogram: MASTER P
 
 | # | Decyzja | Status |
 | --- | --- | --- |
-| AT3-D1 | Partie nawigacyjne oddzielone od 10 grup statystycznych i od klasyfikacji anatomicznej; zdefiniowane jako zbiory kodów mięśni ze słownika atlasu w osobnym pliku `src/atlas/navigation.json` z walidatorem, bez zmiany schematu atlasu. Filtry wielokryterialne: partie, sprzęt, rodzaj obciążenia, chwyt, pozycja, kąt ławki, jednostronność, rodzina | **zatwierdzona kierunkowo**; lista partii, mapowanie kodów mięśni, przynależność ćwiczenia do partii (tylko mięśnie główne czy także pomocnicze) i grupowanie rodzajów obciążenia wymagają szczegółowego uzgodnienia w Standaryzacji (AT3-D10) przed częścią nawigacyjną AT3.2 i przed AT3.6a |
-| AT3-D2 | Jeden słownik nazw 10 grup statystycznych: Klatka piersiowa, Plecy, Barki, Biceps, Triceps, Przedramiona, Brzuch, Czworogłowe uda, Dwugłowe uda / pośladki, Łydki; nazwy użyte w katalogu AT2 („Uda — przód”, „Uda — tył i pośladki”) poprawiane w AT3.2 | obowiązuje (zgodna z wcześniejszą decyzją o 10 grupach) |
+| AT3-D1 | Partie nawigacyjne oddzielone od 10 grup statystycznych i od klasyfikacji anatomicznej; zdefiniowane jako zbiory kodów mięśni ze słownika atlasu w osobnym pliku `src/atlas/navigation.json` z walidatorem, bez zmiany schematu atlasu. Filtry wielokryterialne: partie, sprzęt, rodzaj obciążenia, chwyt, pozycja, kąt ławki, jednostronność, rodzina | **zastąpiona przez AT3-D16** (17.10.2026); filtry wielokryterialne pozostają w AT3-D16 |
+| AT3-D2 | Jeden słownik nazw 10 grup statystycznych: Klatka piersiowa, Plecy, Barki, Biceps, Triceps, Przedramiona, Brzuch, Czworogłowe uda, Dwugłowe uda / pośladki, Łydki; nazwy użyte w katalogu AT2 („Uda — przód”, „Uda — tył i pośladki”) poprawiane w AT3.2 | **zastąpiona przez AT3-D17** (17.10.2026); 10 grup przestaje być podziałem produktu, nazwy w katalogu AT2 poprawiane w AT3.2 na nazwy kategorii i podpartii |
 | AT3-D3 | Czysty start S1: nowa przestrzeń danych, stare dane testowe nietknięte i niewidoczne, bez migracji i bez mapowania identyfikatorów | obowiązuje (STORE FIRST, K01) |
 | AT3-D4 | Gotowe plany wyłącznie na nowym atlasie (`plan-templates.json`, C01-5). Do czasu szablonów sekcja gotowych planów z informacją, że pojawią się wraz z atlasem; treść szablonów przygotowuje właściciel (z ChatGPT), gdy atlas obejmie potrzebne ćwiczenia (O-29) | zatwierdzona |
 | AT3-D5 | Chmura w S1 (logowanie i synchronizacja) wyłączona od AT3.3 do etapu SY; `nextrep-f5-test` bez zmian | zatwierdzona |
@@ -103,7 +109,7 @@ Engine. Specyfikacja: `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`; harmonogram: MASTER P
 | AT3-D7 | Testy: od AT3.4 nowy przebieg E2E na atlasie; test wizualny porównuje z zaakceptowanym stanem poprzedniego etapu zamiast z aplikacją `a2b9ca0` | zatwierdzona |
 | AT3-D8 | Ochrona historii i kolizji `hanging_knee_raise` (ryzyko R-AT3-1, niżej): separacja przestrzeni (AT3-D3); grupy i model w nowej przestrzeni ze snapshotu, a przy jego braku z atlasu — nigdy ze starych map kluczowanych starymi id; brak snapshotu = usterka z ostrzeżeniem (F2-4), bez uzupełniania z bieżącego atlasu; test listy wspólnych id z AT2. Obowiązuje od pierwszego zapisu w nowej przestrzeni (AT3.4) | obowiązuje |
 | AT3-D9 | UI przejściowe z obecnych komponentów w AT3.4–AT3.5; docelowy wygląd w AT3.6a–d po projekcie | zatwierdzona |
-| AT3-D10 | Listę partii nawigacyjnych (AT3-D1) potwierdza czat „Standaryzacja ćwiczeń NextRep”; schemat atlasu bez zmian | zatwierdzona |
+| AT3-D10 | Listę partii nawigacyjnych (od 17.10: hierarchię AT3-D16 — nazwy i kody węzłów) potwierdza czat „Standaryzacja ćwiczeń NextRep”; schemat atlasu bez zmian | zatwierdzona |
 | AT3-D11 | „Podobne ćwiczenia — sugestie oparte na danych, bez deklarowania zamienności”: wyliczane z danych atlasu, bez wpływu na progresję; zasady F2 V8 (brak pól równoważności) i K3 (rodzina ≠ zamiennik) bez zmian | zatwierdzona |
 | AT3-D12 | Instrukcja wykonania i typowe błędy jako nowe pola atlasu dopiero po przygotowaniu treści w Standaryzacji i osobnej zgodzie na zmianę schematu F2; do tego czasu sekcje karty ukryte | zatwierdzona (zmiana schematu nadal wymaga osobnej zgody) |
 | AT3-D13 | Zdjęcia na rodzinę albo partię, nie na każde ćwiczenie; osobny etap zasobów według `DESIGN.md` §16 | zatwierdzona |
@@ -128,6 +134,51 @@ przez Vercel i nie może zostać naruszona. `release/1.0` i istniejący APK S1 s
 NEXTREP 1.0; bez `app.nextrep.dev` i bez nowego workflow; `app.nextrep.spike` pozostaje tymczasowym
 identyfikatorem testowym (ostateczny: O-11); `nextrep-f5-test` pozostaje testowym backendem S1 (od AT3.3 w
 S1 nieużywany do SY, AT3-D5).
+
+## 1e. Decyzje AT3-D16–AT3-D19 — wspólna hierarchia, agregacja, snapshot v2, cardio (17.10.2026)
+
+Źródło: decyzje właściciela produktu po audycie „AT3-D1/D2: wspólna hierarchia atlasu i statystyk”
+(17.10.2026) i zlecenie zamknięcia AT3-D1/D2 (17.10.2026). Szczegóły, tabele i testy:
+`NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md` wersja 2, sekcje 3, 6, 7 i 11.
+
+| # | Decyzja | Status |
+| --- | --- | --- |
+| AT3-D16 | **Jedna hierarchia dla nawigacji atlasu i statystyk** (zastępuje AT3-D1). Kategorie: Klatka piersiowa, Plecy, Barki, Ramiona, Brzuch i core, Nogi, Cardio i kondycja (osobna kategoria aktywności). Przynależność ćwiczenia do kategorii mięśniowej wyznaczają wyłącznie `primaryMuscles`; mięśnie pomocnicze prezentowane oddzielnie. Hierarchia w `src/atlas/navigation.json` z `hierarchyVersion` i walidatorem (każdy aktywny mięsień w dokładnie jednej podpartii). 19 kodów Batch 01 zmapowanych; w Nogach przywodziciele i zginacze biodra to osobne podpartie. Zaplanowane rozszerzenia słownika `gastrocnemius`, `soleus`, `gluteus_medius`, `rhomboids` — dodawane w partii atlasu Standaryzacji, nie w tym zleceniu. Pole `statsGroup` zostaje tymczasowo w schemacie (M4); usunięcie wymaga osobnej, kontrolowanej zmiany schematu i szablonu importu. Filtry wielokryterialne jak w AT3-D1 | zatwierdzona; nazwy i kody węzłów potwierdza Standaryzacja (AT3-D10) |
+| AT3-D17 | **Zasady agregacji** (zastępuje AT3-D2). Każdy mięsień główny dostaje pełną objętość serii; każda podpartia i kategoria liczy serię najwyżej raz w obrębie własnego węzła; kategoria nie jest sumą podpartii; suma treningu liczona niezależnie od kategorii. Praca pomocnicza to osobna metryka na poziomie mięśnia, podpartii i kategorii, zachowana także wtedy, gdy węzeł ma pracę główną; praca główna i pomocnicza nie są sumowane. Zastępuje F2 v2 pkt 1 w części rozłączności grup (`deriveGroups`, M6); rozłączność mięśni (M3) zostaje. Normalizacja obciążenia, jednostronność, powtórzenia, serie i statusy objętości z `load.js` bez zmian. Nazwa metryki: „Objętość ćwiczeń angażujących partię”. Progresja per `exerciseId` | zatwierdzona |
+| AT3-D18 | **Snapshot v2.** `primaryMuscles` i `secondaryMuscles` zamrożone przy zapisie; `primaryGroups` i `secondaryGroups` wycofane; węzły hierarchii wyliczane przy odczycie z bieżącej hierarchii; raporty i eksporty podają `hierarchyVersion`. Brak snapshotu nadal usterką z ostrzeżeniem (F2-4). Brak migracji: S1 nie ma danych z atlasu, szkic SQL nigdzie nie działa | zatwierdzona |
+| AT3-D19 | **Pełne cardio w NEXTREP 1.0**: katalog, plany i treningi, zapis czasu i dystansu, historia, statystyki czasu i dystansu, trendy i porównania. Jednostki kanoniczne: sekundy (`durationSec`) i metry (`distanceM`); seria wykonana przy czasie lub dystansie > 0; tempo wyliczane, nie zapisywane; czas i dystans nigdy w kg; cardio w osobnym bloku sum treningu. Bez GPS, integracji z urządzeniami, tętna i kalorii bez osobnej decyzji | zatwierdzona; szczegóły: O-30–O-33 rozstrzygnięte 17.10 (niżej) |
+
+**Rozstrzygnięcia O-30–O-33 (17.10.2026, decyzje właściciela).**
+- **O-30:** ćwiczenie cardio nie wymaga `primaryMuscles`; mięśnie cardio są opcjonalne i informacyjne, nie
+  uczestniczą w agregacji siłowej ani w kategoriach mięśniowych. Reguła M1 rozróżnia ćwiczenia siłowe
+  (mięsień główny wymagany) i cardio (`measurementType: cardio`, mięśnie opcjonalne); tak samo reguła
+  snapshotu `ws_primary_muscle`. Dotyczy ćwiczeń systemowych i prywatnych.
+- **O-31:** w 1.0 zapisywane są wyłącznie czas i dystans. Kalorie, tętno, prędkość jako osobne pole,
+  nachylenie i pozostałe parametry — poza zakresem. Tempo jest tylko wyliczane z czasu i dystansu.
+- **O-32:** dystans agregowany w ramach konkretnej aktywności (`exerciseId`); bez jednej sumy dystansu
+  różnych aktywności. Łączny czas cardio może być sumowany.
+- **O-33:** „Cardio i kondycja” bez podpartii w 1.0; rodzaje aktywności wyszukiwane i filtrowane, bez
+  sztucznych podpartii mięśniowych.
+
+**Rozstrzygnięcia P1–P3 i B2 (18.10.2026, decyzje właściciela).**
+- **P1:** czas cardio oceniany według zasady „krócej = lepiej” tylko dla tego samego `exerciseId`, przy
+  identycznym dystansie i porównywalnych warunkach pomiaru; w innych przypadkach zmiana czasu jest
+  informacją, bez automatycznej oceny poprawy. Tempo jest wskaźnikiem wyliczanym, nie przechowywanym.
+- **P2:** dla `durationSec` i `distanceM` puste pole = brak wartości; jawne zero i wartość ujemna są
+  nieprawidłowe; seria cardio jest wykonana, gdy co najmniej jedna z tych wartości jest poprawna;
+  walidacja obejmuje ćwiczenia systemowe i prywatne.
+- **P3:** ćwiczenie cardio występuje wyłącznie w kategorii „Cardio i kondycja”; opcjonalne mięśnie
+  informacyjne nie powodują pojawienia się w kategoriach mięśniowych ani nie uczestniczą w statystykach
+  objętości siłowej.
+- **B2:** każde prywatne ćwiczenie inne niż cardio ma co najmniej jeden mięsień główny; reguła spójna w
+  formularzu, walidatorze i kontrakcie snapshotu (`ws_primary_muscle`).
+
+**Zależności etapów po AT3-D16–D19.** AT3.2 obejmuje hierarchię, snapshot v2, agregację węzłów i kontrakt
+cardio w silniku (AT3.2a–c); AT3.4 zapisuje snapshot v2 także dla cardio i ma przejściowy wpis cardio; AT3.5 i AT3.6d wymagają mięśnia
+głównego w prywatnym ćwiczeniu innym niż cardio (B2);
+AT3.6a pokazuje 7 kategorii i podpartie (cardio bez podpartii); AT3.6b–c kartę, historię i wpis cardio; AT3.7 ekrany statystyk
+kategorii, podpartii, mięśni i cardio. Progress Engine: definicje PE (D1–D14, PE-01–PE-32) bez zmian;
+w PE-D „partie” oznaczają węzły hierarchii AT3-D16 z zasadami AT3-D17.
 
 ## 2. Decyzje otwarte
 
@@ -162,6 +213,10 @@ S1 nieużywany do SY, AT3-D5).
 | O-27 | Magazyn w `src/app/`: zakres O-10 (IndexedDB) w istniejącej aplikacji i termin | technika | faza 4 | ponowna ocena C01-6 |
 | ~~O-28~~ | Równoległość synchronizacji i designu | — | — | **rozstrzygnięte 13.10** (sekcja 1c) |
 | O-29 | Minimalny zakres atlasu i gotowych planów na publikację 1.0 (liczba ćwiczeń, które plany) | produkt | AT3.8, test zamknięty | tempo partii jest ścieżką krytyczną; AT3-D4 |
+| ~~O-30~~ | Cardio a mięśnie (M1) | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
+| ~~O-31~~ | Pola cardio poza czasem i dystansem | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
+| ~~O-32~~ | Suma dystansu różnych aktywności | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
+| ~~O-33~~ | Podpartie w „Cardio i kondycja” | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
 
 ## 3. F-4: zgodność Crashlytics ze stosem Capacitor (stan weryfikacji)
 
