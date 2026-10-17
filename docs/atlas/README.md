@@ -22,19 +22,25 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `tools/import-atlas-batch.mjs` | sprawdzenie partii i raport; zapis atlasu tylko z `--write` |
 | `tools/build-nr1.mjs` | walidacja atlasu przy buildzie `src/nr1/` (błąd blokuje build) i generowanie metadanych wydania (C01-4); `issuedIds` pozostaje w `atlas.json`. Po K01 zostaje jako dodatkowa kontrola atlasu w CI |
 
-## Atlas w aplikacji (K01, etapy AT1–AT6)
+## Atlas w aplikacji (K01, etapy AT1–AT3.8)
 
-NEXTREP 1.0 to istniejąca aplikacja `src/app/` (K01-1). Atlas trafia do niej etapami, każdy z osobną
-zgodą i testem (MASTER PLAN v3, sekcja K):
+NEXTREP 1.0 to istniejąca aplikacja `src/app/` (K01-1), a atlas jest jej jedynym źródłem ćwiczeń
+(decyzje AT3, `docs/roadmap/DECISIONS_1_0.md` §1d). Wymagania produktowe, źródła danych i kryteria odbioru:
+`docs/roadmap/NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`; harmonogram: MASTER PLAN §K.3.
 
 | Etap | Zakres |
 | --- | --- |
-| AT1 | publikacja zatwierdzonej partii Batch 01 w `src/atlas/atlas.json` (tylko dane) |
-| AT2 | katalog tylko do odczytu w aplikacji (adapter `atlas.json` → kształt ćwiczenia `src/app/`) |
-| AT3 | czysty start: katalog z atlasu + ćwiczenia prywatne jako źródło planów i treningu; bez starego atlasu 68 ćwiczeń i bez mapowania identyfikatorów |
-| AT4 | snapshot modelu obciążenia w treningu (`buildLoadSnapshot`), historia liczona ze snapshotu |
-| AT5 | ćwiczenia prywatne z polami modelu |
-| AT6 | gotowe plany w `src/atlas/plan-templates.json` z własnym walidatorem (C01-5) |
+| AT1 ✅ | publikacja zatwierdzonej partii Batch 01 w `src/atlas/atlas.json` (`368bf2d`) |
+| AT2 ✅ | katalog tylko do odczytu w aplikacji (`fbc0cdb`); jedyny import `atlas.json`: `src/engine/atlas-release.js` |
+| AT3.0 | decyzje AT3, specyfikacja produktowa, harmonogram (dokumentacja) |
+| AT3.1 | projekt UI w Claude Design |
+| AT3.2 | resolver, indeks, wyszukiwanie, fasety, mapa partii `src/atlas/navigation.json` z walidatorem (bez zmiany schematu atlasu) |
+| AT3.3 | czysty start S1, chmura w S1 wyłączona do SY |
+| AT3.4 | atlas jedynym źródłem planów i treningu; obowiązkowy snapshot modelu obciążenia (`buildLoadSnapshot`) od tego etapu |
+| AT3.5 | model ćwiczeń prywatnych (UUID, pola modelu atlasu) |
+| AT3.6a–d | katalog i filtry, karta szczegółów, wspólny mechanizm wyboru, formularz prywatnego ćwiczenia |
+| AT3.7 | statystyki i progresja ze snapshotu, bramka A5 |
+| AT3.8 | gotowe plany w `src/atlas/plan-templates.json` z własnym walidatorem (C01-5) |
 
 ## Przebieg partii
 

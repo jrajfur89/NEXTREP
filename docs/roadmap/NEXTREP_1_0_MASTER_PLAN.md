@@ -1,9 +1,14 @@
 # NEXTREP 1.0 — MASTER PLAN (audyt kompletności)
 
-Wersja 3.1 · 13.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** po korekcie K01
+Wersja 3.2 · 17.10.2026 · gałąź `release/1.0` · status: **aktualna podstawa planowania** po korekcie K01
 (decyzje K01-1–K01-5 w `DECISIONS_1_0.md` §1c). **Sekcja K ma pierwszeństwo przed resztą dokumentu**;
 sekcje 1–3 i A–E pozostają audytem stanu i wymagań, a etapy F2.4/F3–F7 z wersji 2 są przypisane do faz
 sekcji K.
+
+Zmiany w wersji 3.2 (17.10.2026, etap AT3.0): etapy AT3–AT6 zastąpione planem AT3.0–AT3.8 (w tym
+AT3.6a–d) według decyzji AT3-D1–AT3-D15 (`DECISIONS_1_0.md` §1d); AT1 i AT2 zakończone; obowiązkowy
+snapshot od AT3.4; ryzyko B30 (`hanging_knee_raise`); specyfikacja produktowa atlasu
+`NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`. Prognoza publikacji bez zmian (nadal prognoza, nie zobowiązanie).
 
 Zmiany w wersji 3.1 (13.10.2026): O-28 rozstrzygnięte — wariant równoległy (przygotowanie synchronizacji
 równolegle z designem) jest podstawowym scenariuszem harmonogramu K.4; termin publikacji opisany jako
@@ -56,15 +61,23 @@ są sprzeczne albo niepełne, zapisuje to jako kwestię do decyzji (sekcja F).
 | Faza (K01-5) | Etap | Zakres | Czego etap nie robi |
 | --- | --- | --- | --- |
 | 1. Działający NEXTREP | K02 | korekta dokumentacji (ten dokument, rejestr decyzji, `docs/nr1/README.md`, dokumenty designu, `DESIGN.md` z `main`) | kod, konfiguracja |
-| 2. Atlas i plany | AT1 | publikacja zatwierdzonej partii Batch 01 w `src/atlas/atlas.json` (dane; procedura w raporcie K01, sekcja 4) | zmiany aplikacji, schematu atlasu, `issuedIds` |
-| | AT2 | atlas widoczny w działającej aplikacji jako katalog tylko do odczytu (adapter `atlas.json` → kształt ćwiczenia `src/app/`); zdjęcie testu zamrożenia `src/app/` (C01-7); build testowy wg O-26 | plany, trening, historia, synchronizacja — bez zmian |
-| | AT3 | czysty start: nowy magazyn lokalny, wyłączone migracje i odczyt starych danych, brak zasiewu `DEFAULT_EXERCISES`; katalog z atlasu + ćwiczenia prywatne jako źródło dla planów i treningu | snapshot, statystyki, gotowe plany |
-| | AT4 | snapshot modelu obciążenia (`buildLoadSnapshot`) przy dodaniu ćwiczenia do treningu; historia i podsumowania czytają snapshot; stare wzory F1.6 do bramki A5 | zmiana wzorów na ekranach (A5) |
-| | AT5 | ćwiczenia prywatne z polami modelu (rodzaj obciążenia, strona, liczenie powtórzeń, mięśnie; „nie wiem” → `external_unknown`) | |
-| | AT6 | gotowe plany: `src/atlas/plan-templates.json` + walidator (C01-5), budowa planów na id atlasu; treść planów od Ciebie | |
+| 2. Atlas i plany | AT1 ✅ | publikacja zatwierdzonej partii Batch 01 w `src/atlas/atlas.json` (`368bf2d`) | zmiany aplikacji, schematu atlasu, `issuedIds` |
+| | AT2 ✅ | atlas jako katalog tylko do odczytu w istniejącej aplikacji (`fbc0cdb`); S1 jako środowisko rozwoju (O-26) | plany, trening, historia, synchronizacja — bez zmian |
+| | AT3.0 | decyzje AT3-D1–AT3-D15 w rejestrze, ten harmonogram, `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`, ryzyko B30 (jeden commit dokumentacji) | kod |
+| | AT3.1 | projekt UI w Claude Design (równolegle): katalog z partiami i filtrami, kafelek, karta szczegółów, wspólny mechanizm wyboru, formularz prywatnego ćwiczenia, stany puste | kod |
+| | AT3.2 | dane: resolver (id atlasu / UUID), indeks, wyszukiwanie bez polskich znaków, fasety, mapa partii z `navigation.json` + walidator (AT3-D1), jeden słownik nazw 10 grup (AT3-D2) | ekrany poza nazwami grup |
+| | AT3.3 | czysty start S1 (AT3-D3): nowa przestrzeń, bez zasiewu starego katalogu, wyłączone migracje i import starych kopii, chmura w S1 wyłączona do SY (AT3-D5) | usuwanie starych danych, zmiany `nextrep-f5-test` |
+| | AT3.4 | atlas jedynym źródłem w planach i treningu; **obowiązkowy snapshot** przy dodaniu ćwiczenia; grupy na obecnych ekranach ze snapshotu, stare mapy niewywoływane (AT3-D8); wycofanie starego katalogu, szablonów i kafli; UI przejściowe (AT3-D9); nowy E2E (AT3-D7) | ćwiczenia prywatne, nowy wygląd, zmiana wzorów objętości |
+| | AT3.5 | model ćwiczeń prywatnych (AT3-D6): UUID, pola modelu, resolver, snapshot prywatny, prosty formularz przejściowy | docelowy formularz, synchronizacja |
+| | AT3.6a | UI: katalog, partie, wyszukiwarka, filtry, kafelek, ostatnio używane, ulubione lokalnie (AT3-D14) | karta, wybór |
+| | AT3.6b | UI: karta szczegółów; sekcje bez danych ukryte (AT3-D11–AT3-D13) | — |
+| | AT3.6c | UI: jeden mechanizm wyboru w katalogu, planie i treningu | — |
+| | AT3.6d | UI: formularz prywatnego ćwiczenia (podstawowy, zaawansowany, sugestie) | — |
+| | AT3.7 | silnik: statystyki partii ze snapshotu (praca główna i pomocnicza), progresja z modelu snapshotu, bramka A5 | nowe ekrany raportów (PE-F/G/H) |
+| | AT3.8 | gotowe plany: `plan-templates.json` + walidator (C01-5), plany na id atlasu (AT3-D4) | treść planów (od właściciela) |
 | | PE | PE-B, PE-C, PE-E w silniku (bez ekranów), równolegle do AT; zakres w 1.0: O-25 | |
-| 3. Design | DS1 | projekty w Claude Design (Twoja praca; może iść od razu, równolegle do fazy 2) | |
-| | DS2 | wdrażanie zaakceptowanych ekranów w `src/app/`, ekran po ekranie; test wizualny aktualizowany per ekran | zmiana logiki |
+| 3. Design | DS1 | projekty w Claude Design (Twoja praca; może iść od razu, równolegle do fazy 2); dla atlasu = AT3.1 | |
+| | DS2 | wdrażanie zaakceptowanych ekranów w `src/app/`, ekran po ekranie; test wizualny aktualizowany per ekran; ekrany atlasu = AT3.6a–d | zmiana logiki |
 | | A5 | bramka: ekrany przechodzą na wzory `load.js`; PE-D, PE-F/G/H (raporty) z nowymi ekranami statystyk | |
 | 4. Synchronizacja, monetyzacja, Google Play | SY | nowy projekt Supabase (O-24), synchronizacja wg O-23, konto (OTP, usuwanie konta), 4A.10 wg SPEC, magazyn wg O-27 | |
 | | AN | Android: ostateczny identyfikator (O-11), funkcje natywne (F4: eksport, powiadomienie przerwy, stoper w tle), Crashlytics (F-4, O-14), ustawienia wydania (B15–B17) | |
@@ -87,10 +100,10 @@ synchronizacji i ekranów — to osobny etap z osobną zgodą i testami (K.2).
 
 | Tydzień | Etapy (każdy z osobną zgodą) | Równolegle: przygotowanie i prace bez kodu |
 | --- | --- | --- |
-| 1 (12–18.10) | K02 ✅ (`1ed73f3`); AT1 po otrzymaniu pliku Batch 01 | decyzja O-26; partie atlasu; DS1 start; decyzja O-01 (konto Play) |
-| 2–3 (19.10–1.11) | AT2, AT3 | PE-B; DS1; SY: decyzje O-23, O-24 i specyfikacja zakresu |
-| 4–5 (2–15.11) | AT4, AT5; PE-C, PE-E | DS1; SY: schemat i testy lokalne; decyzja O-25 |
-| 6–8 (16.11–6.12) | AT6 (wymaga treści planów, O-29) | ostatnie partie atlasu; DS1 domknięte; SY przygotowane do integracji; szkice GP |
+| 1 (12–18.10) | K02 ✅ (`1ed73f3`); AT1 ✅ (`368bf2d`); AT2 ✅ (`fbc0cdb`); AT3.0 | O-26 ✅ (13.10); partie atlasu; DS1 start; decyzja O-01 (konto Play); lista partii nawigacyjnych w Standaryzacji (AT3-D1) |
+| 2–3 (19.10–1.11) | AT3.2, AT3.3 | AT3.1 (Claude Design); PE-B; SY: decyzje O-23, O-24 i specyfikacja zakresu |
+| 4–5 (2–15.11) | AT3.4, AT3.5; PE-C, PE-E | AT3.1; SY: schemat i testy lokalne; decyzja O-25 |
+| 6–8 (16.11–6.12) | AT3.6a–d według gotowości projektów; AT3.7; AT3.8, gdy atlas i treść planów pozwolą (O-29) | ostatnie partie atlasu; SY przygotowane do integracji; szkice GP |
 | 9–13 (7.12–10.01) | DS2 + A5 + PE-D/F/G/H; integracja SY w `src/app/` (konto OTP, 4A.10) — z przerwą świąteczną | AN; rekrutacja testerów; aplikacja w Play Console |
 | 14–15 (11–24.01) | MO, GP, AN domknięte; tor wewnętrzny (D.1) | karta sklepu |
 | 16–17 (25.01–7.02) | test zamknięty 14 dni (D.2) | poprawki |
@@ -107,7 +120,7 @@ jednocześnie przy jednym wykonawcy; przy opóźnieniu pierwszeństwo ma kolejno
 synchronizacją), co przesuwa prognozę w stronę wariantu ścisłego.
 
 Ścieżka krytyczna: treść atlasu i planów (O-29) → DS2 i integracja SY → MO → test zamknięty 14 dni →
-ocena Google. Terminy decyzji: O-26 do 18.10 (przed AT2); O-01 do 31.10 (konto Play, testerzy); O-23, O-24
+ocena Google. Terminy decyzji: O-01 do 31.10 (konto Play, testerzy); O-23, O-24
 do 1.11 (przygotowanie SY); O-25 do 15.11; O-02/O-03/O-04 do 6.12 (przed MO).
 
 ---
@@ -266,8 +279,9 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 - **Kryteria odbioru:** cały atlas: 0 błędów walidatora, ostrzeżenia przejrzane; każdy wpis z modelem,
   lateralnością i liczeniem powtórzeń; 8 szablonów planów walidowanych na nowych identyfikatorach;
   atlas offline w paczce aplikacji.
-- **Priorytet i etap:** P0 · F2.3 (partie, równolegle) → AT1–AT6 (sekcja K): atlas jako katalog
-  istniejącej aplikacji, snapshot, ćwiczenia prywatne, gotowe plany.
+- **Priorytet i etap:** P0 · F2.3 (partie, równolegle) → AT1 ✅, AT2 ✅, AT3.0–AT3.8 (sekcja K): atlas
+  jedynym źródłem ćwiczeń, snapshot, ćwiczenia prywatne, nowy katalog i wybór, gotowe plany
+  (`NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`).
 
 ### 2.5 Finalny design i dokumentacja marki
 
@@ -283,7 +297,7 @@ Szczegółowa analiza scenariuszy jest w sekcji 3.
 - **Brakuje:** komponenty, 9–10 ekranów, stany puste/błędów, ekrany nowych funkcji (4A.10, PRO/PRO+,
   zakupy, zgody, usuwanie konta, onboarding), grafiki sklepu, ikona aplikacji 1.0.
 - **Zależności:** projekty w Claude Design (DS1), PE-F/G/H i A5 (nowe ekrany statystyk, raportu,
-  treningu), atlas w aplikacji (AT2–AT4).
+  treningu), atlas w aplikacji (AT3.1, AT3.6a–d).
 - **Kryteria odbioru:** każdy ekran zaakceptowany i opisany w `docs/design/`; wdrożenie bez zmian logiki;
   nowe wzorce wizualne w teście wizualnym; kontrast sprawdzony na urządzeniu.
 - **Priorytet i etap:** P1 · faza 3 (DS1 równolegle od tygodnia 1, DS2 po fazie 2; sekcja K).
@@ -622,6 +636,7 @@ Kolumna „stara” = dowód dla obecnego kodu; „v2” = wymaganie odbioru F3.
 | B27 | Inne aplikacje „NextRep” w Google Play i App Store | ryzyko marki | odrzucenie nazwy, pomyłki użytkowników, spór o znak | O-12 przed kartą sklepu | F6 |
 | B28 | Backend testowy bez `nextrep-dev` | decyzja | brak E2E na prawdziwym backendzie w F3 | O-13 | F3 |
 | B29 | Logowanie offline — rozstrzygnięte (O-18) | zamknięte w dokumentach | — | implementacja i T-28 w F3 | F3 |
+| B30 | Kolizja identyfikatora `hanging_knee_raise`: stary katalog 68 i stare mapy silnika vs atlas Batch 01 (R-AT3-1) | ryzyko | grupy ze starej mapy dla nowego ćwiczenia; stara historia odczytana jako historia ćwiczenia z atlasu | AT3-D8: separacja przestrzeni, grupy i model ze snapshotu albo atlasu, stare mapy niewywoływane, brak snapshotu = usterka z ostrzeżeniem (F2-4), test wspólnych id | AT3.4 |
 
 ## C. Harmonogram
 

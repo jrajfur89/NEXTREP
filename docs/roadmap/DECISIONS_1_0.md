@@ -1,6 +1,11 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 5 · 13.10.2026 · gałąź `release/1.0`
+Wersja 6 · 17.10.2026 · gałąź `release/1.0`
+
+Zmiany w wersji 6: decyzje AT3-D1–AT3-D15 (sekcja 1d, etap AT3.0): nowy atlas jedynym źródłem ćwiczeń,
+trzy warstwy klasyfikacji, harmonogram AT3.0–AT3.8, obowiązkowy snapshot od AT3.4, ryzyko R-AT3-1
+(`hanging_knee_raise`) i mechanizm ochrony historii; O-26 rozstrzygnięte 13.10 (S1 środowiskiem rozwoju);
+specyfikacja `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`.
 
 Zmiany w wersji 5: O-28 rozstrzygnięte (13.10.2026) — przygotowanie synchronizacji i prace w Claude Design
 mogą przebiegać równolegle; wdrożenie i integracja wymagają osobnej zgody i testów (sekcja 1c).
@@ -49,10 +54,10 @@ gdy padła wprost od Ciebie. Rekomendacja w dokumencie nie jest decyzją. Ten pl
 | # | Decyzja | Skutek | Status po K01 |
 | --- | --- | --- | --- |
 | C01-1 | NEXTREP 1.0 powstaje w `src/nr1/`, obok starej aplikacji | `docs/nr1/README.md` | **zastąpiona przez K01-1** |
-| C01-2 | Deweloperski identyfikator Androida: `app.nextrep.dev` | osobny projekt natywny (etap N9); nie przesądza O-11 | do ponownej oceny (O-26) |
+| C01-2 | Deweloperski identyfikator Androida: `app.nextrep.dev` | osobny projekt natywny (etap N9); nie przesądza O-11 | **zastąpiona przez O-26 (13.10)**: bez `app.nextrep.dev`; rozwój w istniejącym S1 |
 | C01-3 | Bramka A5 = akceptacja właściciela przed pierwszym ekranem z wynikami Progress Engine 2.0 | etap N8 | **zmieniona przez K01-1**: A5 wraca do pierwotnego znaczenia — przełączenie istniejących ekranów na wzory `load.js`, osobna akceptacja |
 | C01-4 | `issuedIds` zostaje w `atlas.json`; metadane wydania generuje build | `tools/build-nr1.mjs` (N0); dokumentacja F2 zgodna z tą decyzją | obowiązuje (także dla `src/app/`) |
-| C01-5 | Szablony planów w osobnym `src/atlas/plan-templates.json`, z własnym walidatorem | etap późniejszy (nie w N0) | obowiązuje (etap AT6) |
+| C01-5 | Szablony planów w osobnym `src/atlas/plan-templates.json`, z własnym walidatorem | etap późniejszy (nie w N0) | obowiązuje (etap AT3.8, dawniej AT6) |
 | C01-6 | `fake-indexeddb` wyłącznie jako zależność testowa; bez nowej biblioteki produkcyjnej do IndexedDB na start | N2 | do ponownej oceny razem z zakresem O-10 w `src/app/` (O-27) |
 | C01-7 | Stara aplikacja na `release/1.0` zamrożona do N12 | test zamrożenia w `tests/nr1/n0.test.mjs` | **zastąpiona przez K01-1**; test zamrożenia zostaje do pierwszego etapu zmieniającego `src/app/` (AT2), który go zdejmuje w swoim zakresie |
 
@@ -79,6 +84,50 @@ zatwierdzone 12.10.2026, K01-4 i K01-5 podane wprost w tej samej akceptacji.
 technicznym nie zmienia zakresu projektu. Zmiana zakresu (co budujemy, w której aplikacji, w jakiej
 kolejności) wymaga osobnej, nazwanej decyzji właściciela w tym rejestrze. Jeśli etap ujawni potrzebę
 takiej zmiany, etap zatrzymuje się i wraca z propozycją decyzji.
+
+## 1d. Decyzje AT3 — atlas jedynym źródłem ćwiczeń (17.10.2026)
+
+Źródło: audyt AT3 (14.10.2026), koncepcja atlasu opracowana z ChatGPT i zaakceptowana przez właściciela
+17.10.2026, raport uzgodnieniowy AT3 (17.10.2026); pakiet decyzji zatwierdzony przez właściciela
+17.10.2026 (etap AT3.0). Prefiks „AT3-” odróżnia te decyzje od D1–D11 STORE FIRST i D1–D14 Progress
+Engine. Specyfikacja: `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`; harmonogram: MASTER PLAN §K.3–K.4.
+
+| # | Decyzja | Status |
+| --- | --- | --- |
+| AT3-D1 | Partie nawigacyjne oddzielone od 10 grup statystycznych i od klasyfikacji anatomicznej; zdefiniowane jako zbiory kodów mięśni ze słownika atlasu w osobnym pliku `src/atlas/navigation.json` z walidatorem, bez zmiany schematu atlasu. Filtry wielokryterialne: partie, sprzęt, rodzaj obciążenia, chwyt, pozycja, kąt ławki, jednostronność, rodzina | **zatwierdzona kierunkowo**; lista partii, mapowanie kodów mięśni, przynależność ćwiczenia do partii (tylko mięśnie główne czy także pomocnicze) i grupowanie rodzajów obciążenia wymagają szczegółowego uzgodnienia w Standaryzacji (AT3-D10) przed częścią nawigacyjną AT3.2 i przed AT3.6a |
+| AT3-D2 | Jeden słownik nazw 10 grup statystycznych: Klatka piersiowa, Plecy, Barki, Biceps, Triceps, Przedramiona, Brzuch, Czworogłowe uda, Dwugłowe uda / pośladki, Łydki; nazwy użyte w katalogu AT2 („Uda — przód”, „Uda — tył i pośladki”) poprawiane w AT3.2 | obowiązuje (zgodna z wcześniejszą decyzją o 10 grupach) |
+| AT3-D3 | Czysty start S1: nowa przestrzeń danych, stare dane testowe nietknięte i niewidoczne, bez migracji i bez mapowania identyfikatorów | obowiązuje (STORE FIRST, K01) |
+| AT3-D4 | Gotowe plany wyłącznie na nowym atlasie (`plan-templates.json`, C01-5). Do czasu szablonów sekcja gotowych planów z informacją, że pojawią się wraz z atlasem; treść szablonów przygotowuje właściciel (z ChatGPT), gdy atlas obejmie potrzebne ćwiczenia (O-29) | zatwierdzona |
+| AT3-D5 | Chmura w S1 (logowanie i synchronizacja) wyłączona od AT3.3 do etapu SY; `nextrep-f5-test` bez zmian | zatwierdzona |
+| AT3-D6 | Ćwiczenia prywatne: model techniczny w AT3.5 (UUID, pola modelu atlasu, mięśnie ze słownika atlasu, „nie wiem” → `external_unknown`, snapshot `source: private`); docelowy formularz w AT3.6d (tryb podstawowy i zaawansowany, sugestie istniejących ćwiczeń). Pola trybu podstawowego ustala projekt AT3.1 w granicach tego modelu | zatwierdzona |
+| AT3-D7 | Testy: od AT3.4 nowy przebieg E2E na atlasie; test wizualny porównuje z zaakceptowanym stanem poprzedniego etapu zamiast z aplikacją `a2b9ca0` | zatwierdzona |
+| AT3-D8 | Ochrona historii i kolizji `hanging_knee_raise` (ryzyko R-AT3-1, niżej): separacja przestrzeni (AT3-D3); grupy i model w nowej przestrzeni ze snapshotu, a przy jego braku z atlasu — nigdy ze starych map kluczowanych starymi id; brak snapshotu = usterka z ostrzeżeniem (F2-4), bez uzupełniania z bieżącego atlasu; test listy wspólnych id z AT2. Obowiązuje od pierwszego zapisu w nowej przestrzeni (AT3.4) | obowiązuje |
+| AT3-D9 | UI przejściowe z obecnych komponentów w AT3.4–AT3.5; docelowy wygląd w AT3.6a–d po projekcie | zatwierdzona |
+| AT3-D10 | Listę partii nawigacyjnych (AT3-D1) potwierdza czat „Standaryzacja ćwiczeń NextRep”; schemat atlasu bez zmian | zatwierdzona |
+| AT3-D11 | „Podobne ćwiczenia — sugestie oparte na danych, bez deklarowania zamienności”: wyliczane z danych atlasu, bez wpływu na progresję; zasady F2 V8 (brak pól równoważności) i K3 (rodzina ≠ zamiennik) bez zmian | zatwierdzona |
+| AT3-D12 | Instrukcja wykonania i typowe błędy jako nowe pola atlasu dopiero po przygotowaniu treści w Standaryzacji i osobnej zgodzie na zmianę schematu F2; do tego czasu sekcje karty ukryte | zatwierdzona (zmiana schematu nadal wymaga osobnej zgody) |
+| AT3-D13 | Zdjęcia na rodzinę albo partię, nie na każde ćwiczenie; osobny etap zasobów według `DESIGN.md` §16 | zatwierdzona |
+| AT3-D14 | Ulubione lokalnie w AT3.6a; synchronizacja w SY | zatwierdzona |
+| AT3-D15 | Numeracja: dawne etapy AT4 (snapshot), AT5 (ćwiczenia prywatne) i AT6 (gotowe plany) wchłonięte w AT3.4/AT3.7, AT3.5/AT3.6d i AT3.8 | zatwierdzona |
+
+**Ustalenie techniczne (raport uzgodnieniowy, K-1).** Obowiązkowy snapshot modelu obciążenia powstaje od
+AT3.4 — pierwszego etapu, który zapisuje treningi na ćwiczeniach atlasu — przy dodaniu ćwiczenia do
+treningu i jest zapisywany przy wpisie historii. AT3.7 wykorzystuje go do statystyk partii (praca główna i
+pomocnicza), progresji i bramki A5. Uwaga: raport z 17.10 mówił o odrzucaniu zapisu bez snapshotu; to
+sprzeczne z F2-4, które obowiązuje — brak snapshotu jest usterką z ostrzeżeniem, a trening nie jest
+tracony.
+
+**Ryzyko R-AT3-1 (otwarte do AT3.4).** `hanging_knee_raise` istnieje w starym katalogu 68 ćwiczeń, w
+starych mapach silnika (`ATLAS_MUSCLE_GROUPS`, `load-legacy-map.js`) i w atlasie Batch 01. To zbieg
+identyfikatorów, nie mapowanie. Bez ochrony silnik przypisałby nowemu ćwiczeniu grupy ze starej mapy, a
+stara historia mogłaby zostać odczytana jako historia ćwiczenia z atlasu. Mechanizm ochrony: AT3-D8.
+Zamknięcie: test odbioru AT3.4 (trening `hanging_knee_raise` w nowej przestrzeni daje grupy z atlasu).
+
+**O-26 rozstrzygnięte (13.10.2026, decyzja właściciela).** Codzienna aplikacja właściciela działa z `main`
+przez Vercel i nie może zostać naruszona. `release/1.0` i istniejący APK S1 są środowiskiem rozwoju Android
+NEXTREP 1.0; bez `app.nextrep.dev` i bez nowego workflow; `app.nextrep.spike` pozostaje tymczasowym
+identyfikatorem testowym (ostateczny: O-11); `nextrep-f5-test` pozostaje testowym backendem S1 (od AT3.3 w
+S1 nieużywany do SY, AT3-D5).
 
 ## 2. Decyzje otwarte
 
@@ -109,10 +158,10 @@ takiej zmiany, etap zatrzymuje się i wraca z propozycją decyzji.
 | O-23 | Zakres synchronizacji w 1.0: poprawiona obecna synchronizacja (przecinek, `position`) czy pełny schemat v2 STORE FIRST w `src/app/` | technika / termin | faza 4 (SY) | MASTER PLAN v3 §K.3 |
 | O-24 | Nowy projekt Supabase dla 1.0 (koszt; łączy się z O-05 i O-13) | koszt | faza 4 (SY) | czysty start bez dotykania produkcji i `nextrep-f5-test` |
 | O-25 | Zakres Progress Engine w 1.0 (które z PE-B–PE-H) i termin bramki A5 | produkt | faza 2–3 | |
-| O-26 | Identyfikator i środowisko buildów testowych etapów AT (np. `app.nextrep.dev`, tryb gościa bez backendu do fazy 4), tak by obecny APK testowy (`app.nextrep.spike` + `nextrep-f5-test`) się nie zmienił | technika | AT2 | ponowna ocena C01-2 |
+| ~~O-26~~ | Identyfikator i środowisko buildów testowych etapów AT | — | — | **rozstrzygnięte 13.10** (sekcja 1d) |
 | O-27 | Magazyn w `src/app/`: zakres O-10 (IndexedDB) w istniejącej aplikacji i termin | technika | faza 4 | ponowna ocena C01-6 |
 | ~~O-28~~ | Równoległość synchronizacji i designu | — | — | **rozstrzygnięte 13.10** (sekcja 1c) |
-| O-29 | Minimalny zakres atlasu i gotowych planów na publikację 1.0 (liczba ćwiczeń, które plany) | produkt | AT6, test zamknięty | tempo partii jest ścieżką krytyczną |
+| O-29 | Minimalny zakres atlasu i gotowych planów na publikację 1.0 (liczba ćwiczeń, które plany) | produkt | AT3.8, test zamknięty | tempo partii jest ścieżką krytyczną; AT3-D4 |
 
 ## 3. F-4: zgodność Crashlytics ze stosem Capacitor (stan weryfikacji)
 
@@ -157,4 +206,5 @@ Wniosek: `app.nextrep` jest poprawnym kandydatem. Przed zatwierdzeniem potrzebne
 | PE-A | P1–P4 (w tym uniwersalny silnik bez ręcznego przeglądu 68 ćwiczeń); A4.5 z pełną równoważnością; kolejność A4.5 → F2 → A5 | dokumenty F1 / A4.5 |
 | F2 | F2-1 (zastąpione), F2-2 (bez projektu i kosztów), F2-3 (A5 na końcu F3 z osobną bramką), F2-4 (snapshot obowiązkowy, brak = usterka z ostrzeżeniem), F2-5 (jawna korekta z historią) | „F2: projekt struktury atlasu” v2 |
 | K01 | powrót do `src/app/`, Claude Design, integracja etapami, kolejność priorytetów; O-28 (praca równoległa) | sekcja 1c |
+| AT3 | atlas jedynym źródłem ćwiczeń, AT3-D1–AT3-D15, R-AT3-1, O-26 | sekcja 1d, `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md` |
 | Atlas | treść wyłącznie z zatwierdzonych partii „Standaryzacji ćwiczeń NextRep”; K2 (pola techniczne proponuję per partia), K3 (warianty z własnym id), K4 (wiele mięśni głównych z różnych grup); walidator v2 pkt 1–5 | `docs/atlas/README.md`, dokument F2 |
