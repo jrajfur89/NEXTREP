@@ -188,8 +188,9 @@ występujące w bieżącym wydaniu (w Batch 01 np. jeden kąt `angle.flat` i jed
 | Sprzęt, mięśnie główne i pomocnicze | `equipment`, `primaryMuscles`, `secondaryMuscles` | jest |
 | Sposób zapisu | `measurementType`, `loadModel`, `implements`, `laterality`, `repsCounting` | jest |
 | Wskazówki | `tipsPl` | jest |
-| Instrukcja wykonania | — | brak (AT3-D12) |
-| Typowe błędy | — | brak (AT3-D12) |
+| Instrukcja wykonania | `instructionsPl` | pole w schemacie (AT3-D12 A, B02/S1); treść Batch 01 w S4 |
+| Typowe błędy | `commonMistakesPl` | pole w schemacie (AT3-D12 A, B02/S1); treść Batch 01 w S4 |
+| Bezpieczeństwo | `safetyPl` | pole w schemacie (AT3-D12 A, B02/S1); treść Batch 01 w S4 |
 | Warianty | inne ćwiczenia tej samej `familyId`, opisane jako warianty | jest |
 | Podobne ćwiczenia | sugestie oparte na danych, bez deklarowania zamienności (AT3-D11) | jest |
 | Ćwiczenie zarchiwizowane | `status`, `archivedReason`, `successorHint` | jest (w Batch 01 brak archiwalnych) |

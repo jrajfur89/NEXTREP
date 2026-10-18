@@ -85,6 +85,7 @@ Błąd blokuje import; ostrzeżenie i informacja idą do oceny.
 | I5 zmiana pól obliczeniowych = wyższy `entryRev` | `ENTRY_REV_NOT_BUMPED`, `ENTRY_REV_DECREASED` | błąd |
 | I6 zmiana interpretacji = nowy wariant albo zatwierdzona poprawka | `LOAD_INTERPRETATION_CHANGED` / `CORRECTION_APPLIED`, `CORRECTION_INVALID` | błąd / informacja |
 | T1–T4 pola techniczne kompletne i spójne | `REQUIRED_FIELD_MISSING`, `BILATERAL_PER_SIDE`, `LOAD_MODEL_UNKNOWN`, `MEASUREMENT_*`, `LOAD_INCREMENT_*` | błąd (brak kroku: ostrzeżenie) |
+| T5 pełna karta (AT3-D12 A): pole obecne = 1–10 niepustych, unikalnych punktów po ≤ 300 znaków; `[]` niedozwolone | `CARD_CONTENT_TYPE`, `CARD_CONTENT_EMPTY`, `CARD_CONTENT_TOO_MANY`, `CARD_ITEM_TYPE`, `CARD_ITEM_EMPTY`, `CARD_ITEM_TOO_LONG`, `CARD_ITEM_DUPLICATE` | błąd (rekord prywatny: ostrzeżenie); obecność pól wymagana od S4 |
 | S1–S2 słowniki i zamknięty schemat | `UNKNOWN_FIELD`, `SCOPE_INVALID`, `STATUS_INVALID`, `DICT_*`, `EQUIPMENT_*`, `VARIANT_*`, `ATLAS_VERSION_*` | błąd |
 | B problemy pliku partii | `BATCH_TEMPLATE_VERSION`, `BATCH_TEMPLATE_CHANGED`, `BATCH_DUPLICATE_ROW` | błąd |
 

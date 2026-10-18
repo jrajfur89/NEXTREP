@@ -1,6 +1,10 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 8 · 18.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+Wersja 9 · 18.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+
+Zmiany w wersji 9: AT3-D12 A — pełna karta ćwiczenia (`instructionsPl`, `commonMistakesPl`, `safetyPl`);
+etap B02/S1 wdrożony w schemacie i walidatorze (sekcja 1g), obowiązek treści dla rekordów systemowych
+odroczony do S4.
 
 Zmiany w wersji 8: B02-D21 — konfigurowalny model obciążenia maszyn (sekcja 1f; D-1 = A, D-2, D-3 = S2,
 zatwierdzone 18.10.2026); niespójność rejestru: AT3-D20 przywołana w handoffie B02-D21, brak w rejestrze
@@ -115,7 +119,7 @@ Engine. Specyfikacja: `NEXTREP_ATLAS_PRODUCT_SPEC_1_0.md`; harmonogram: MASTER P
 | AT3-D9 | UI przejściowe z obecnych komponentów w AT3.4–AT3.5; docelowy wygląd w AT3.6a–d po projekcie | zatwierdzona |
 | AT3-D10 | Listę partii nawigacyjnych (od 17.10: hierarchię AT3-D16 — nazwy i kody węzłów) potwierdza czat „Standaryzacja ćwiczeń NextRep”; schemat atlasu bez zmian | zatwierdzona |
 | AT3-D11 | „Podobne ćwiczenia — sugestie oparte na danych, bez deklarowania zamienności”: wyliczane z danych atlasu, bez wpływu na progresję; zasady F2 V8 (brak pól równoważności) i K3 (rodzina ≠ zamiennik) bez zmian | zatwierdzona |
-| AT3-D12 | Instrukcja wykonania i typowe błędy jako nowe pola atlasu dopiero po przygotowaniu treści w Standaryzacji i osobnej zgodzie na zmianę schematu F2; do tego czasu sekcje karty ukryte | zatwierdzona (zmiana schematu nadal wymaga osobnej zgody) |
+| AT3-D12 | Instrukcja wykonania i typowe błędy jako nowe pola atlasu dopiero po przygotowaniu treści w Standaryzacji i osobnej zgodzie na zmianę schematu F2; do tego czasu sekcje karty ukryte | **rozstrzygnięta wariantem AT3-D12 A** (18.10.2026, sekcja 1g) |
 | AT3-D13 | Zdjęcia na rodzinę albo partię, nie na każde ćwiczenie; osobny etap zasobów według `DESIGN.md` §16 | zatwierdzona |
 | AT3-D14 | Ulubione lokalnie w AT3.6a; synchronizacja w SY | zatwierdzona |
 | AT3-D15 | Numeracja: dawne etapy AT4 (snapshot), AT5 (ćwiczenia prywatne) i AT6 (gotowe plany) wchłonięte w AT3.4/AT3.7, AT3.5/AT3.6d i AT3.8 | zatwierdzona |
@@ -202,6 +206,23 @@ atlasu §6.1; notatka Smitha `docs/atlas/B02-D21-SMITH-S2.md`.
 jednym z modeli dopuszczonych danymi atlasu. Snapshot nie zapisuje jawnie, że model pochodzi z wyboru
 (da się to odtworzyć: model ≠ domyślny i należy do opcji). Osobne pole pochodzenia wyboru wymagałoby
 zatwierdzonej zmiany kontraktu i szkicu SQL — nie wprowadzono.
+
+## 1g. AT3-D12 A — pełna karta ćwiczenia; etapy B02/S1 i S4 (18.10.2026)
+
+Źródło: decyzja właściciela AT3-D12 A (rejestr B02-STD-12), audyt B02-STD-13 i polecenie B02/S1
+(18.10.2026). Implementacja S1: `src/engine/atlas-schema.js` (`CARD_CONTENT_FIELDS`, `CARD_CONTENT_LIMITS`,
+`cardContentProblems`, `readCardContent`), `src/engine/atlas-validate.js` (reguła T5); testy
+`tests/unit/b02-s1-card-content.test.mjs`.
+
+| # | Decyzja | Status |
+| --- | --- | --- |
+| AT3-D12 A | Pola `instructionsPl`, `commonMistakesPl`, `safetyPl` (listy punktów po polsku) w rekordach systemowych i prywatnych; `tipsPl` zostaje. Pola redakcyjne: poza `CALC_FIELDS` i `INTERPRETATION_FIELDS`, więc zmiana tekstu nie podnosi `entryRev` i nie reinterpretuje historii. Bez `contentRev` (wymagałby odrębnej decyzji). Treść pisze Standaryzacja | zatwierdzona; schemat wdrożony w S1 |
+| B02/S1 | Zamknięty schemat zna trzy pola. Pole obecne musi mieć 1–10 punktów; każdy punkt to tekst niepusty po obcięciu spacji, najwyżej 300 znaków (po obcięciu), unikalny po obcięciu. Rekord systemowy: błąd T5 (`CARD_CONTENT_TYPE`, `_EMPTY`, `_TOO_MANY`, `CARD_ITEM_TYPE`, `_EMPTY`, `_TOO_LONG`, `_DUPLICATE`); pusta lista `[]` jest błędem — jedyną dozwoloną formą braku treści jest brak pola. Rekord prywatny: pola opcjonalne, te same problemy jako ostrzeżenie T5, wczytanie starszych danych nigdy nie jest blokowane; do wyświetlania `readCardContent` (kopia poprawnych punktów, bez mutacji rekordu). Walidator nie zmienia rekordów | wdrożona (S1) |
+| B02/S4 | Obowiązek obecności trzech pól w każdym aktywnym rekordzie systemowym włączany razem z treścią 15 kart Batch 01 dostarczoną przez Standaryzację (jeden etap, żeby walidacja atlasu w CI nie została przerwana). Przed S4: szablon importu XLSX (`tools/atlas-xlsx.mjs`) musi przenosić trzy pola — dziś ich nie zna | zaplanowana; nie wdrożona |
+
+Kolejność dalszych etapów B02: S2 (`smith_plates_only`) → S3 (model maszyny w pozycji planu) → S4 → S5
+(import 40 rekordów B02 po zatwierdzeniu) → S6 (UI). Notatka `docs/atlas/B02-D21-SMITH-S2.md` dotyczy
+wcześniejszego wariantu zapisu Smitha i zostanie zaktualizowana w S2 (B02-D25 A).
 
 ## 2. Decyzje otwarte
 

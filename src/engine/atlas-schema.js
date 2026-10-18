@@ -42,13 +42,65 @@ export const EQUIPMENT_ROLES = ["load", "support", "assist"];
 // repsCounting); an "implements" attribute states how many implements are held.
 export const VARIANT_DIMENSIONS = ["grip", "angle", "position", "laterality", "implements", "execution"];
 
+// Full exercise card (AT3-D12 A, B02/S1): three editorial lists of Polish points, in system and
+// private records. Editorial only — never in CALC_FIELDS or INTERPRETATION_FIELDS, so editing the text
+// does not raise entryRev and never reinterprets history. In S1 the fields are optional everywhere
+// (a system record may omit them; `[]` is not allowed); S4 makes them required for system records,
+// together with the content of the 15 Batch 01 cards.
+export const CARD_CONTENT_FIELDS = ["instructionsPl", "commonMistakesPl", "safetyPl"];
+export const CARD_CONTENT_LIMITS = Object.freeze({ minItems: 1, maxItems: 10, maxItemLength: 300 });
+
 // Closed schema of each record — any other field is an error (no hidden equivalence fields).
 export const EXERCISE_FIELDS = [
   "exerciseId", "scope", "familyId", "namePl", "aliasesPl", "variantAttributes", "equipment",
   "primaryMuscles", "secondaryMuscles", "measurementType", "loadModel", "implements", "laterality",
   "repsCounting", "loadIncrementKg", "tipsPl", "videoUrl", "status", "archivedReason", "successorHint",
   "entryRev", "introducedIn", "changedIn", "approvedIn", "correction",
+  ...CARD_CONTENT_FIELDS,
 ];
+
+// Problems of one card-content field. → [{ code, index }] (index of the point, or null for the field).
+// `undefined` (field absent) has no problems; everything else must be a list of 1–10 points, each a
+// string that is non-empty after trimming, at most 300 characters (trimmed) and unique after trimming.
+export function cardContentProblems(value) {
+  if (value === undefined) return [];
+  const L = CARD_CONTENT_LIMITS;
+  if (!Array.isArray(value)) return [{ code: "CARD_CONTENT_TYPE", index: null }];
+  const out = [];
+  if (value.length < L.minItems) out.push({ code: "CARD_CONTENT_EMPTY", index: null });
+  if (value.length > L.maxItems) out.push({ code: "CARD_CONTENT_TOO_MANY", index: null });
+  const seen = new Set();
+  value.forEach((p, i) => {
+    if (typeof p !== "string") { out.push({ code: "CARD_ITEM_TYPE", index: i }); return; }
+    const t = p.trim();
+    if (!t) { out.push({ code: "CARD_ITEM_EMPTY", index: i }); return; }
+    if (t.length > L.maxItemLength) out.push({ code: "CARD_ITEM_TOO_LONG", index: i });
+    if (seen.has(t)) out.push({ code: "CARD_ITEM_DUPLICATE", index: i });
+    seen.add(t);
+  });
+  return out;
+}
+
+// Lenient read of the card of any record (e.g. an older or damaged private exercise): never throws,
+// never changes the record. Each field → a new frozen list of the valid points (trimmed, de-duplicated,
+// at most 10); a missing or invalid field → []. Points over 300 characters are left out, not cut.
+export function readCardContent(record) {
+  const out = {};
+  for (const f of CARD_CONTENT_FIELDS) {
+    const v = record && typeof record === "object" ? record[f] : undefined;
+    const seen = new Set();
+    const points = [];
+    for (const p of Array.isArray(v) ? v : []) {
+      if (typeof p !== "string") continue;
+      const t = p.trim();
+      if (!t || t.length > CARD_CONTENT_LIMITS.maxItemLength || seen.has(t)) continue;
+      seen.add(t);
+      if (points.length < CARD_CONTENT_LIMITS.maxItems) points.push(t);
+    }
+    out[f] = Object.freeze(points);
+  }
+  return Object.freeze(out);
+}
 // fields whose change changes what history computes → entryRev must go up (I5)
 export const CALC_FIELDS = ["variantAttributes", "equipment", "primaryMuscles", "secondaryMuscles", "measurementType", "loadModel", "implements", "laterality", "repsCounting", "loadIncrementKg"];
 // fields that define how typed numbers are interpreted → change needs a new variant (I6, K3)

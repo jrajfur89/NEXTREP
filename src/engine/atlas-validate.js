@@ -10,8 +10,19 @@ import {
   STATS_GROUPS, SCOPES, STATUSES, REPS_COUNTINGS, LATERALITIES, LOAD_MODEL_CODES, NO_LOAD_MODELS, LOAD_FREE_MODELS,
   PER_IMPLEMENT_MODELS, MEASUREMENT_TYPES, EQUIPMENT_ROLES, VARIANT_DIMENSIONS, EXERCISE_FIELDS, CALC_FIELDS,
   INTERPRETATION_FIELDS, FAMILY_FIELDS, DICTIONARY_FIELDS, EQUIVALENCE_FIELDS, EXERCISE_ID_PATTERN, DICT_CODE_PATTERN,
-  normalizeName,
+  CARD_CONTENT_FIELDS, CARD_CONTENT_LIMITS, cardContentProblems, normalizeName,
 } from "./atlas-schema.js";
+
+// T5 — full exercise card (AT3-D12 A, B02/S1). Polish messages per code.
+const CARD_MESSAGES = {
+  CARD_CONTENT_TYPE: (f) => `Pole ${f} musi być listą punktów (tekstów).`,
+  CARD_CONTENT_EMPTY: (f) => `Pole ${f} nie może być pustą listą — pomiń pole albo podaj co najmniej ${CARD_CONTENT_LIMITS.minItems} punkt.`,
+  CARD_CONTENT_TOO_MANY: (f) => `Pole ${f} może mieć najwyżej ${CARD_CONTENT_LIMITS.maxItems} punktów.`,
+  CARD_ITEM_TYPE: (f, i) => `Punkt ${i + 1} pola ${f} musi być tekstem.`,
+  CARD_ITEM_EMPTY: (f, i) => `Punkt ${i + 1} pola ${f} jest pusty.`,
+  CARD_ITEM_TOO_LONG: (f, i) => `Punkt ${i + 1} pola ${f} przekracza ${CARD_CONTENT_LIMITS.maxItemLength} znaków.`,
+  CARD_ITEM_DUPLICATE: (f, i) => `Punkt ${i + 1} pola ${f} powtarza wcześniejszy punkt.`,
+};
 
 const arr = (v) => (Array.isArray(v) ? v : []);
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -97,6 +108,12 @@ export function validateExercise(ex, ctx, add) {
   if (!STATUSES.includes(ex.status)) add("error", "S1", "STATUS_INVALID", where, "status", "Status musi być active albo archived.");
   if (isSystem) req("approvedIn", typeof ex.approvedIn === "string" && ex.approvedIn.trim().length > 0);
   for (const f of ["aliasesPl", "variantAttributes", "equipment", "primaryMuscles", "secondaryMuscles"]) if (ex[f] != null && !Array.isArray(ex[f])) add("error", "S1", "FIELD_TYPE", where, f, `Pole ${f} musi być listą.`);
+
+  // full card (T5, AT3-D12 A). Optional in S1; a present field must be valid. System record → error;
+  // private record → warning (older private data must stay loadable; display through readCardContent).
+  for (const f of CARD_CONTENT_FIELDS) {
+    for (const p of cardContentProblems(ex[f])) add(isSystem ? "error" : "warning", "T5", p.code, where, f, CARD_MESSAGES[p.code](f, p.index));
+  }
 
   // family (V1)
   if (req("familyId", typeof ex.familyId === "string" && ex.familyId.length > 0)) {
