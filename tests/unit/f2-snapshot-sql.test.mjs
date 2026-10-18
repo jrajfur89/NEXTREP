@@ -79,12 +79,11 @@ describe("database and engine accept and reject the same rows", () => {
     const pools = {
       snapshotVersion: [1, 2, 0, null], source: ["atlas", "private", "user_correction", "custom", null],
       catalogExerciseId: ["test_press_bar", null, "x"], privateExerciseId: [UUID, null], atlasVersion: [1, 3, 0, null, -1],
-      entryRev: [1, 2, 0, null], familyId: ["test_family_press", null], measurementType: ["weight_reps", "bodyweight_reps", "band_reps", "time", null, "weight"],
-      loadModel: ["barbell_total", "dumbbell_pair", "dumbbell_single", "bodyweight", "band", "external_unknown", "time", null, "rocket"],
+      entryRev: [1, 2, 0, null], familyId: ["test_family_press", null], measurementType: ["weight_reps", "bodyweight_reps", "band_reps", "time", "cardio", null, "weight"],
+      loadModel: ["barbell_total", "dumbbell_pair", "dumbbell_single", "bodyweight", "band", "external_unknown", "time", "cardio", null, "rocket"],
       implements: [1, 2, null, 3], laterality: ["bilateral", "unilateral", "alternating", null, "left"], repsCounting: ["total", "per_side", null],
       loadIncrementKg: [2.5, 0.5, null, 0, -1], primaryMuscles: [["test.m.chest_a"], [], ["test.m.chest_a", "test.m.back_a"], ["", "x"], [null]],
-      secondaryMuscles: [[], ["test.m.triceps_a"], ["test.m.chest_a"]], primaryGroups: [["chest"], [], ["chest", "back"], ["legs"]],
-      secondaryGroups: [[], ["triceps"], ["chest"], ["legs"]], weightUnit: ["kg", "lb", null], confidence: ["verified", "high", "low", "unknown", null, "sure"],
+      secondaryMuscles: [[], ["test.m.triceps_a"], ["test.m.chest_a"]], weightUnit: ["kg", "lb", null], confidence: ["verified", "high", "low", "unknown", null, "sure"],
       volumeFormulaVersion: [1, 2, null], capturedAt: [NOW, null], correctionCount: [0, 1, 2, -1, null],
     };
     let accepted = 0;

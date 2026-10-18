@@ -1,4 +1,5 @@
-// NEXTREP 1.0 — snapshot of an exercise's load model in a workout (F2.1, decisions D13, F2-4, F2-5).
+// NEXTREP 1.0 — snapshot of an exercise's load model in a workout (F2.1, decisions D13, F2-4, F2-5;
+// version 2: AT3-D18).
 //
 // Every exercise of every NEXTREP 1.0 workout stores the load model that applied when it was done.
 // History reads THAT snapshot, so a new atlas release or an edited private exercise never silently
@@ -8,11 +9,18 @@
 // SNAPSHOT_FIELDS is the ONE contract for the engine, the client and the database: the SQL draft
 // (db/v2-draft/001_load_snapshot.sql) is tested against it column by column and constraint by
 // constraint, and validateLoadSnapshot mirrors every SQL CHECK (tests compare both on random rows).
+//
+// Version 2 (AT3-D18): the primary and secondary MUSCLES are frozen at save; the stats groups of
+// version 1 (primaryGroups / secondaryGroups) are withdrawn. Category and sub-region nodes are computed
+// when history is read, from the current hierarchy (hierarchy.js, muscle-stats.js), and every report
+// states the hierarchyVersion it used. A snapshot outside cardio has at least one primary muscle —
+// atlas and private alike (ws_primary_muscle, B2); a cardio snapshot may have none (O-30).
+// No migration: no version-1 snapshot exists in any database (the SQL draft is applied nowhere, S1
+// has no atlas workouts); a version-1 object is simply invalid (→ the F2-4 fault path).
 import { normalizeModel, LOAD_MODELS, VOLUME_FORMULA_VERSION } from "./load.js";
-import { STATS_GROUPS, MEASUREMENT_TYPES, LATERALITIES, REPS_COUNTINGS } from "./atlas-schema.js";
-import { deriveGroups } from "./atlas-validate.js";
+import { MEASUREMENT_TYPES, LATERALITIES, REPS_COUNTINGS } from "./atlas-schema.js";
 
-export const LOAD_SNAPSHOT_VERSION = 1;
+export const LOAD_SNAPSHOT_VERSION = 2;
 export const SNAPSHOT_SOURCES = ["atlas", "private", "user_correction"];
 export const SNAPSHOT_CONFIDENCES = ["verified", "high", "low", "unknown"];
 export const SNAPSHOT_LOAD_MODELS = Object.keys(LOAD_MODELS); // incl. external_unknown (private "nie wiem")
@@ -37,8 +45,6 @@ export const SNAPSHOT_FIELDS = [
   { name: "loadIncrementKg", column: "load_increment_kg", sql: "numeric", nullable: true },
   { name: "primaryMuscles", column: "primary_muscles", sql: "text[]", nullable: false },
   { name: "secondaryMuscles", column: "secondary_muscles", sql: "text[]", nullable: false },
-  { name: "primaryGroups", column: "primary_groups", sql: "text[]", nullable: false, values: STATS_GROUPS },
-  { name: "secondaryGroups", column: "secondary_groups", sql: "text[]", nullable: false, values: STATS_GROUPS },
   { name: "weightUnit", column: "weight_unit", sql: "text", nullable: false, values: ["kg"] },
   { name: "confidence", column: "load_confidence", sql: "text", nullable: false, values: SNAPSHOT_CONFIDENCES },
   { name: "volumeFormulaVersion", column: "volume_formula_version", sql: "smallint", nullable: false, values: [VOLUME_FORMULA_VERSION] },
@@ -82,9 +88,8 @@ export function validateLoadSnapshot(s) {
   if (PAIR.includes(s.loadModel) ? s.implements !== 2 : SINGLE.includes(s.loadModel) ? s.implements !== 1 : s.implements != null) e("ws_implements_model", "implements");
   if (s.loadModel === "external_unknown" && s.confidence !== "unknown") e("ws_unknown_model_confidence", "confidence");
   if (s.loadIncrementKg != null && !(s.loadIncrementKg > 0 && KG_MODELS.includes(s.loadModel))) e("ws_load_increment", "loadIncrementKg");
-  if (s.primaryGroups.some((g) => s.secondaryGroups.includes(g))) e("ws_groups_disjoint", "secondaryGroups");
   if (s.primaryMuscles.some((m) => s.secondaryMuscles.includes(m))) e("ws_muscles_disjoint", "secondaryMuscles");
-  if (s.source === "atlas" && s.primaryGroups.length === 0) e("ws_atlas_primary_group", "primaryGroups");
+  if (s.measurementType !== "cardio" && s.primaryMuscles.length === 0) e("ws_primary_muscle", "primaryMuscles");
   if (s.entryRev < 1) e("ws_entry_rev", "entryRev");
   if (s.atlasVersion != null && s.atlasVersion < 1) e("ws_atlas_version", "atlasVersion");
   if (s.correctionCount < 0 || (s.source === "user_correction") !== (s.correctionCount > 0)) e("ws_correction_count", "correctionCount");
@@ -93,12 +98,13 @@ export function validateLoadSnapshot(s) {
 }
 
 // Snapshot of an atlas exercise or a private exercise at the moment it enters a workout.
-// atlas: { exercise, atlasVersion, muscles (dictionary) }; private: { privateExercise, muscles }.
-export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = null, muscles = [], now = new Date().toISOString() }) {
+// atlas: { exercise, atlasVersion }; private: { privateExercise }. The muscles are copied as they are
+// at this moment (frozen in the workout). `muscles` (the dictionary) is accepted for callers of
+// version 1 and no longer used: nodes are computed at read time.
+export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = null, now = new Date().toISOString() }) {
   const src = exercise || privateExercise;
   if (!src) throw new Error("buildLoadSnapshot: no exercise");
   const isAtlas = Boolean(exercise);
-  const groups = deriveGroups(src, muscles);
   const model = src.loadModel || "external_unknown";
   const snapshot = {
     snapshotVersion: LOAD_SNAPSHOT_VERSION,
@@ -116,8 +122,6 @@ export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = nu
     loadIncrementKg: typeof src.loadIncrementKg === "number" ? src.loadIncrementKg : null,
     primaryMuscles: [...(src.primaryMuscles || [])],
     secondaryMuscles: [...(src.secondaryMuscles || [])],
-    primaryGroups: groups.primaryGroups,
-    secondaryGroups: groups.secondaryGroups,
     weightUnit: "kg",
     confidence: isAtlas ? "verified" : model === "external_unknown" ? "unknown" : SNAPSHOT_CONFIDENCES.includes(src.confidence) ? src.confidence : "low",
     volumeFormulaVersion: VOLUME_FORMULA_VERSION,
@@ -139,15 +143,15 @@ export function modelFromSnapshot(s) {
 // and status "snapshot_missing" (never exact); (3) nothing known: "unknown".
 export function resolveWorkoutExerciseModel(workoutExercise, { atlasById = new Map(), privateById = new Map() } = {}) {
   const s = workoutExercise && workoutExercise.loadSnapshot;
-  if (s && validateLoadSnapshot(s).length === 0) return { status: "snapshot", model: modelFromSnapshot(s), groups: { primaryGroups: s.primaryGroups, secondaryGroups: s.secondaryGroups }, warning: null };
+  if (s && validateLoadSnapshot(s).length === 0) return { status: "snapshot", model: modelFromSnapshot(s), muscles: { primaryMuscles: [...s.primaryMuscles], secondaryMuscles: [...s.secondaryMuscles] }, warning: null };
   const id = workoutExercise && (workoutExercise.catalogExerciseId || workoutExercise.exerciseId);
   const current = (id && atlasById.get(id)) || (workoutExercise && workoutExercise.privateExerciseId && privateById.get(workoutExercise.privateExerciseId));
   const warning = "Obliczone z aktualnego atlasu, nie z danych zapisanych przy treningu.";
   if (current && current.loadModel) {
     const model = normalizeModel({ loadModel: current.loadModel, implements: current.implements, laterality: current.laterality, repsCounting: current.repsCounting, confidence: "low", source: "current-atlas-fallback" });
-    return { status: "snapshot_missing", model, groups: null, warning };
+    return { status: "snapshot_missing", model, muscles: null, warning };
   }
-  return { status: "unknown", model: normalizeModel(null), groups: null, warning };
+  return { status: "unknown", model: normalizeModel(null), muscles: null, warning };
 }
 
 // Explicit user correction of a FINISHED workout's exercise (F2-5): only that workout, marked, with

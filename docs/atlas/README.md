@@ -15,9 +15,10 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `src/engine/atlas-schema.js` | kształt atlasu i słowniki techniczne (modele, lateralność, 10 grup, typy pomiaru) |
 | `src/engine/atlas-validate.js` | walidator (reguły M, V, I, T, S poniżej) |
 | `src/engine/atlas-index.js` | (AT3.2a) indeks wydania atlasu: resolver po `exerciseId` (także archiwalne), wyszukiwanie po nazwie i aliasach bez polskich znaków, fasety katalogu; czysty, jeszcze nie eksportowany do aplikacji |
-| `src/engine/load-snapshot.js` | kontrakt snapshotu modelu obciążenia w treningu (silnik = klient = baza) |
-| `src/engine/muscle-work.js` | praca partii na 10 grupach (F2); w AT3.2 zastępowana agregacją węzłów hierarchii (AT3-D17) |
-| `src/atlas/navigation.json` | (od AT3.2) wspólna hierarchia nawigacji i statystyk z `hierarchyVersion` (AT3-D16); jeszcze nie istnieje |
+| `src/engine/load-snapshot.js` | kontrakt snapshotu modelu obciążenia w treningu (silnik = klient = baza); od AT3.2b wersja 2 (AT3-D18): zamrożone mięśnie, bez grup, `ws_primary_muscle` |
+| `src/engine/hierarchy.js` | (AT3.2b) walidator wspólnej hierarchii i jej indeks: mięśnie → podpartie → kategorie (AT3-D16) |
+| `src/engine/muscle-stats.js` | (AT3.2b) praca mięśni, podpartii i kategorii: główna i pomocnicza osobno, seria raz na węzeł, suma treningu niezależna (AT3-D17); zastąpił `muscle-work.js` (10 grup, F2) |
+| `src/atlas/navigation.json` | (AT3.2b) wspólna hierarchia nawigacji i statystyk, `hierarchyVersion` 1: 6 kategorii mięśniowych, 18 podpartii, „Cardio i kondycja” bez podpartii; 4 kody planowane (AT3-D16) |
 | `db/v2-draft/001_load_snapshot.sql` | SZKIC schematu v2 z kontraktu; nie jest migracją, nigdzie nie uruchomiony |
 | `docs/atlas/nextrep-atlas-batch-template.xlsx` | pusty szablon partii |
 | `docs/atlas/przyklad/` | partia syntetyczna (dane TEST) i jej raport importu |

@@ -35,17 +35,17 @@ export function generateSnapshotSql() {
     ["ws_implements_model", `(load_model in (${list(pair)}) and coalesce(load_implements, 0) = 2) or (load_model in (${list(single)}) and coalesce(load_implements, 0) = 1) or (load_model not in (${list([...pair, ...single])}) and load_implements is null)`],
     ["ws_unknown_model_confidence", "load_model <> 'external_unknown' or load_confidence = 'unknown'"],
     ["ws_load_increment", `load_increment_kg is null or (load_increment_kg > 0 and load_model in (${list(kg)}))`],
-    ["ws_groups_disjoint", "not (primary_groups && secondary_groups)"],
     ["ws_muscles_disjoint", "not (primary_muscles && secondary_muscles)"],
     ["ws_array_elements", arrays.map((c) => `array_position(${c}, null) is null and not ('' = any(${c}))`).join("\n      and ")],
-    ["ws_atlas_primary_group", "load_source <> 'atlas' or cardinality(primary_groups) >= 1"],
+    ["ws_primary_muscle", "coalesce(measurement_type = 'cardio', false) or cardinality(primary_muscles) >= 1"],
     ["ws_entry_rev", "entry_rev >= 1"],
     ["ws_atlas_version", "atlas_version is null or atlas_version >= 1"],
     ["ws_correction_count", "load_correction_count >= 0 and ((load_source = 'user_correction') = (load_correction_count > 0))"],
     ["ws_measurement_model", "measurement_type is null\n      or " + Object.entries(MEASUREMENT_TYPES).map(([k, v]) => `(measurement_type = ${q(k)} and load_model in (${list(v.loadModels)}))`).join("\n      or ")],
   ];
   return `-- NEXTREP 1.0 / schema v2 — DRAFT, NOT A MIGRATION. Applied nowhere (no Supabase project).
--- Load-model snapshot of an exercise in a workout (D13, F2-4, F2-5). Generated from the contract
+-- Load-model snapshot of an exercise in a workout (D13, F2-4, F2-5; version 2: AT3-D18 — muscles
+-- frozen, no stats-group columns; hierarchy nodes are computed at read time). Generated from the contract
 -- src/engine/load-snapshot.js (SNAPSHOT_FIELDS) by tools/gen-snapshot-sql.mjs; tests check that
 -- every column and constraint matches the contract and that the database and validateLoadSnapshot()
 -- accept and reject exactly the same rows. Constraint names = JS rule codes.

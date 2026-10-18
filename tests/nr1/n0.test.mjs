@@ -201,7 +201,7 @@ describe("N0-C / N0-D: boundaries are enforced on real dependencies and on the b
     const r = build(["--entry", fixture("allowed-engine-modules.jsx")]);
     assert.equal(r.status, 0, r.text);
     const inputs = Object.keys(JSON.parse(readFileSync(join(r.work, "metafile.json"), "utf8")).inputs);
-    for (const f of ["rir.js", "load.js", "load-snapshot.js", "atlas-validate.js", "atlas-schema.js", "muscle-work.js"]) assert.ok(inputs.includes(`src/engine/${f}`), f);
+    for (const f of ["rir.js", "load.js", "load-snapshot.js", "atlas-validate.js", "atlas-schema.js", "hierarchy.js", "muscle-stats.js"]) assert.ok(inputs.includes(`src/engine/${f}`), f);
     assert.ok(!inputs.some((i) => /legacy-progression|load-legacy-map|volume\.js|src\/engine\/index\.js|src\/app\//.test(i)), inputs.join(", "));
   });
 
@@ -303,6 +303,9 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       "index.html", "tools/build-web.mjs", "android", "capacitor.config.json", "vercel.json",
       ".github/workflows/android-s1-apk.yml", "src/engine/load-legacy-map.js",
       "src/engine/volume.js", "db", "docs/sql",
+      // AT3.2b (AT3-D18): the snapshot SQL DRAFT follows its contract — it is generated from
+      // load-snapshot.js and checked by tests/unit/f2-snapshot-sql.test.mjs (applied nowhere)
+      ":(exclude)db/v2-draft/001_load_snapshot.sql",
     ];
     let diff;
     try {

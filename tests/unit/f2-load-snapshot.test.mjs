@@ -1,10 +1,10 @@
-// F2.1 — load-model snapshot contract (D13, F2-4, F2-5) and muscle-group work (F2 v2 point 1).
+// F2.1 — load-model snapshot contract (D13, F2-4, F2-5), version 2 since AT3.2b (AT3-D18). The muscle
+// work of the hierarchy (AT3-D17, replacing the F2 group work) is tested in at3-2b-hierarchy-stats.test.mjs.
 // Synthetic data only. The database side of the contract is in f2-snapshot-sql.test.mjs.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { buildLoadSnapshot, validateLoadSnapshot, modelFromSnapshot, resolveWorkoutExerciseModel, correctLoadSnapshot, snapshotToRow, rowToSnapshot, SNAPSHOT_FIELDS } from "../../src/engine/load-snapshot.js";
 import { exerciseTotals, sessionTotals } from "../../src/engine/load.js";
-import { allocateGroupWork, addGroupWork } from "../../src/engine/muscle-work.js";
 import { baseAtlas, clone } from "../fixtures/atlas/synthetic.mjs";
 
 const NOW = "2026-10-11T10:00:00.000Z";
@@ -14,14 +14,15 @@ const snap = (id, over = {}) => buildLoadSnapshot({ exercise: { ...byId.get(id),
 const set = (weight, reps, extra = {}) => ({ weight, reps, rir: "0-1", setType: "normal", ...extra });
 
 describe("building and validating a snapshot", () => {
-  test("an atlas exercise gives a complete, verified snapshot with groups derived from muscles", () => {
+  test("an atlas exercise gives a complete, verified snapshot v2 with the muscles frozen and no groups", () => {
     const s = snap("test_press_db_incline");
     assert.deepEqual(validateLoadSnapshot(s), []);
     assert.equal(s.source, "atlas");
     assert.equal(s.confidence, "verified");
     assert.deepEqual([s.loadModel, s.implements, s.laterality, s.repsCounting], ["dumbbell_pair", 2, "bilateral", "total"]);
-    assert.deepEqual(s.primaryGroups, ["chest", "shoulders"]);
-    assert.deepEqual(s.secondaryGroups, ["triceps"]); // chest is primary, so never secondary too
+    assert.equal(s.snapshotVersion, 2);
+    assert.deepEqual([s.primaryMuscles, s.secondaryMuscles], [byId.get("test_press_db_incline").primaryMuscles, byId.get("test_press_db_incline").secondaryMuscles]);
+    assert.ok(!("primaryGroups" in s) && !("secondaryGroups" in s));
     assert.deepEqual([s.atlasVersion, s.entryRev, s.familyId, s.weightUnit, s.volumeFormulaVersion, s.correctionCount], [1, 1, "test_family_press", "kg", 1, 0]);
     // every contract field is present
     for (const f of SNAPSHOT_FIELDS) assert.ok(f.name in s, f.name);
@@ -42,16 +43,15 @@ describe("building and validating a snapshot", () => {
     };
     bad((s) => { s.loadModel = null; }, "NOT_NULL");
     bad((s) => { s.loadModel = "rocket"; }, "VALUE");
-    bad((s) => { s.snapshotVersion = 2; }, "VALUE");
-    bad((s) => { s.primaryGroups = ["legs"]; }, "VALUE");
+    bad((s) => { s.snapshotVersion = 1; }, "VALUE"); // version 1 (stats groups) is withdrawn
+    bad((s) => { s.primaryMuscles = "x"; }, "TYPE");
     bad((s) => { s.privateExerciseId = "00000000-0000-4000-8000-000000000001"; }, "ws_exactly_one_exercise");
     bad((s) => { s.confidence = "low"; }, "ws_atlas_source");
     bad((s) => { s.repsCounting = "per_side"; }, "ws_bilateral_total");
     bad((s) => { s.implements = 2; }, "ws_implements_model");
     bad((s) => { s.loadIncrementKg = -1; }, "ws_load_increment");
-    bad((s) => { s.secondaryGroups = ["chest"]; }, "ws_groups_disjoint");
     bad((s) => { s.secondaryMuscles = ["test.m.chest_a"]; }, "ws_muscles_disjoint");
-    bad((s) => { s.primaryGroups = []; }, "ws_atlas_primary_group");
+    bad((s) => { s.primaryMuscles = []; }, "ws_primary_muscle");
     bad((s) => { s.correctionCount = 1; }, "ws_correction_count");
     bad((s) => { s.measurementType = "band_reps"; }, "ws_measurement_model");
     assert.deepEqual(validateLoadSnapshot(null), [{ code: "SNAPSHOT_MISSING", field: null }]);
@@ -81,10 +81,16 @@ describe("history reads the snapshot first (D13)", () => {
     const total = sessionTotals(workout(we), (e) => resolveWorkoutExerciseModel(e, { atlasById: changedAtlas }).model);
     assert.deepEqual([total.volumeKg, total.volumeStatus], [520, "exact"]);
   });
-  test("a changed muscle dictionary does not change the stored groups", () => {
+  test("a changed atlas entry does not change the muscles stored in the workout", () => {
     const s = snap("test_press_bar");
     const we = { catalogExerciseId: "test_press_bar", loadSnapshot: s };
-    assert.deepEqual(resolveWorkoutExerciseModel(we).groups, { primaryGroups: ["chest"], secondaryGroups: ["triceps"] });
+    const frozen = { primaryMuscles: [...s.primaryMuscles], secondaryMuscles: [...s.secondaryMuscles] };
+    byId.get("test_press_bar").primaryMuscles.push("test.m.back_a"); // a later atlas release
+    try {
+      assert.deepEqual(resolveWorkoutExerciseModel(we).muscles, frozen);
+    } finally {
+      byId.get("test_press_bar").primaryMuscles.pop();
+    }
   });
   test("missing snapshot is a fault: current atlas only with a warning and never exact", () => {
     const we = { catalogExerciseId: "test_press_db", sets: [set("26", "10")] };
@@ -130,30 +136,5 @@ describe("explicit correction of a finished workout (F2-5)", () => {
     assert.throws(() => correctLoadSnapshot(s, { laterality: "unilateral", repsCounting: "per_side" }, {}), /reason/);
     assert.throws(() => correctLoadSnapshot(s, { primaryGroups: ["abs"] }, { reason: "x" }), /cannot be corrected/);
     assert.throws(() => correctLoadSnapshot(s, { loadModel: "band", measurementType: "weight_reps" }, { reason: "x" }), /invalid result/);
-  });
-});
-
-describe("muscle-group work: full work to every primary group, secondary apart, never summed", () => {
-  test("two primary groups each get the full sets and kg; secondary separately", () => {
-    const s = snap("test_press_db_incline");
-    const totals = exerciseTotals([set("26", "10"), set("26", "8")], modelFromSnapshot(s));
-    const w = allocateGroupWork(totals, s);
-    assert.deepEqual(Object.keys(w.main), ["chest", "shoulders"]);
-    assert.deepEqual(Object.keys(w.secondary), ["triceps"]);
-    for (const g of ["chest", "shoulders", "triceps"]) {
-      const x = w.main[g] || w.secondary[g];
-      assert.deepEqual([x.sets, x.volumeKg], [2, 936]);
-    }
-  });
-  test("a group listed as both is only primary", () => {
-    const w = allocateGroupWork({ workingSets: 3, volumeKg: 300, reps: 30, seconds: 0, volumeStatus: "exact" }, { primaryGroups: ["chest"], secondaryGroups: ["chest", "triceps"] });
-    assert.deepEqual([Object.keys(w.main), Object.keys(w.secondary)], [["chest"], ["triceps"]]);
-  });
-  test("accumulation keeps main and secondary apart and keeps an unavailable volume visible", () => {
-    let acc = addGroupWork(null, allocateGroupWork({ workingSets: 3, volumeKg: 300, reps: 30, seconds: 0, volumeStatus: "exact" }, { primaryGroups: ["chest"], secondaryGroups: ["triceps"] }));
-    acc = addGroupWork(acc, allocateGroupWork({ workingSets: 2, volumeKg: 100, reps: 20, seconds: 0, volumeStatus: "exact" }, { primaryGroups: ["triceps"], secondaryGroups: [] }));
-    acc = addGroupWork(acc, allocateGroupWork({ workingSets: 1, volumeKg: null, reps: 8, seconds: 0, volumeStatus: "unavailable" }, { primaryGroups: ["chest"], secondaryGroups: [] }));
-    assert.deepEqual([acc.main.chest.sets, acc.main.chest.volumeKg, acc.main.chest.volumeStatus], [4, 300, "partial"]);
-    assert.deepEqual([acc.main.triceps.sets, acc.secondary.triceps.sets], [2, 3]);
   });
 });

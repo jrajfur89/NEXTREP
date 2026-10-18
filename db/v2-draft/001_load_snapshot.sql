@@ -1,12 +1,13 @@
 -- NEXTREP 1.0 / schema v2 — DRAFT, NOT A MIGRATION. Applied nowhere (no Supabase project).
--- Load-model snapshot of an exercise in a workout (D13, F2-4, F2-5). Generated from the contract
+-- Load-model snapshot of an exercise in a workout (D13, F2-4, F2-5; version 2: AT3-D18 — muscles
+-- frozen, no stats-group columns; hierarchy nodes are computed at read time). Generated from the contract
 -- src/engine/load-snapshot.js (SNAPSHOT_FIELDS) by tools/gen-snapshot-sql.mjs; tests check that
 -- every column and constraint matches the contract and that the database and validateLoadSnapshot()
 -- accept and reject exactly the same rows. Constraint names = JS rule codes.
 -- Expects the v2 table workout_exercises(id uuid primary key, …) to exist.
 
 alter table workout_exercises
-  add column load_snapshot_version smallint not null check (load_snapshot_version in (1)),
+  add column load_snapshot_version smallint not null check (load_snapshot_version in (2)),
   add column load_source text not null check (load_source in ('atlas', 'private', 'user_correction')),
   add column catalog_exercise_id text,
   add column private_exercise_id uuid,
@@ -21,8 +22,6 @@ alter table workout_exercises
   add column load_increment_kg numeric,
   add column primary_muscles text[] not null,
   add column secondary_muscles text[] not null,
-  add column primary_groups text[] not null check (primary_groups <@ array['chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'abs', 'quads', 'hamstrings_glutes', 'calves']::text[]),
-  add column secondary_groups text[] not null check (secondary_groups <@ array['chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'abs', 'quads', 'hamstrings_glutes', 'calves']::text[]),
   add column weight_unit text not null check (weight_unit in ('kg')),
   add column load_confidence text not null check (load_confidence in ('verified', 'high', 'low', 'unknown')),
   add column volume_formula_version smallint not null check (volume_formula_version in (1)),
@@ -35,13 +34,10 @@ alter table workout_exercises
   add constraint ws_implements_model check ((load_model in ('dumbbell_pair', 'kettlebell_pair') and coalesce(load_implements, 0) = 2) or (load_model in ('dumbbell_single', 'kettlebell_single') and coalesce(load_implements, 0) = 1) or (load_model not in ('dumbbell_pair', 'kettlebell_pair', 'dumbbell_single', 'kettlebell_single') and load_implements is null)),
   add constraint ws_unknown_model_confidence check (load_model <> 'external_unknown' or load_confidence = 'unknown'),
   add constraint ws_load_increment check (load_increment_kg is null or (load_increment_kg > 0 and load_model in ('barbell_total', 'dumbbell_pair', 'dumbbell_single', 'kettlebell_pair', 'kettlebell_single', 'machine_stack', 'plate_loaded', 'cable', 'external_unknown', 'bodyweight_plus'))),
-  add constraint ws_groups_disjoint check (not (primary_groups && secondary_groups)),
   add constraint ws_muscles_disjoint check (not (primary_muscles && secondary_muscles)),
   add constraint ws_array_elements check (array_position(primary_muscles, null) is null and not ('' = any(primary_muscles))
-      and array_position(secondary_muscles, null) is null and not ('' = any(secondary_muscles))
-      and array_position(primary_groups, null) is null and not ('' = any(primary_groups))
-      and array_position(secondary_groups, null) is null and not ('' = any(secondary_groups))),
-  add constraint ws_atlas_primary_group check (load_source <> 'atlas' or cardinality(primary_groups) >= 1),
+      and array_position(secondary_muscles, null) is null and not ('' = any(secondary_muscles))),
+  add constraint ws_primary_muscle check (coalesce(measurement_type = 'cardio', false) or cardinality(primary_muscles) >= 1),
   add constraint ws_entry_rev check (entry_rev >= 1),
   add constraint ws_atlas_version check (atlas_version is null or atlas_version >= 1),
   add constraint ws_correction_count check (load_correction_count >= 0 and ((load_source = 'user_correction') = (load_correction_count > 0))),

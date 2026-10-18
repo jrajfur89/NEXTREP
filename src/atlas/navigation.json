@@ -1,0 +1,82 @@
+{
+  "formatVersion": 1,
+  "hierarchyVersion": 1,
+  "categories": [
+    {
+      "code": "chest",
+      "labelPl": "Klatka piersiowa",
+      "kind": "muscle",
+      "subregions": [
+        { "code": "chest.pectorals", "labelPl": "Klatka piersiowa", "muscles": ["pectoralis_major"], "plannedMuscles": [] }
+      ]
+    },
+    {
+      "code": "back",
+      "labelPl": "Plecy",
+      "kind": "muscle",
+      "subregions": [
+        { "code": "back.lats", "labelPl": "Najszerszy grzbietu", "muscles": ["latissimus_dorsi"], "plannedMuscles": [] },
+        { "code": "back.upper", "labelPl": "Środek i góra pleców", "muscles": ["trapezius"], "plannedMuscles": ["rhomboids"] },
+        { "code": "back.lower", "labelPl": "Dolny odcinek pleców", "muscles": ["erector_spinae"], "plannedMuscles": [] }
+      ]
+    },
+    {
+      "code": "shoulders",
+      "labelPl": "Barki",
+      "kind": "muscle",
+      "subregions": [
+        { "code": "shoulders.front", "labelPl": "Przedni akton", "muscles": ["deltoid_anterior"], "plannedMuscles": [] },
+        { "code": "shoulders.side", "labelPl": "Boczny akton", "muscles": ["deltoid_lateral"], "plannedMuscles": [] },
+        { "code": "shoulders.rear", "labelPl": "Tylny akton", "muscles": ["deltoid_posterior"], "plannedMuscles": [] }
+      ]
+    },
+    {
+      "code": "arms",
+      "labelPl": "Ramiona",
+      "kind": "muscle",
+      "subregions": [
+        { "code": "arms.biceps", "labelPl": "Biceps", "muscles": ["biceps_brachii", "brachialis"], "plannedMuscles": [] },
+        { "code": "arms.triceps", "labelPl": "Triceps", "muscles": ["triceps_brachii"], "plannedMuscles": [] },
+        { "code": "arms.forearms", "labelPl": "Przedramiona", "muscles": ["brachioradialis"], "plannedMuscles": [] }
+      ]
+    },
+    {
+      "code": "core",
+      "labelPl": "Brzuch i core",
+      "kind": "muscle",
+      "subregions": [
+        { "code": "core.abs", "labelPl": "Brzuch", "muscles": ["rectus_abdominis", "transversus_abdominis"], "plannedMuscles": [] },
+        { "code": "core.obliques", "labelPl": "Skośne brzucha", "muscles": ["obliques"], "plannedMuscles": [] }
+      ]
+    },
+    {
+      "code": "legs",
+      "labelPl": "Nogi",
+      "kind": "muscle",
+      "subregions": [
+        { "code": "legs.quads", "labelPl": "Czworogłowe uda", "muscles": ["quadriceps"], "plannedMuscles": [] },
+        { "code": "legs.hamstrings", "labelPl": "Dwugłowe uda", "muscles": ["biceps_femoris"], "plannedMuscles": [] },
+        { "code": "legs.glutes", "labelPl": "Pośladki", "muscles": ["gluteus_maximus"], "plannedMuscles": ["gluteus_medius"] },
+        { "code": "legs.adductors", "labelPl": "Przywodziciele", "muscles": ["adductor_magnus"], "plannedMuscles": [] },
+        { "code": "legs.hip_flexors", "labelPl": "Zginacze biodra", "muscles": ["hip_flexors"], "plannedMuscles": [] },
+        { "code": "legs.calves", "labelPl": "Łydki", "muscles": [], "plannedMuscles": ["gastrocnemius", "soleus"] }
+      ]
+    },
+    {
+      "code": "cardio",
+      "labelPl": "Cardio i kondycja",
+      "kind": "conditioning",
+      "measurementType": "cardio",
+      "subregions": []
+    }
+  ],
+  "issuedNodeCodes": [
+    "chest", "chest.pectorals",
+    "back", "back.lats", "back.upper", "back.lower",
+    "shoulders", "shoulders.front", "shoulders.side", "shoulders.rear",
+    "arms", "arms.biceps", "arms.triceps", "arms.forearms",
+    "core", "core.abs", "core.obliques",
+    "legs", "legs.quads", "legs.hamstrings", "legs.glutes", "legs.adductors", "legs.hip_flexors", "legs.calves",
+    "cardio"
+  ]
+}
