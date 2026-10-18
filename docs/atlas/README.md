@@ -14,6 +14,7 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `src/atlas/atlas.json` | atlas 1.0: słowniki, rodziny, ćwiczenia, wydane identyfikatory |
 | `src/engine/atlas-schema.js` | kształt atlasu i słowniki techniczne (modele, lateralność, 10 grup, typy pomiaru) |
 | `src/engine/atlas-validate.js` | walidator (reguły M, V, I, T, S poniżej) |
+| `src/engine/atlas-index.js` | (AT3.2a) indeks wydania atlasu: resolver po `exerciseId` (także archiwalne), wyszukiwanie po nazwie i aliasach bez polskich znaków, fasety katalogu; czysty, jeszcze nie eksportowany do aplikacji |
 | `src/engine/load-snapshot.js` | kontrakt snapshotu modelu obciążenia w treningu (silnik = klient = baza) |
 | `src/engine/muscle-work.js` | praca partii na 10 grupach (F2); w AT3.2 zastępowana agregacją węzłów hierarchii (AT3-D17) |
 | `src/atlas/navigation.json` | (od AT3.2) wspólna hierarchia nawigacji i statystyk z `hierarchyVersion` (AT3-D16); jeszcze nie istnieje |
