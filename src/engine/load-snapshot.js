@@ -19,6 +19,7 @@
 // has no atlas workouts); a version-1 object is simply invalid (→ the F2-4 fault path).
 import { normalizeModel, LOAD_MODELS, VOLUME_FORMULA_VERSION } from "./load.js";
 import { MEASUREMENT_TYPES, LATERALITIES, REPS_COUNTINGS } from "./atlas-schema.js";
+import { validateLoadModelChoice } from "./load-model-options.js";
 
 export const LOAD_SNAPSHOT_VERSION = 2;
 export const SNAPSHOT_SOURCES = ["atlas", "private", "user_correction"];
@@ -101,11 +102,27 @@ export function validateLoadSnapshot(s) {
 // atlas: { exercise, atlasVersion }; private: { privateExercise }. The muscles are copied as they are
 // at this moment (frozen in the workout). `muscles` (the dictionary) is accepted for callers of
 // version 1 and no longer used: nodes are computed at read time.
-export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = null, now = new Date().toISOString() }) {
+//
+// B02-D21: `loadModel` (optional) is the model chosen for THIS execution, e.g. a plate-loaded machine
+// for an atlas exercise whose default is the stack. It must be one of loadModelOptions(exercise,
+// equipment) — `equipment` is the atlas equipment dictionary (or the atlas); without it only the
+// default is accepted. A private exercise has no choice: only its own model. The chosen model is
+// stored in the existing `loadModel` field (contract, versions and SQL unchanged). Without the
+// parameter nothing changes.
+export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = null, now = new Date().toISOString(), loadModel = undefined, equipment = null }) {
   const src = exercise || privateExercise;
   if (!src) throw new Error("buildLoadSnapshot: no exercise");
   const isAtlas = Boolean(exercise);
-  const model = src.loadModel || "external_unknown";
+  let model = src.loadModel || "external_unknown";
+  if (loadModel !== undefined && loadModel !== null) {
+    if (isAtlas) {
+      const r = validateLoadModelChoice(src, equipment, loadModel);
+      if (!r.ok) throw new Error(`buildLoadSnapshot: LOAD_MODEL_NOT_ALLOWED (${loadModel}; allowed: ${r.errors[0].allowed.join(", ") || "—"})`);
+      model = r.loadModel;
+    } else if (loadModel !== model) {
+      throw new Error(`buildLoadSnapshot: LOAD_MODEL_NOT_ALLOWED (${loadModel}; a private exercise has only its own model ${model})`);
+    }
+  }
   const snapshot = {
     snapshotVersion: LOAD_SNAPSHOT_VERSION,
     source: isAtlas ? "atlas" : "private",

@@ -266,6 +266,24 @@ starej mapy, a stara historia mogłaby zostać odczytana jako historia ćwiczeni
    partii jest od razu widoczna.
 Test odbioru: trening `hanging_knee_raise` w nowej przestrzeni daje węzły z atlasu (T13).
 
+### 6.1 Konfigurowalny model obciążenia maszyn (B02-D21)
+
+- Jedno ćwiczenie katalogowe może mieć dwie konstrukcje maszyny: ze stosem (`machine_stack`) i ładowaną
+  talerzami (`plate_loaded`). Opcje wyznacza `loadModelOptions(exercise, atlas)`: domyślny `loadModel`
+  należy do tej pary, a jedyny sprzęt obciążający jawnie dopuszcza oba modele w `loadModels`. Inaczej —
+  tylko model z atlasu. Schemat atlasu bez zmian (D-1 = A).
+- Wybór następuje przy dodaniu do planu (pozycja planu) albo przy dodaniu poza planem, przed pierwszą serią
+  (AT3.4 / AT3.6c): „Na jakiej maszynie będziesz wykonywać ćwiczenie?” — 1. Maszyna ze stosem obciążenia;
+  2. Maszyna ładowana talerzami. Pytania nie ma, gdy jest jedna opcja.
+- Snapshot wykonania zapisuje wybrany model w polu `loadModel` (`buildLoadSnapshot({ …, loadModel,
+  equipment })`, model spoza opcji → `LOAD_MODEL_NOT_ALLOWED`). Zmiana planu nie zmienia starych sesji.
+- Wpis ciężaru: stos — wartość ze stosu (50 kg → 50 kg); talerze — suma dołożonych talerzy (20 + 20 kg →
+  40 kg); konstrukcja maszyny nie jest doliczana. Tonaż bez zmian wzorów.
+- Porównania kg i rekordy: rozdzielone kluczem `comparabilityKey` = `exerciseId + loadModel + entryRev`
+  (podstawa PE-B / PE-E). Zmiana modelu nie jest prezentowana jako spadek ani wzrost siły. Ten sam klucz
+  nie gwarantuje identyczności dwóch fizycznych maszyn.
+- Maszyna Smitha — osobna konwencja (D-3 = S2): `docs/atlas/B02-D21-SMITH-S2.md`.
+
 ## 7. Cardio w NEXTREP 1.0 (AT3-D19)
 
 Zakres: katalog ćwiczeń cardio, cardio w planach i treningach, zapis czasu i dystansu, historia

@@ -1,6 +1,10 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 7 · 17.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+Wersja 8 · 18.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+
+Zmiany w wersji 8: B02-D21 — konfigurowalny model obciążenia maszyn (sekcja 1f; D-1 = A, D-2, D-3 = S2,
+zatwierdzone 18.10.2026); niespójność rejestru: AT3-D20 przywołana w handoffie B02-D21, brak w rejestrze
+(O-34).
 
 Zmiany w wersji 7: decyzje AT3-D16–AT3-D19 (sekcja 1e): wspólna hierarchia nawigacji i statystyk
 (zastępuje AT3-D1), zasady agregacji (zastępuje AT3-D2), snapshot v2, pełne cardio w NEXTREP 1.0; decyzje
@@ -180,6 +184,25 @@ AT3.6a pokazuje 7 kategorii i podpartie (cardio bez podpartii); AT3.6b–c kart�
 kategorii, podpartii, mięśni i cardio. Progress Engine: definicje PE (D1–D14, PE-01–PE-32) bez zmian;
 w PE-D „partie” oznaczają węzły hierarchii AT3-D16 z zasadami AT3-D17.
 
+## 1f. B02-D21 — konfigurowalny model obciążenia maszyn (18.10.2026)
+
+Źródło: decyzja właściciela B02-D21 i rozstrzygnięcia audytu D-1, D-2, D-3 (18.10.2026). Implementacja
+warstwy silnika: `src/engine/load-model-options.js`, `buildLoadSnapshot` (parametr `loadModel`); spec
+atlasu §6.1; notatka Smitha `docs/atlas/B02-D21-SMITH-S2.md`.
+
+| # | Decyzja | Status |
+| --- | --- | --- |
+| B02-D21 | **Konfigurowalny model obciążenia maszyn.** Jedno ćwiczenie katalogowe (np. „Wyciskanie na maszynie”) może być wykonywane na maszynie ze stosem (`machine_stack`) albo ładowanej talerzami (`plate_loaded`); wybór to konfiguracja wykonania (pozycja planu, trening bez planu), utrwalana w snapshocie wykonania. Nie tworzymy osobnych ćwiczeń tylko z powodu konstrukcji maszyny; nie scalamy ćwiczeń różniących się mechaniką, kątem lub wykonaniem. Wpis: stos — wartość ze stosu; talerze — suma dołożonych talerzy; bez doliczania konstrukcji. Wzory tonażu bez zmian (oba modele: ciężar całkowity) | zatwierdzona |
+| B02-D21 / D-1 | Dozwolone modele wynikają z istniejącego słownika sprzętu (wariant A): wybór tylko gdy domyślny model ćwiczenia należy do {`machine_stack`, `plate_loaded`} i jego jedyny sprzęt obciążający (V5) jawnie dopuszcza oba; w innych przypadkach wyłącznie model z atlasu. Bez pola `loadModelOptions` w atlasie, bez wnioskowania z nazw | zatwierdzona, wdrożona w silniku |
+| B02-D21 / D-2 | **Kontrolowany wyjątek od K3 / V3 / I6:** wybór spośród jawnie dopuszczonych modeli maszynowych danego ćwiczenia nie jest nowym wariantem ćwiczenia. Wyjątek nie zezwala na zmianę interpretacji zapisanej historii (snapshot zamraża model wykonania) ani na łączenie różnych ćwiczeń. Porównania kg rozdzielone kluczem `exerciseId + loadModel + entryRev` (D13); zmiana modelu nie jest spadkiem ani wzrostem siły | zatwierdzona |
+| B02-D21 / D-3 | Maszyna Smitha: osobna konwencja (S2) — znany opór początkowy: wpis = opór początkowy + talerze (bez domyślnych 20 kg); nieznany: dopuszczalny wpis samych talerzy, jednoznacznie oznaczony i nieporównywalny bezpośrednio z pełnym ciężarem. Obowiązkowa informacja na karcie: „Szukaj naklejki informacyjnej na maszynie.” Sposób zapisu — po osobnej zgodzie (notatka projektowa) | zatwierdzona produktowo; implementacja niezaczęta |
+
+**Uwaga do snapshotu.** Wybrany model jest zapisywany w istniejącym polu `loadModel`; `source: atlas` i
+`confidence: verified` pozostają, bo opisują pochodzenie definicji ćwiczenia (atlas), a wybrany model jest
+jednym z modeli dopuszczonych danymi atlasu. Snapshot nie zapisuje jawnie, że model pochodzi z wyboru
+(da się to odtworzyć: model ≠ domyślny i należy do opcji). Osobne pole pochodzenia wyboru wymagałoby
+zatwierdzonej zmiany kontraktu i szkicu SQL — nie wprowadzono.
+
 ## 2. Decyzje otwarte
 
 | # | Decyzja | Rodzaj | Blokuje | Uwagi |
@@ -217,6 +240,7 @@ w PE-D „partie” oznaczają węzły hierarchii AT3-D16 z zasadami AT3-D17.
 | ~~O-31~~ | Pola cardio poza czasem i dystansem | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
 | ~~O-32~~ | Suma dystansu różnych aktywności | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
 | ~~O-33~~ | Podpartie w „Cardio i kondycja” | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
+| O-34 | Niespójność rejestru: handoff B02-D21 przywołuje decyzję **AT3-D20** („obowiązkowe pełne karty ćwiczeń”, w tym karta maszyny Smitha), której nie ma w rejestrze (ostatnia: AT3-D19). Potrzebna treść decyzji od właściciela, aby wpisać ją bez zgadywania | dokumentacja | karta Smitha (D-3), AT3.6b | rejestr nie został uzupełniony samodzielnie |
 
 ## 3. F-4: zgodność Crashlytics ze stosem Capacitor (stan weryfikacji)
 
