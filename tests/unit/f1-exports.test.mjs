@@ -14,6 +14,8 @@ const ADDED_BY_STAGE = {
     "ATLAS_REPS_COUNTING_LABELS", "ATLAS_STATS_GROUP_LABELS", "AtlasCatalogEntry", "AtlasCatalogView",
     "AtlasChips", "AtlasExerciseDetail", "AtlasSection", "buildAtlasCatalog", "deepFreezeAtlasCatalog",
   ],
+  // SEC-HF-01 (18.10.2026): workout data safety (src/app/05-storage-keys-draft-pro.jsx)
+  SEC_HF_01: ["activeDraftHasContent", "activeDraftOwnedBy", "clearOwnActiveWorkoutDraft", "saveKeyStrict"],
 };
 
 test("F1: every baseline top-level name is still exported; only names of approved stages are added", async () => {

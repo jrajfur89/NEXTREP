@@ -18,13 +18,34 @@ const STORAGE_KEYS = {
 
 // Active workout draft — written SYNCHRONOUSLY (plain localStorage, not the async saveKey) so the
 // latest typed series is on disk before e.g. the Android Back dialog opens or the OS kills the app.
-function saveActiveWorkoutDraft(draft) {
+//
+// SEC-HF-01 (P0-1, P1-A): the result is reported ({ ok, reason }) and the write never replaces a
+// draft that belongs to ANOTHER workout. A draft carries `workoutInstanceId`; `owner` is
+// { id: this workout's instance id, legacy: true when this workout resumed a draft saved before the
+// id existed }. A stored draft with user content is replaced only by its own workout (same id, or —
+// for a legacy draft without an id — the workout that resumed it). Starting another workout over it
+// needs the person's explicit "Odrzuć i zacznij nowy", which clears the draft first. A stored value
+// that cannot be read is treated as no draft (as loadActiveWorkoutDraft does).
+function activeDraftHasContent(d) {
+  return Boolean(d && Array.isArray(d.blocks) && d.blocks.some((b) => b && Array.isArray(b.items) && b.items.length > 0));
+}
+function activeDraftOwnedBy(d, owner) {
+  if (!d) return true;
+  if (!owner || !owner.id) return false;
+  if (d.workoutInstanceId) return d.workoutInstanceId === owner.id;
+  return Boolean(owner.legacy);
+}
+function saveActiveWorkoutDraft(draft, owner) {
   try {
+    const current = loadActiveWorkoutDraft();
+    if (current && activeDraftHasContent(current) && !activeDraftOwnedBy(current, owner)) {
+      return { ok: false, reason: "conflict" };
+    }
     localStorage.setItem(STORAGE_KEYS.activeWorkoutDraft, JSON.stringify({ version: 1, savedAt: new Date().toISOString(), ...draft }));
-    return true;
+    return { ok: true, reason: null };
   } catch (e) {
     console.error("active workout draft save failed", e);
-    return false;
+    return { ok: false, reason: "storage" };
   }
 }
 function loadActiveWorkoutDraft() {
@@ -42,6 +63,18 @@ function clearActiveWorkoutDraft() {
   try {
     localStorage.removeItem(STORAGE_KEYS.activeWorkoutDraft);
   } catch {}
+}
+// SEC-HF-01: clears the draft only when it belongs to this workout (owner as above) — a workout that
+// ends never removes another workout's draft. Returns true when nothing of this workout is left.
+function clearOwnActiveWorkoutDraft(owner) {
+  const current = loadActiveWorkoutDraft();
+  if (current && !activeDraftOwnedBy(current, owner)) return false;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.activeWorkoutDraft);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Whether the person currently has PRO-tier access — either they've switched it on directly, or
@@ -85,6 +118,19 @@ async function saveKey(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     console.error("storage save failed", key, e);
+  }
+}
+
+// SEC-HF-01 (P0-2): a synchronous write whose result is CHECKED — true only when the value is on
+// disk (written and read back identically). Used where losing the write would lose data.
+function saveKeyStrict(key, value) {
+  try {
+    const raw = JSON.stringify(value);
+    localStorage.setItem(key, raw);
+    return localStorage.getItem(key) === raw;
+  } catch (e) {
+    console.error("storage save failed", key, e);
+    return false;
   }
 }
 

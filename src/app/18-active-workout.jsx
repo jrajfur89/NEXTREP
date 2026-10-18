@@ -360,19 +360,43 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   // a completed session: only finish() adds a session to history, and finishing/interrupting
   // clears the draft.
   const isLiveWorkout = !editingSession;
+  // SEC-HF-01: this workout's own identity (kept in its draft) and the id its finished session gets —
+  // both stable across retries, interruptions and app restarts (taken from the draft when resumed).
+  // `legacy`: resuming a draft saved before these ids existed (it is adopted, never reset).
+  const [workoutOwner] = useState(() => ({
+    id: (draftInit && draftInit.workoutInstanceId) || newUuid(),
+    legacy: Boolean(draftInit && !draftInit.workoutInstanceId),
+  }));
+  // The session id is created at the first finish attempt (as before: same moment, same generator)
+  // and from then on kept in the draft, so every retry — also after a restart — reuses it.
+  const sessionIdRef = useRef((draftInit && draftInit.sessionId) || null);
   const draftDataRef = useRef(null);
-  draftDataRef.current = { plan: plan || null, backfillInfo: backfillInfo ? { ...backfillInfo, date: backfillDate || backfillInfo.date } : null, nowDate, startTime, blocks, blockIdx, subIdx, manualDuration };
+  draftDataRef.current = { workoutInstanceId: workoutOwner.id, sessionId: sessionIdRef.current, plan: plan || null, backfillInfo: backfillInfo ? { ...backfillInfo, date: backfillDate || backfillInfo.date } : null, nowDate, startTime, blocks, blockIdx, subIdx, manualDuration };
+  // SEC-HF-01 (P1-A): "ok" = the latest state is on disk; "storage" = the write failed (progress
+  // only in memory); "conflict" = another unfinished workout owns the draft slot (never overwritten).
+  const [draftSaveStatus, setDraftSaveStatus] = useState("ok");
   const saveDraftNow = useCallback(() => {
-    if (!isLiveWorkout || !draftDataRef.current) return;
-    saveActiveWorkoutDraft(draftDataRef.current);
-  }, [isLiveWorkout]);
+    if (!isLiveWorkout || !draftDataRef.current) return true;
+    const r = saveActiveWorkoutDraft(draftDataRef.current, workoutOwner);
+    setDraftSaveStatus(r.ok ? "ok" : r.reason || "storage");
+    return r.ok;
+  }, [isLiveWorkout, workoutOwner]);
+  const progressNotSaved = isLiveWorkout && draftSaveStatus !== "ok";
   // "Przerwij trening" (menu) / "Opuść trening" (Back): the draft is KEPT (saved right now) and the
   // view goes to the Dashboard, where the workout can be resumed, or discarded. Nothing goes to history.
-  const interruptWorkout = () => {
-    saveDraftNow();
+  // SEC-HF-01: when the progress cannot be saved, the workout stays open (leaving would lose it);
+  // leaving anyway needs the explicit `force` choice in the dialog.
+  const [leaveUnsaved, setLeaveUnsaved] = useState(false);
+  const interruptWorkout = (force = false) => {
+    if (!saveDraftNow() && force !== true) {
+      setConfirmFinish(false);
+      setLeaveUnsaved(true);
+      setLeaveStep("leave");
+      return;
+    }
     activeWorkoutOverlayRef.current = null;
     if (onInterrupt) onInterrupt();
-    else onCancel();
+    else onCancel(workoutOwner);
   };
   useEffect(() => {
     saveDraftNow();
@@ -688,7 +712,21 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   const isLastExercise = !canGoNext;
   const unfilledSetsCount = blocks.flatMap((b) => b.items).reduce((sum, it) => sum + it.sets.filter((s) => !isSetPerformed(s, it.type)).length, 0);
 
+  // SEC-HF-01 (P0-2): finishing reports whether the session is on disk. On a failure the workout
+  // stays open with its draft and can be finished again — with the same session id, so a retry never
+  // adds a second session. A second tap while one finish runs is ignored.
+  const [finishError, setFinishError] = useState(null);
+  const finishingRef = useRef(false);
   const finish = () => {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    try {
+      finishUnguarded();
+    } finally {
+      finishingRef.current = false;
+    }
+  };
+  const finishUnguarded = () => {
     const allItems = blocks.flatMap((b) => b.items);
     const withSets = allItems
       .map((it) => ({ ...it, sets: it.sets.filter((s) => isSetPerformed(s, it.type)) }))
@@ -750,7 +788,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
     }
 
     const session = {
-      id: uid(),
+      id: sessionIdRef.current || (sessionIdRef.current = uid()),
       date: sessionDateIso,
       planId: plan?.id || null,
       planName: plan?.name || null,
@@ -771,7 +809,16 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
       })),
       analysis,
     };
-    onFinish(session);
+    // the latest state — with the session id — is in the draft before anything else happens
+    draftDataRef.current = { ...draftDataRef.current, sessionId: session.id };
+    saveDraftNow();
+    const result = onFinish(session, workoutOwner);
+    if (result && result.ok === false) {
+      setConfirmFinish(false);
+      setFinishError(result.message || "Nie udało się zapisać treningu na urządzeniu.");
+      return;
+    }
+    setFinishError(null);
   };
 
   /* System/Android Back dialog. Back never leaves the workout by itself — "Opuść trening" keeps the
@@ -781,30 +828,76 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6" onClick={() => setLeaveStep(null)}>
           <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
             <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">OPUSZCZASZ AKTYWNY TRENING</p>
-            <p className="text-neutral-400 text-sm mb-5">
-              Twój aktualny postęp zostanie zapisany. Będziesz mógł wrócić do tego treningu później i kontynuować od tego miejsca.
-            </p>
+            {progressNotSaved ? (
+              <p className="text-red-400 text-sm mb-5" data-testid="leave-unsaved-warning">
+                Postępu nie udało się zapisać na urządzeniu — jest tylko w pamięci aplikacji. Jeśli wyjdziesz, możesz go stracić.
+              </p>
+            ) : (
+              <p className="text-neutral-400 text-sm mb-5">
+                Twój aktualny postęp zostanie zapisany. Będziesz mógł wrócić do tego treningu później i kontynuować od tego miejsca.
+              </p>
+            )}
             <div className="flex flex-col gap-2">
-              <button onClick={() => setLeaveStep(null)} className="w-full py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold">
+              <button onClick={() => { setLeaveStep(null); setLeaveUnsaved(false); }} className="w-full py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold">
                 Wróć do treningu
               </button>
-              <button data-no-rearm onClick={interruptWorkout} className="w-full py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
-                Opuść trening
-              </button>
+              {progressNotSaved && leaveUnsaved ? (
+                <button data-no-rearm data-testid="leave-without-saving" onClick={() => interruptWorkout(true)} className="w-full py-3 rounded-xl bg-red-500/90 text-neutral-950 font-semibold">
+                  Opuść bez zapisu
+                </button>
+              ) : (
+                <button data-no-rearm onClick={() => interruptWorkout()} className="w-full py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
+                  Opuść trening
+                </button>
+              )}
             </div>
           </div>
         </div>
   ) : null;
 
+  // SEC-HF-01: visible safety messages — never a "saved" message while the data is only in memory.
+  const safetyBanner =
+    progressNotSaved || finishError ? (
+      <div className="fixed inset-x-0 top-0 z-30 px-4 pt-2 flex justify-center" data-testid="workout-safety-banner">
+        <div className="w-full max-w-sm bg-neutral-900 border border-red-500/70 rounded-2xl p-3 shadow-lg text-left">
+          {finishError && (
+            <p className="text-red-400 text-xs leading-relaxed" data-testid="finish-error">
+              {finishError} Trening nie został zakończony{progressNotSaved ? "" : " — jest zachowany jako niedokończony"}. Zwolnij miejsce na urządzeniu i spróbuj ponownie.
+            </p>
+          )}
+          {progressNotSaved && (
+            <p className={`text-red-400 text-xs leading-relaxed ${finishError ? "mt-1" : ""}`} data-testid="draft-save-warning" data-reason={draftSaveStatus}>
+              {draftSaveStatus === "conflict"
+                ? "Na urządzeniu jest inny niedokończony trening — ten trening NIE jest zapisywany. Nie zamykaj aplikacji."
+                : "Postęp NIE jest zapisany na urządzeniu — jest tylko w pamięci aplikacji. Nie zamykaj aplikacji."}
+            </p>
+          )}
+          <div className="flex gap-2 mt-2">
+            {progressNotSaved && (
+              <button onClick={() => saveDraftNow()} className="flex-1 py-1.5 rounded-xl bg-neutral-800 text-neutral-100 font-semibold text-xs" data-testid="draft-save-retry">
+                Zapisz ponownie
+              </button>
+            )}
+            {finishError && (
+              <button onClick={() => finish()} className="flex-1 py-1.5 rounded-xl bg-orange-500 text-neutral-950 font-bold text-xs" data-testid="finish-retry">
+                Spróbuj zakończyć ponownie
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   if (!currentBlock) {
     return (
       <div className="min-h-screen bg-app-depth font-body flex flex-col items-center justify-center px-6 text-center">
         <FontStyles />
+        {safetyBanner}
         <p className="text-neutral-300 font-semibold mb-4">Ten trening nie ma jeszcze ćwiczeń.</p>
         <button onClick={openAddPicker} className="bg-orange-500 text-neutral-950 font-bold px-6 py-3 rounded-xl mb-3">
           Dodaj ćwiczenie
         </button>
-        <button onClick={onCancel} className="text-neutral-500 text-sm">
+        <button onClick={() => onCancel(workoutOwner)} className="text-neutral-500 text-sm">
           Anuluj trening
         </button>
         {addPickerOpen && <ExercisePickerModal exercises={exercises} onPick={addExerciseAdHoc} onClose={() => setAddPickerOpen(false)} onCreateExercise={onCreateExercise} />}
@@ -833,6 +926,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   return (
     <div className="min-h-screen bg-app-depth font-body flex flex-col">
       <FontStyles />
+      {safetyBanner}
       <div className="px-4 pt-4 pb-2 grid grid-cols-3 items-center gap-2">
         {/* back-filled workout: the date + duration fields use the (otherwise empty) clock column too */}
         <div className={`min-w-0 ${editingSession || backfillInfo ? "col-span-2" : ""}`}>
@@ -1537,6 +1631,8 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
               {confirmFinish === "cancel"
                 ? editingSession
                   ? "Wprowadzone zmiany nie zostaną zapisane."
+                  : progressNotSaved
+                  ? "Postępu nie udało się zapisać na urządzeniu — jest tylko w pamięci aplikacji."
                   : "Twój aktualny postęp zostanie zapisany. Będziesz mógł wrócić do tego treningu później i kontynuować od tego miejsca."
                 : editingSession
                 ? "Zapisany wcześniej trening zostanie zaktualizowany."
@@ -1567,7 +1663,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
                   // history.back() below hits the "activeWorkoutPlan !== undefined" branch of the
                   // root popstate handler instead of being intercepted as "just close this modal".
                   if (!editingSession) activeWorkoutOverlayRef.current = null;
-                  onCancel();
+                  onCancel(workoutOwner);
                 }}
                 className={`flex-1 py-3 rounded-xl font-bold ${confirmFinish === "cancel" && editingSession ? "bg-red-500 text-neutral-950" : "bg-orange-500 text-neutral-950"}`}
               >

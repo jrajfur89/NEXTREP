@@ -175,9 +175,25 @@ describe("A4.5 guards", () => {
   });
   test("finish() and sync are untouched by A4.5 (identical to F1.6)", () => {
     const at = (f) => execFileSync("git", ["show", `${REF}:src/app/${f}`], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    for (const f of ["07-sync-queue-push.jsx", "08-sync-meta-pull-conflicts.jsx", "18-active-workout.jsx", "05-storage-keys-draft-pro.jsx", "04-account-init-migration.jsx", "03-normalizers-namespaces.jsx"]) {
+    for (const f of ["07-sync-queue-push.jsx", "08-sync-meta-pull-conflicts.jsx", "04-account-init-migration.jsx", "03-normalizers-namespaces.jsx"]) {
       assert.equal(app(f), at(f), `${f} changed`);
     }
+    // SEC-HF-01 (18.10.2026) changed the draft / finish SAFETY of 18-active-workout.jsx and
+    // 05-storage-keys-draft-pro.jsx. What A4.5 protects stays byte-identical: the volume and totals
+    // formulas of finish() and the storage helpers loadKey / saveKey.
+    const block = (src, from, to) => {
+      const i = src.indexOf(from);
+      const j = src.indexOf(to, i);
+      assert.ok(i >= 0 && j > i, `block ${from} … ${to} found`);
+      return src.slice(i, j);
+    };
+    const formulas = (src) => block(src, "const allItems = blocks.flatMap((b) => b.items);", "// Analysis with the current engine");
+    assert.equal(formulas(app("18-active-workout.jsx")), formulas(at("18-active-workout.jsx")), "finish() volume formulas changed");
+    const sessionFields = "      exercisesCount: withSets.length,\n      totalSets,\n      totalReps,\n      totalWeight,\n      volume,\n";
+    assert.ok(app("18-active-workout.jsx").includes(sessionFields), "the stored session fields are the same");
+    const helpers = (src) => block(src, "async function loadKey(key) {", "// SEC-HF-01 (P0-2)").trim() || "";
+    const helpersRef = (src) => block(src, "async function loadKey(key) {", "/* ---").trim();
+    assert.equal(helpers(app("05-storage-keys-draft-pro.jsx")), helpersRef(at("05-storage-keys-draft-pro.jsx")), "loadKey / saveKey changed");
   });
   test("the access point reports the F1.6 source and does not use the new load engine yet", () => {
     assert.equal(VOLUME.VOLUME_SOURCE, "f1.6");

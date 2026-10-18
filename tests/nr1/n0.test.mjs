@@ -297,6 +297,9 @@ describe("N0-F: runtime isolation (jsdom)", () => {
 // else stays frozen at the C01 audit point.
 const AT1_REF = "368bf2d"; // AT1: atlas Batch 01 published — the last commit before AT2
 const AT2_APP_FILES = ["src/app/00-imports.jsx", "src/app/17-exercises-plans.jsx", "src/app/17b-atlas-catalog.jsx", "src/app/ORDER.json"];
+// SEC-HF-01 (18.10.2026, P0 hotfix, approved by the product owner): workout draft and finish safety —
+// exactly these three files; their content is checked by tests/ui/sec-hf-01-workout-safety.test.mjs.
+const SEC_HF_01_APP_FILES = ["src/app/05-storage-keys-draft-pro.jsx", "src/app/18-active-workout.jsx", "src/app/21-app.jsx"];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
@@ -316,13 +319,13 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     assert.equal(diff.trim(), "", diff);
   });
 
-  test(`AT2 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files`, () => {
+  test(`AT2 / SEC-HF-01 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files and the three SEC-HF-01 files`, () => {
     const changed = execFileSync("git", ["diff", "--name-only", AT1_REF, "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
-    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f));
-    assert.deepEqual(outside, [], "src/app files changed outside AT2");
+    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f));
+    assert.deepEqual(outside, [], "src/app files changed outside AT2 and SEC-HF-01");
     // ORDER.json: the old order plus exactly one new file after 17-exercises-plans.jsx
     const before = JSON.parse(execFileSync("git", ["show", `${AT1_REF}:src/app/ORDER.json`], { cwd: ROOT, encoding: "utf8" }));
     const now = JSON.parse(readFileSync(resolve(ROOT, "src/app/ORDER.json"), "utf8"));

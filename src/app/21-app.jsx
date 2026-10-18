@@ -47,6 +47,9 @@ function App() {
   const [resumeDraft, setResumeDraft] = useState(null);
   const [, setDraftTick] = useState(0); // re-render after the Dashboard discards the draft
   const resumeCheckedRef = useRef(false);
+  // SEC-HF-01 (P0-1): a start requested while an unfinished workout exists — { start, summary,
+  // confirmDiscard } while the choice dialog is open. Nothing starts until the person decides.
+  const [startConflict, setStartConflict] = useState(null);
 
   // Makes the hardware/gesture back button navigate one level up inside the app (closing
   // whichever overlay is currently topmost, or returning to the dashboard from another tab)
@@ -645,6 +648,11 @@ function App() {
       return next;
     });
   }, []);
+
+  // SEC-HF-01 (P0-2): the latest history for the finish path (the session is written to disk
+  // BEFORE the state changes).
+  const historyRef = useRef(history);
+  historyRef.current = history;
 
   const updateHistory = useCallback((updater) => {
     setHistory((prev) => {
@@ -1302,23 +1310,40 @@ function App() {
           setBackfillInfo(null);
           setScreen("dashboard");
         }}
-        onCancel={() => {
+        onCancel={(owner) => {
           // Discard path (kept for completeness; the live workout uses onInterrupt): nothing is
-          // saved, the draft is removed, and the view closes directly.
-          clearActiveWorkoutDraft();
+          // saved, the draft is removed, and the view closes directly. SEC-HF-01: only this
+          // workout's own draft — another unfinished workout's draft is never removed here.
+          clearOwnActiveWorkoutDraft(owner);
           setResumeDraft(null);
           setActiveWorkoutPlan(undefined);
           setScreen(backfillInfo ? "history" : "plans");
           setBackfillInfo(null);
         }}
-        onFinish={(session) => {
-          updateHistory((prev) => [...prev, session]);
-          clearActiveWorkoutDraft();
+        onFinish={(session, owner) => {
+          // SEC-HF-01 (P0-2), in this order: (1) the session goes to disk and the write is CHECKED;
+          // (2) only then the app state, backup and sync queue; (3) only then the draft is removed;
+          // (4) only then the summary. Idempotent by session id: a retry replaces, never appends.
+          // On a failed write nothing changes and the workout stays open with its draft.
+          const upsert = (list) => {
+            const prev = Array.isArray(list) ? list : [];
+            return prev.some((x) => x && x.id === session.id) ? prev.map((x) => (x && x.id === session.id ? session : x)) : [...prev, session];
+          };
+          if (!saveKeyStrict(STORAGE_KEYS.history, upsert(historyRef.current))) {
+            return { ok: false, message: "Nie udało się zapisać treningu na urządzeniu (brak miejsca lub błąd pamięci)." };
+          }
+          try {
+            updateHistory(upsert); // state, backup and sync queue — the history itself is already on disk
+          } catch (e) {
+            console.error("post-save step failed (the session is already saved)", e);
+          }
+          clearOwnActiveWorkoutDraft(owner); // a failure here only leaves a draft whose session id is already saved
           setResumeDraft(null);
           setActiveWorkoutPlan(undefined);
           setBackfillInfo(null);
           setScreen("history");
           setHistoryDetail(session);
+          return { ok: true };
         }}
       />
       {proModalOpen && (
@@ -1401,6 +1426,34 @@ function App() {
     );
   }
 
+  // SEC-HF-01 (P0-1): the ONE way a new workout starts (plan, no plan, back-filled). An unfinished
+  // workout with content is never replaced silently: the person chooses Kontynuuj / Odrzuć i zacznij
+  // nowy (confirmed) / Anuluj.
+  const resumeStoredDraft = () => {
+    const d = loadActiveWorkoutDraft();
+    if (!d || !summarizeActiveWorkoutDraft(d)) return false;
+    setResumeDraft(d);
+    setBackfillInfo(d.backfillInfo || null);
+    setResumePrompt(null);
+    pushNavMarker();
+    setActiveWorkoutPlan(d.plan || null);
+    return true;
+  };
+  const beginWorkout = ({ plan = null, backfill = null }) => {
+    pushNavMarker();
+    setResumeDraft(null);
+    setBackfillInfo(backfill);
+    setActiveWorkoutPlan(plan);
+  };
+  const requestStartWorkout = (start) => {
+    const summary = summarizeActiveWorkoutDraft(loadActiveWorkoutDraft());
+    if (summary) {
+      setStartConflict({ start, summary, confirmDiscard: false });
+      return;
+    }
+    beginWorkout(start);
+  };
+
   const screenContent = (() => {
     switch (screen) {
     case "welcome":
@@ -1429,13 +1482,7 @@ function App() {
           activeDraft={summarizeActiveWorkoutDraft(loadActiveWorkoutDraft())}
           onResumeDraft={() => {
             // exactly the existing resume path — the same draft object, as it was left
-            const d = loadActiveWorkoutDraft();
-            if (!d || !summarizeActiveWorkoutDraft(d)) return;
-            setResumeDraft(d);
-            setBackfillInfo(d.backfillInfo || null);
-            setResumePrompt(null);
-            pushNavMarker();
-            setActiveWorkoutPlan(d.plan || null);
+            resumeStoredDraft();
           }}
           onDiscardDraft={() => {
             clearActiveWorkoutDraft();
@@ -1445,8 +1492,7 @@ function App() {
           nextPlan={getNextPlan(plans, history)}
           onStartPlan={(p) => {
             // the existing start path ("Trening" → plan)
-            pushNavMarker();
-            setActiveWorkoutPlan(p);
+            requestStartWorkout({ plan: p });
           }}
         />
       );
@@ -1486,14 +1532,8 @@ function App() {
           updatePlans={updatePlans}
           updateExercises={updateExercises}
           onNavigate={goToScreen}
-          onSelectPlan={(p) => {
-            pushNavMarker();
-            setActiveWorkoutPlan(p);
-          }}
-          onNoPlan={() => {
-            pushNavMarker();
-            setActiveWorkoutPlan(null);
-          }}
+          onSelectPlan={(p) => requestStartWorkout({ plan: p })}
+          onNoPlan={() => requestStartWorkout({ plan: null })}
           isPro={isProEffective}
           onOpenUnlock={() => setProModalOpen(true)}
         />
@@ -1530,11 +1570,7 @@ function App() {
             setTrainingReportTarget(s);
           }}
           onDelete={(id) => updateHistory((prev) => prev.filter((s) => s.id !== id))}
-          onStartBackfill={(meta) => {
-            pushNavMarker();
-            setBackfillInfo({ date: meta.date, durationMin: meta.durationMin });
-            setActiveWorkoutPlan(meta.plan || null);
-          }}
+          onStartBackfill={(meta) => requestStartWorkout({ plan: meta.plan || null, backfill: { date: meta.date, durationMin: meta.durationMin } })}
           isPro={isProEffective}
           onOpenUnlock={() => setProModalOpen(true)}
         />
@@ -1672,6 +1708,60 @@ function App() {
                 : "Dane w trybie bez logowania pozostały bez zmian."}
             </p>
             <button onClick={() => setGuestMigrationNotice(null)} className="w-full py-2 rounded-xl bg-orange-500 text-neutral-950 font-bold text-sm">OK</button>
+          </div>
+        </div>
+      )}
+      {startConflict && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6" data-testid="start-conflict" onClick={() => setStartConflict(null)}>
+          <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            {!startConflict.confirmDiscard ? (
+              <>
+                <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">MASZ NIEDOKOŃCZONY TRENING</p>
+                <p className="text-neutral-400 text-sm mb-1 break-words">{startConflict.summary.name}</p>
+                <p className="text-neutral-400 text-sm mb-5">Nowy trening zastąpiłby go. Wybierz, co zrobić z niedokończonym treningiem.</p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    data-testid="start-conflict-resume"
+                    onClick={() => {
+                      setStartConflict(null);
+                      resumeStoredDraft();
+                    }}
+                    className="w-full py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold"
+                  >
+                    Kontynuuj trening
+                  </button>
+                  <button data-testid="start-conflict-discard" onClick={() => setStartConflict((c) => (c ? { ...c, confirmDiscard: true } : c))} className="w-full py-3 rounded-xl bg-neutral-800 text-red-400 font-semibold">
+                    Odrzuć i zacznij nowy
+                  </button>
+                  <button data-testid="start-conflict-cancel" onClick={() => setStartConflict(null)} className="w-full py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
+                    Anuluj
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">ODRZUCIĆ NIEDOKOŃCZONY TRENING?</p>
+                <p className="text-neutral-400 text-sm mb-5 break-words">„{startConflict.summary.name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.</p>
+                <div className="flex gap-3">
+                  <button data-testid="start-conflict-back" onClick={() => setStartConflict((c) => (c ? { ...c, confirmDiscard: false } : c))} className="flex-1 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
+                    Wróć
+                  </button>
+                  <button
+                    data-testid="start-conflict-discard-confirm"
+                    onClick={() => {
+                      const { start } = startConflict;
+                      setStartConflict(null);
+                      clearActiveWorkoutDraft();
+                      setDraftTick((n) => n + 1);
+                      beginWorkout(start);
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-red-500 text-neutral-950 font-bold"
+                  >
+                    Odrzuć i zacznij
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
