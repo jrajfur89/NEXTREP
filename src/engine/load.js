@@ -18,7 +18,13 @@
 // Inputs accept today's set shape ({ weight, reps, duration, rir, setType: "normal"|"dropset",
 // done }) and the planned v2 shape ({ loadKg, assistKg, setType: "warmup"|"working"|"dropset",
 // status: "done"|"skipped" }). Stored data is only read, never changed.
+//
+// AT3.2c (AT3-D19, spec v2 §7.2): the model "cardio" only — a cardio set is performed when it has a
+// valid `durationSec` or `distanceM` (cardio.js, P2); exerciseTotals adds time, distance and the
+// derived pace; sessionTotals keeps cardio OUT of its sets, reps, seconds and kg and reports it in a
+// separate `cardio` block. Every other model is unchanged.
 import { parseRirBounds } from "./rir.js";
+import { cardioSetValues, paceSecPerKm } from "./cardio.js";
 
 // Version of the volume formula. v2 stores it next to any persisted volume (decision P3).
 export const VOLUME_FORMULA_VERSION = 1;
@@ -126,7 +132,11 @@ export function setRole(set) {
 export function isPerformed(set, model) {
   if (!set || typeof set !== "object" || set.status === "skipped") return false;
   const unit = normalizeModel(model).unit;
-  if (unit === "seconds" || unit === "cardio") return (parseSeconds(set.duration) ?? 0) > 0;
+  if (unit === "cardio") {
+    const v = cardioSetValues(set);
+    return v.durationSec != null || v.distanceM != null;
+  }
+  if (unit === "seconds") return (parseSeconds(set.duration) ?? 0) > 0;
   if (unit === "sets") return Boolean(set.done) || set.status === "done" || (set.weight !== "" && set.weight != null);
   return (parseReps(set.reps) ?? 0) > 0;
 }
@@ -147,7 +157,7 @@ export function normalizeLoad(set, model) {
   const performed = isPerformed(set, m);
   const counts = ROLE_COUNTS[role] === true && performed;
   const reps = parseReps(s.reps) ?? 0;
-  const seconds = parseSeconds(s.duration) ?? 0;
+  const seconds = m.unit === "cardio" ? cardioSetValues(s).durationSec ?? 0 : parseSeconds(s.duration) ?? 0;
   const perSide = m.repsCounting === "per_side";
   const typed = parseKg(s.loadKg !== undefined && s.loadKg !== null && s.loadKg !== "" ? s.loadKg : s.weight);
 
@@ -167,6 +177,7 @@ export function normalizeLoad(set, model) {
   let volumeKg = 0;
   if (kgApplies && counts) volumeKg = m.confidence === "unknown" ? null : roundKg(externalKg * reps * (perSide ? 2 : 1));
 
+  const cardio = m.unit === "cardio" ? cardioSetValues(s) : null;
   const rirBounds = parseRirBounds(s.rir);
   const rirKnown = rirBounds != null;
   const repBased = m.unit === "kg" || m.unit === "reps";
@@ -177,6 +188,9 @@ export function normalizeLoad(set, model) {
     progress: counts && role === "working",
     // reps as typed (per side for repsCounting "per_side", in total otherwise)
     reps,
+    // cardio only (null for every other model): valid canonical values of the set
+    durationSec: cardio ? cardio.durationSec : null,
+    distanceM: cardio ? cardio.distanceM : null,
     repsPerSide: m.laterality === "bilateral" ? null : perSide ? reps : reps / 2,
     repsAllSides: perSide ? reps * 2 : reps,
     seconds,
@@ -227,6 +241,12 @@ export function exerciseTotals(sets, model) {
     topExternalKg: null,
     minAssistKg: null,
     rirMissingSets: 0,
+    // cardio only (model "cardio"): time, distance and pace from the sets that have both values
+    durationSec: 0,
+    distanceM: 0,
+    pacedDurationSec: 0,
+    pacedDistanceM: 0,
+    paceSecPerKm: null,
   };
   for (const set of Array.isArray(sets) ? sets : []) {
     const n = normalizeLoad(set, m);
@@ -242,10 +262,19 @@ export function exerciseTotals(sets, model) {
     t.seconds += n.seconds;
     if (t.volumeKg !== null) t.volumeKg = n.volumeKg === null ? null : roundKg(t.volumeKg + n.volumeKg);
     if (!n.rirKnown) t.rirMissingSets++;
+    if (m.unit === "cardio") {
+      t.durationSec += n.durationSec ?? 0;
+      t.distanceM += n.distanceM ?? 0;
+      if (n.durationSec != null && n.distanceM != null) {
+        t.pacedDurationSec += n.durationSec;
+        t.pacedDistanceM += n.distanceM;
+      }
+    }
     if (n.progress && n.isLoaded) t.topExternalKg = Math.max(t.topExternalKg ?? 0, n.externalKg);
     if (n.progress && n.assistKg != null) t.minAssistKg = t.minAssistKg == null ? n.assistKg : Math.min(t.minAssistKg, n.assistKg);
   }
   if (t.volumeStatus === "unavailable") t.volumeKg = null;
+  t.paceSecPerKm = paceSecPerKm(t.pacedDurationSec, t.pacedDistanceM);
   return t;
 }
 
@@ -260,9 +289,28 @@ export function sessionTotals(session, resolveModel) {
     return { exerciseId: ex ? ex.exerciseId : null, model, totals: exerciseTotals(ex ? ex.sets : [], model) };
   });
   const out = { workingSets: 0, reps: 0, repsAllSides: 0, seconds: 0, volumeKg: 0, volumeStatus: "none", exercises };
+  // cardio (AT3-D19): its own block, never mixed into the sums above. Distance is kept per
+  // exercise (activity) only — no distance total across different activities (O-32).
+  const cardio = { activities: 0, sets: 0, durationSec: 0, byExercise: {} };
   const statuses = new Set();
   for (const e of exercises) {
     const t = e.totals;
+    if (e.model.unit === "cardio") {
+      if (t.workingSets === 0) continue;
+      cardio.activities++;
+      cardio.sets += t.workingSets;
+      cardio.durationSec += t.durationSec;
+      const raw = list[exercises.indexOf(e)] || {};
+      const key = e.exerciseId ?? raw.catalogExerciseId ?? raw.privateExerciseId ?? "unknown";
+      const b = cardio.byExercise[key] || (cardio.byExercise[key] = { activities: 0, durationSec: 0, distanceM: 0, pacedDurationSec: 0, pacedDistanceM: 0, paceSecPerKm: null });
+      b.activities++;
+      b.durationSec += t.durationSec;
+      b.distanceM += t.distanceM;
+      b.pacedDurationSec += t.pacedDurationSec;
+      b.pacedDistanceM += t.pacedDistanceM;
+      b.paceSecPerKm = paceSecPerKm(b.pacedDurationSec, b.pacedDistanceM);
+      continue;
+    }
     out.workingSets += t.workingSets;
     out.reps += t.reps;
     out.repsAllSides += t.repsAllSides;
@@ -273,5 +321,6 @@ export function sessionTotals(session, resolveModel) {
   if (statuses.has("unavailable")) out.volumeStatus = "partial";
   else if (statuses.has("estimated")) out.volumeStatus = "estimated";
   else if (statuses.has("exact")) out.volumeStatus = "exact";
+  out.cardio = cardio;
   return out;
 }

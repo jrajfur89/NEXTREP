@@ -13,7 +13,8 @@
 //    volume statuses); a node combines exercises the way sessionTotals does ("partial" when an
 //    exercise's volume is unavailable, kg of the others kept).
 // 6. Entries without a valid snapshot add to no node (F2-4: counted as a fault with a warning).
-//    Cardio entries add to no muscle node (O-30, P3); their time and distance are AT3.2c.
+//    Cardio entries add to no muscle node (O-30, P3); their time and distance are in
+//    workout.cardio (sessionTotals, AT3.2c) and cardio-stats.js.
 // Names in the UI (AT3-D17): „Objętość ćwiczeń angażujących partię” (primary) and „… jako mięśnie
 // pomocnicze” (secondary) — not a physiological measure of muscle work.
 import { exerciseTotals, sessionTotals } from "./load.js";

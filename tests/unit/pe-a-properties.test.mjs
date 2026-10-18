@@ -117,13 +117,18 @@ describe("properties on random data", () => {
       assert.equal(uni.reps, bi.reps); // one set, reps as typed — never doubled into two sets
     }
   });
-  test(`sessionTotals is exactly the sum of exerciseTotals (${N} cases)`, () => {
+  // AT3.2c (AT3-D19): cardio is kept out of these sums and reported in its own block.
+  test(`sessionTotals is exactly the sum of exerciseTotals; cardio apart (${N} cases)`, () => {
     const r = rng(5);
     for (let i = 0; i < N; i++) {
       const models = Array.from({ length: 1 + Math.floor(r() * 5) }, () => randomModel(r));
       const session = { exercises: models.map((m, k) => ({ exerciseId: String(k), sets: Array.from({ length: Math.floor(r() * 5) }, () => messySet(r)) })) };
       const s = sessionTotals(session, (ex) => models[Number(ex.exerciseId)]);
-      for (const k of ["workingSets", "reps", "repsAllSides", "seconds"]) assert.equal(s[k], s.exercises.reduce((a, e) => a + e.totals[k], 0));
+      const strength = s.exercises.filter((e) => e.model.unit !== "cardio");
+      const cardio = s.exercises.filter((e) => e.model.unit === "cardio");
+      for (const k of ["workingSets", "reps", "repsAllSides", "seconds"]) assert.equal(s[k], strength.reduce((a, e) => a + e.totals[k], 0));
+      assert.equal(s.cardio.durationSec, cardio.reduce((a, e) => a + e.totals.durationSec, 0));
+      assert.equal(s.cardio.sets, cardio.reduce((a, e) => a + e.totals.workingSets, 0));
       const sum = s.exercises.reduce((a, e) => a + (e.totals.volumeKg ?? 0), 0);
       assert.ok(Math.abs(s.volumeKg - sum) <= 1e-3 + 1e-12 * Math.abs(sum), `${s.volumeKg} vs ${sum}`);
     }

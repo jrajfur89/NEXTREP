@@ -16,6 +16,8 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `src/engine/atlas-validate.js` | walidator (reguły M, V, I, T, S poniżej) |
 | `src/engine/atlas-index.js` | (AT3.2a) indeks wydania atlasu: resolver po `exerciseId` (także archiwalne), wyszukiwanie po nazwie i aliasach bez polskich znaków, fasety katalogu; czysty, jeszcze nie eksportowany do aplikacji |
 | `src/engine/load-snapshot.js` | kontrakt snapshotu modelu obciążenia w treningu (silnik = klient = baza); od AT3.2b wersja 2 (AT3-D18): zamrożone mięśnie, bez grup, `ws_primary_muscle` |
+| `src/engine/cardio.js` | (AT3.2c) kontrakt serii cardio: `durationSec` i `distanceM` w jednostkach kanonicznych, walidacja P2, wpis „mm:ss” i km z przecinkiem, tempo tylko wyliczane (AT3-D19) |
+| `src/engine/cardio-stats.js` | (AT3.2c) statystyki, historia, trendy i porównania cardio: czas łącznie, dystans tylko w obrębie aktywności (O-32), porównanie P1 |
 | `src/engine/hierarchy.js` | (AT3.2b) walidator wspólnej hierarchii i jej indeks: mięśnie → podpartie → kategorie (AT3-D16) |
 | `src/engine/muscle-stats.js` | (AT3.2b) praca mięśni, podpartii i kategorii: główna i pomocnicza osobno, seria raz na węzeł, suma treningu niezależna (AT3-D17); zastąpił `muscle-work.js` (10 grup, F2) |
 | `src/atlas/navigation.json` | (AT3.2b) wspólna hierarchia nawigacji i statystyk, `hierarchyVersion` 1: 6 kategorii mięśniowych, 18 podpartii, „Cardio i kondycja” bez podpartii; 4 kody planowane (AT3-D16) |
@@ -60,7 +62,7 @@ Błąd blokuje import; ostrzeżenie i informacja idą do oceny.
 
 | Reguła | Kody | Poziom |
 | --- | --- | --- |
-| M1 co najmniej jeden mięsień główny (od AT3.2c tylko ćwiczenia z `measurementType` innym niż `cardio`; mięśnie cardio opcjonalne, O-30; ta sama reguła dla ćwiczeń prywatnych i snapshotu `ws_primary_muscle`, B2) | `PRIMARY_MUSCLE_REQUIRED` | błąd |
+| M1 co najmniej jeden mięsień główny (od AT3.2c — wdrożone — tylko ćwiczenia z `measurementType` innym niż `cardio`; mięśnie cardio opcjonalne, O-30; ta sama reguła dla ćwiczeń prywatnych i snapshotu `ws_primary_muscle`, B2) | `PRIMARY_MUSCLE_REQUIRED` | błąd |
 | M2 mięsień ze słownika, aktywny | `MUSCLE_UNKNOWN`, `DICT_VALUE_ARCHIVED` | błąd |
 | M3 bez powtórzeń; nie główny i pomocniczy naraz | `MUSCLE_DUPLICATE`, `MUSCLE_PRIMARY_AND_SECONDARY` | błąd |
 | M4 każdy mięsień ma jedną z 10 grup | `MUSCLE_GROUP_INVALID` | błąd |

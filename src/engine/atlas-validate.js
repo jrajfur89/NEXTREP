@@ -121,8 +121,9 @@ export function validateExercise(ex, ctx, add) {
   dictCheck("primaryMuscles", "muscles", "M2");
   dictCheck("secondaryMuscles", "muscles", "M2");
 
-  // muscles (M1, M3, M5, M6)
-  if (!arr(ex.primaryMuscles).length) add("error", "M1", "PRIMARY_MUSCLE_REQUIRED", where, "primaryMuscles", "Ćwiczenie musi mieć co najmniej jeden mięsień główny.");
+  // muscles (M1, M3, M5, M6). M1 since AT3.2c (O-30): cardio needs no muscles — they are optional and
+  // informational; every other exercise has at least one primary muscle.
+  if (ex.measurementType !== "cardio" && !arr(ex.primaryMuscles).length) add("error", "M1", "PRIMARY_MUSCLE_REQUIRED", where, "primaryMuscles", "Ćwiczenie musi mieć co najmniej jeden mięsień główny.");
   for (const c of arr(ex.secondaryMuscles)) if (arr(ex.primaryMuscles).includes(c)) add("error", "M3", "MUSCLE_PRIMARY_AND_SECONDARY", where, "secondaryMuscles", `Mięsień „${c}” nie może być jednocześnie główny i pomocniczy.`);
   const groups = deriveGroups(ex, [...ctx.dict.muscles.values()]);
   if (arr(ex.primaryMuscles).length > 3 || groups.primaryGroups.length > 2) add("warning", "M5", "MANY_PRIMARY_MUSCLES", where, "primaryMuscles", `Dużo pracy głównej (${arr(ex.primaryMuscles).length} mięśnie, ${groups.primaryGroups.length} grupy) — sprawdź, czy to na pewno praca główna.`);

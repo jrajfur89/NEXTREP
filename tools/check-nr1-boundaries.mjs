@@ -31,7 +31,7 @@ export const ATLAS_RELEASE_MODULE = "nr1:atlas-release";
 
 // Pure modules of src/engine/ that NEXTREP 1.0 may use. legacy-progression.js, load-legacy-map.js,
 // volume.js and index.js (which re-exports them) serve only the old app.
-export const ALLOWED_ENGINE_MODULES = ["rir.js", "load.js", "atlas-schema.js", "atlas-validate.js", "load-snapshot.js", "hierarchy.js", "muscle-stats.js"]; // AT3.2b: muscle-stats.js replaces muscle-work.js (AT3-D17)
+export const ALLOWED_ENGINE_MODULES = ["rir.js", "load.js", "cardio.js", "atlas-schema.js", "atlas-validate.js", "load-snapshot.js", "hierarchy.js", "muscle-stats.js", "cardio-stats.js"]; // AT3.2b: muscle-stats.js replaces muscle-work.js (AT3-D17); AT3.2c: cardio.js, cardio-stats.js
 export const FORBIDDEN_ENGINE_MODULES = ["legacy-progression.js", "load-legacy-map.js", "volume.js", "index.js"];
 
 // npm packages allowed in the bundle. A new runtime dependency needs approval (C01-6) and an entry here.
