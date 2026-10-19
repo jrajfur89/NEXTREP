@@ -173,7 +173,7 @@ export function validateExercise(ex, ctx, add) {
   const attrs = arr(ex.variantAttributes).map((c) => ctx.dict.variantAttributes.get(c)).filter(Boolean);
   for (const a of attrs.filter((x) => x.dimension === "implements")) if (ex.implements !== a.implements) add("error", "V6", "IMPLEMENTS_ATTRIBUTE_MISMATCH", where, "implements", `Cecha „${a.code}” oznacza ${a.implements} przyrząd(y), podano ${ex.implements ?? "brak"}.`);
   // load increment (T4)
-  const kgModel = lmKnown && ["total", "per_implement", "added"].includes(LOAD_MODELS[ex.loadModel].kg);
+  const kgModel = lmKnown && ["total", "per_implement", "added", "plates"].includes(LOAD_MODELS[ex.loadModel].kg);
   if (ex.loadIncrementKg != null && (!(typeof ex.loadIncrementKg === "number" && ex.loadIncrementKg > 0) || !kgModel)) add("error", "T4", "LOAD_INCREMENT_INVALID", where, "loadIncrementKg", "Krok ciężaru musi być liczbą > 0 i dotyczy tylko modeli liczonych w kg.");
   if (kgModel && ex.loadIncrementKg == null) add("warning", "T4", "LOAD_INCREMENT_MISSING", where, "loadIncrementKg", "Brak kroku ciężaru — silnik nie poda konkretnego ciężaru do zwiększenia (D7).");
 

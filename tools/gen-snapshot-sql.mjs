@@ -19,7 +19,8 @@ export function generateSnapshotSql() {
   const models = Object.keys(LOAD_MODELS);
   const pair = models.filter((m) => LOAD_MODELS[m].kg === "per_implement" && LOAD_MODELS[m].implements === 2);
   const single = models.filter((m) => LOAD_MODELS[m].kg === "per_implement" && LOAD_MODELS[m].implements === 1);
-  const kg = models.filter((m) => ["total", "per_implement", "added"].includes(LOAD_MODELS[m].kg));
+  const kg = models.filter((m) => ["total", "per_implement", "added", "plates"].includes(LOAD_MODELS[m].kg));
+  const smith = models.filter((m) => LOAD_MODELS[m].kg === "plates");
   const arrays = SNAPSHOT_FIELDS.filter((f) => f.sql === "text[]").map((f) => f.column);
   const columns = SNAPSHOT_FIELDS.map((f) => {
     let l = `  add column ${f.column} ${f.sql}${f.nullable ? "" : " not null"}`;
@@ -41,11 +42,14 @@ export function generateSnapshotSql() {
     ["ws_entry_rev", "entry_rev >= 1"],
     ["ws_atlas_version", "atlas_version is null or atlas_version >= 1"],
     ["ws_correction_count", "load_correction_count >= 0 and ((load_source = 'user_correction') = (load_correction_count > 0))"],
+    ["ws_starting_resistance", `(load_model in (${list(smith)}) and starting_resistance_status is not null and (starting_resistance_status = 'known') = (starting_resistance_kg is not null) and (starting_resistance_kg is null or (starting_resistance_kg >= 0 and starting_resistance_kg < 'Infinity'::numeric)))\n      or (load_model not in (${list(smith)}) and starting_resistance_status is null and starting_resistance_kg is null)`],
+    ["ws_snapshot_version_fields", "load_snapshot_version >= 3 or starting_resistance_status is null"],
     ["ws_measurement_model", "measurement_type is null\n      or " + Object.entries(MEASUREMENT_TYPES).map(([k, v]) => `(measurement_type = ${q(k)} and load_model in (${list(v.loadModels)}))`).join("\n      or ")],
   ];
   return `-- NEXTREP 1.0 / schema v2 — DRAFT, NOT A MIGRATION. Applied nowhere (no Supabase project).
 -- Load-model snapshot of an exercise in a workout (D13, F2-4, F2-5; version 2: AT3-D18 — muscles
--- frozen, no stats-group columns; hierarchy nodes are computed at read time). Generated from the contract
+-- frozen, no stats-group columns; hierarchy nodes are computed at read time; version 3: B02/S2 — Smith
+-- starting resistance R and its explicit status). Generated from the contract
 -- src/engine/load-snapshot.js (SNAPSHOT_FIELDS) by tools/gen-snapshot-sql.mjs; tests check that
 -- every column and constraint matches the contract and that the database and validateLoadSnapshot()
 -- accept and reject exactly the same rows. Constraint names = JS rule codes.

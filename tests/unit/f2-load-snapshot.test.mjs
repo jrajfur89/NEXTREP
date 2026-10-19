@@ -20,7 +20,7 @@ describe("building and validating a snapshot", () => {
     assert.equal(s.source, "atlas");
     assert.equal(s.confidence, "verified");
     assert.deepEqual([s.loadModel, s.implements, s.laterality, s.repsCounting], ["dumbbell_pair", 2, "bilateral", "total"]);
-    assert.equal(s.snapshotVersion, 2);
+    assert.equal(s.snapshotVersion, 3); // v3 since B02/S2 (Smith R columns); the v2 rules stay
     assert.deepEqual([s.primaryMuscles, s.secondaryMuscles], [byId.get("test_press_db_incline").primaryMuscles, byId.get("test_press_db_incline").secondaryMuscles]);
     assert.ok(!("primaryGroups" in s) && !("secondaryGroups" in s));
     assert.deepEqual([s.atlasVersion, s.entryRev, s.familyId, s.weightUnit, s.volumeFormulaVersion, s.correctionCount], [1, 1, "test_family_press", "kg", 1, 0]);

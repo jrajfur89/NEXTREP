@@ -100,7 +100,7 @@ describe("B02-D21 — snapshot (5–8, 18)", () => {
     assert.equal(plates.loadModel, "plate_loaded");
     for (const s of [stack, plates]) {
       assert.deepEqual(validateLoadSnapshot(s), []);
-      assert.deepEqual([s.snapshotVersion, s.volumeFormulaVersion, s.entryRev, s.source, s.confidence, s.implements], [2, 1, 1, "atlas", "verified", null]);
+      assert.deepEqual([s.snapshotVersion, s.volumeFormulaVersion, s.entryRev, s.source, s.confidence, s.implements], [3, 1, 1, "atlas", "verified", null]);
       assert.deepEqual(rowToSnapshot(snapshotToRow(s)), s, "same columns, lossless");
     }
   });

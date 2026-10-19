@@ -267,6 +267,11 @@ starej mapy, a stara historia mogłaby zostać odczytana jako historia ćwiczeni
    partii jest od razu widoczna.
 Test odbioru: trening `hanging_knee_raise` w nowej przestrzeni daje węzły z atlasu (T13).
 
+**Snapshot v3 (B02/S2, B02-D25 A).** Nowe snapshoty mają `snapshotVersion` 3 i dwa pola maszyny Smitha:
+`startingResistanceKg` (R, kg, null = nieznane) oraz `startingResistanceStatus` (`known` / `unknown`, null dla
+innych modeli); reguły `ws_starting_resistance` i `ws_snapshot_version_fields`. Wszystkie zasady v2 powyżej
+obowiązują bez zmian; snapshot v2 (bez kolumn R, nigdy Smith) pozostaje poprawny do odczytu bez migracji.
+
 ### 6.1 Konfigurowalny model obciążenia maszyn (B02-D21)
 
 - Jedno ćwiczenie katalogowe może mieć dwie konstrukcje maszyny: ze stosem (`machine_stack`) i ładowaną
@@ -283,7 +288,10 @@ Test odbioru: trening `hanging_knee_raise` w nowej przestrzeni daje węzły z at
 - Porównania kg i rekordy: rozdzielone kluczem `comparabilityKey` = `exerciseId + loadModel + entryRev`
   (podstawa PE-B / PE-E). Zmiana modelu nie jest prezentowana jako spadek ani wzrost siły. Ten sam klucz
   nie gwarantuje identyczności dwóch fizycznych maszyn.
-- Maszyna Smitha — osobna konwencja (D-3 = S2): `docs/atlas/B02-D21-SMITH-S2.md`.
+- Maszyna Smitha (B02-D25 A, zastępuje D-3): model `smith_plates_only` — wpis samych talerzy P, opcjonalny
+  opór początkowy R jako ustawienie karty użytkownika, kopiowany do snapshotu v3; obciążenie P + R lub P,
+  objętość w głównej objętości treningu, status `plates_only` i komunikat przy braku R. Kontrakt:
+  `docs/atlas/B02-D21-SMITH-S2.md`.
 
 ## 7. Cardio w NEXTREP 1.0 (AT3-D19)
 

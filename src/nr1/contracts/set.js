@@ -6,6 +6,7 @@
 //
 //   kg meaning total / per_implement / added  → loadKg (kg per implement for dumbbells, added kg
 //                                                for weighted bodyweight) + reps
+//   plates (smith_plates_only)                 → loadKg = mass of the plates only (P) + reps
 //   assist (assisted)                          → assistKg + reps
 //   none + reps (bodyweight), resistance (band) → reps only (band level: later stage)
 //   seconds (time), cardio                     → durationSec only, no RIR
@@ -24,7 +25,7 @@ export function allowedSetFields(loadModel) {
   if (!m) return null;
   if (m.unit === "seconds" || m.unit === "cardio") return ["durationSec"];
   if (m.unit === "sets") return [];
-  if (["total", "per_implement", "added"].includes(m.kg)) return ["reps", "loadKg", "rir"];
+  if (["total", "per_implement", "added", "plates"].includes(m.kg)) return ["reps", "loadKg", "rir"]; // plates: loadKg = P (B02/S2)
   if (m.kg === "assist") return ["reps", "assistKg", "rir"];
   return ["reps", "rir"]; // bodyweight, band
 }

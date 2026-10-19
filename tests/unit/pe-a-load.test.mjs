@@ -355,7 +355,7 @@ describe("PE-A safety: no screen uses load.js before A5", () => {
   test("every load model declares its kg meaning and unit; formula version is 1", () => {
     assert.equal(VOLUME_FORMULA_VERSION, 1);
     for (const [k, v] of Object.entries(LOAD_MODELS)) {
-      assert.ok(["total", "per_implement", "added", "assist", "resistance", "none"].includes(v.kg), k);
+      assert.ok(["total", "per_implement", "added", "plates", "assist", "resistance", "none"].includes(v.kg), k);
       assert.ok(["kg", "reps", "seconds", "cardio", "sets"].includes(v.unit), k);
     }
   });

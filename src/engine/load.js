@@ -23,6 +23,14 @@
 // valid `durationSec` or `distanceM` (cardio.js, P2); exerciseTotals adds time, distance and the
 // derived pace; sessionTotals keeps cardio OUT of its sets, reps, seconds and kg and reports it in a
 // separate `cardio` block. Every other model is unchanged.
+//
+// B02/S2 (B02-D25 A): the model "smith_plates_only" (Smith machine). The typed number P is the mass of
+// the PLATES only. The starting resistance R of the machine is an optional per-user setting of the
+// exercise card (exercise-settings.js), frozen in the workout snapshot (load-snapshot.js v3) and passed
+// here as `model.startingResistanceKg` (null = R unknown; 0 = a stated zero). Computed load
+// `effectiveLoadKg` = P + R when R is known, P when it is not; volume = effectiveLoadKg × reps in both
+// cases and counts in the main volume (decision B). A result with R unknown has volumeStatus
+// "plates_only" (never a plain "exact") and sessionTotals reports a notice for it. No e1RM here.
 import { parseRirBounds } from "./rir.js";
 import { cardioSetValues, paceSecPerKm } from "./cardio.js";
 
@@ -33,6 +41,7 @@ export const VOLUME_FORMULA_VERSION = 1;
 //   kg: "total"         — the whole load (bar with plates, stack, plates on a machine)
 //       "per_implement" — one dumbbell / kettlebell; multiplied by `implements`
 //       "added"         — only the load added to body mass (belt, vest)
+//       "plates"        — only the plates of a Smith machine; + the starting resistance R when known
 //       "assist"        — assistance (counterweight, band): never a load
 //       "resistance"    — band resistance: not comparable with kg
 //       "none"          — no kg at all
@@ -45,6 +54,7 @@ export const LOAD_MODELS = {
   machine_stack: { kg: "total", unit: "kg", implements: 1 },
   plate_loaded: { kg: "total", unit: "kg", implements: 1 },
   cable: { kg: "total", unit: "kg", implements: 1 },
+  smith_plates_only: { kg: "plates", unit: "kg", implements: 1 },
   // a loaded exercise whose equipment is not known (e.g. history of a deleted own exercise)
   external_unknown: { kg: "total", unit: "kg", implements: 1 },
   bodyweight: { kg: "none", unit: "reps", implements: 0 },
@@ -62,6 +72,15 @@ export const LATERALITIES = ["bilateral", "unilateral", "alternating"];
 //   low      — inferred, plausible but not certain (e.g. own dumbbell exercise: one or two?)
 //   unknown  — cannot be determined; no kg volume is given
 export const CONFIDENCE_LEVELS = ["verified", "high", "low", "unknown"];
+// kg meanings that give a classic volume in kg
+export const CLASSIC_KG_MEANINGS = ["total", "per_implement", "added", "plates"];
+
+// B02/S2: the message contract for a performed Smith exercise without its starting resistance. The
+// post-workout report (S6) shows it; the code is stable, the text is the approved meaning.
+export const SMITH_STARTING_RESISTANCE_MISSING = "SMITH_STARTING_RESISTANCE_MISSING";
+export const LOAD_NOTICE_MESSAGES = Object.freeze({
+  [SMITH_STARTING_RESISTANCE_MISSING]: "Dla ćwiczenia na maszynie Smitha liczono same talerze, ponieważ nie uzupełniono oporu początkowego w karcie ćwiczenia.",
+});
 
 const ROLE_COUNTS = { working: true, dropset: true, warmup: false, skipped: false };
 // kg sums are rounded to 1 g so that the order of sets never changes a total (float addition)
@@ -101,6 +120,9 @@ export function normalizeModel(model) {
   const def = LOAD_MODELS[loadModel];
   const implements_ = def.kg === "per_implement" && Number.isInteger(m.implements) && m.implements > 0 ? m.implements : def.implements;
   const inc = parseKg(m.loadIncrementKg);
+  // Smith starting resistance: a finite number ≥ 0 (0 is a stated zero); anything else = unknown
+  const r = m.startingResistanceKg;
+  const startingResistanceKg = def.kg === "plates" && typeof r === "number" && Number.isFinite(r) && r >= 0 ? r : null;
   return {
     loadModel,
     implements: implements_,
@@ -111,12 +133,12 @@ export function normalizeModel(model) {
     confidence,
     unit: def.unit,
     kgMeaning: def.kg,
+    startingResistanceKg,
   };
 }
 // Does this model have a classic volume in kg at all?
 export function hasClassicKg(model) {
-  const k = normalizeModel(model).kgMeaning;
-  return k === "total" || k === "per_implement" || k === "added";
+  return CLASSIC_KG_MEANINGS.includes(normalizeModel(model).kgMeaning);
 }
 
 // ---- sets ---------------------------------------------------------------------------------------
@@ -169,6 +191,10 @@ export function normalizeLoad(set, model) {
   } else if (m.kgMeaning === "per_implement") {
     kgPerImplement = typed;
     externalKg = (typed ?? 0) * m.implements;
+  } else if (m.kgMeaning === "plates") {
+    // P typed; R from the model (snapshot). No typed P → no load, like every other model.
+    kgPerImplement = typed;
+    externalKg = typed == null ? 0 : roundKg(typed + (m.startingResistanceKg ?? 0));
   }
   const assistKg = m.kgMeaning === "assist" ? parseKg(s.assistKg !== undefined && s.assistKg !== null && s.assistKg !== "" ? s.assistKg : s.weight) : null;
   const bandResistance = m.kgMeaning === "resistance" ? typed : null;
@@ -196,6 +222,11 @@ export function normalizeLoad(set, model) {
     seconds,
     kgPerImplement,
     externalKg,
+    // computed load of the set (= externalKg); for Smith P + R, or P when R is unknown
+    effectiveLoadKg: externalKg,
+    // Smith only (null for every other model): what was typed (P) and the R used
+    platesKg: m.kgMeaning === "plates" ? typed : null,
+    startingResistanceKg: m.kgMeaning === "plates" ? m.startingResistanceKg : null,
     volumeKg,
     assistKg,
     bandResistance,
@@ -214,12 +245,23 @@ export function setVolumeKg(set, model) {
 
 // ---- exercise and session ----------------------------------------------------------------------
 // volumeStatus: "exact" | "estimated" (model confidence low) | "unavailable" (model unknown)
+//               | "plates_only" (Smith with the starting resistance unknown: plates only, B02-D25 A)
 //               | "none" (the model has no classic kg: bodyweight, assisted, band, time, cardio, sets)
 function volumeStatusOf(m) {
   if (!hasClassicKg(m)) return "none";
   if (m.confidence === "unknown") return "unavailable";
   if (m.confidence === "low") return "estimated";
+  if (m.kgMeaning === "plates" && m.startingResistanceKg == null) return "plates_only";
   return "exact";
+}
+// Status of a sum of several results: worst first (shared by sessionTotals and muscle-stats).
+export function combineVolumeStatuses(statuses) {
+  const s = statuses instanceof Set ? statuses : new Set(statuses);
+  if (s.has("unavailable")) return "partial";
+  if (s.has("estimated")) return "estimated";
+  if (s.has("plates_only")) return "plates_only";
+  if (s.has("exact")) return "exact";
+  return "none";
 }
 export function exerciseTotals(sets, model) {
   const m = normalizeModel(model);
@@ -241,6 +283,11 @@ export function exerciseTotals(sets, model) {
     topExternalKg: null,
     minAssistKg: null,
     rirMissingSets: 0,
+    // Smith only: the basis of the computed load and whether R is missing (null for other models)
+    loadBasis: m.kgMeaning === "plates" ? (m.startingResistanceKg == null ? "plates_only" : "plates_plus_starting_resistance") : null,
+    startingResistanceKg: m.kgMeaning === "plates" ? m.startingResistanceKg : null,
+    startingResistanceMissing: m.kgMeaning === "plates" ? m.startingResistanceKg == null : false,
+    topPlatesKg: null,
     // cardio only (model "cardio"): time, distance and pace from the sets that have both values
     durationSec: 0,
     distanceM: 0,
@@ -271,6 +318,7 @@ export function exerciseTotals(sets, model) {
       }
     }
     if (n.progress && n.isLoaded) t.topExternalKg = Math.max(t.topExternalKg ?? 0, n.externalKg);
+    if (n.progress && n.platesKg != null) t.topPlatesKg = Math.max(t.topPlatesKg ?? 0, n.platesKg);
     if (n.progress && n.assistKg != null) t.minAssistKg = t.minAssistKg == null ? n.assistKg : Math.min(t.minAssistKg, n.assistKg);
   }
   if (t.volumeStatus === "unavailable") t.volumeKg = null;
@@ -281,14 +329,16 @@ export function exerciseTotals(sets, model) {
 // Session totals = the sum of exerciseTotals over its exercises. `resolveModel(sessionExercise)`
 // returns the model of one entry of session.exercises ({ exerciseId, type, sets, … }).
 // volumeStatus: "exact" | "estimated" | "partial" (some exercise's volume unavailable — volumeKg is
-// the sum of the others) | "none" (no exercise with classic kg).
+// the sum of the others) | "plates_only" (a Smith exercise without R, B02-D25 A) | "none" (no
+// exercise with classic kg). `notices`: [{ code, exerciseId, message }] — today only
+// SMITH_STARTING_RESISTANCE_MISSING, for a PERFORMED Smith exercise whose snapshot has no R.
 export function sessionTotals(session, resolveModel) {
   const list = session && Array.isArray(session.exercises) ? session.exercises : [];
   const exercises = list.map((ex) => {
     const model = normalizeModel(typeof resolveModel === "function" ? resolveModel(ex) : null);
     return { exerciseId: ex ? ex.exerciseId : null, model, totals: exerciseTotals(ex ? ex.sets : [], model) };
   });
-  const out = { workingSets: 0, reps: 0, repsAllSides: 0, seconds: 0, volumeKg: 0, volumeStatus: "none", exercises };
+  const out = { workingSets: 0, reps: 0, repsAllSides: 0, seconds: 0, volumeKg: 0, volumeStatus: "none", exercises, notices: [] };
   // cardio (AT3-D19): its own block, never mixed into the sums above. Distance is kept per
   // exercise (activity) only — no distance total across different activities (O-32).
   const cardio = { activities: 0, sets: 0, durationSec: 0, byExercise: {} };
@@ -317,10 +367,13 @@ export function sessionTotals(session, resolveModel) {
     out.seconds += t.seconds;
     if (t.volumeStatus !== "none" && t.workingSets > 0) statuses.add(t.volumeStatus);
     if (t.volumeKg != null) out.volumeKg = roundKg(out.volumeKg + t.volumeKg);
+    if (t.startingResistanceMissing && t.workingSets > 0) {
+      const raw = list[exercises.indexOf(e)] || {};
+      const exerciseId = e.exerciseId ?? raw.catalogExerciseId ?? raw.privateExerciseId ?? null;
+      out.notices.push({ code: SMITH_STARTING_RESISTANCE_MISSING, exerciseId, message: LOAD_NOTICE_MESSAGES[SMITH_STARTING_RESISTANCE_MISSING] });
+    }
   }
-  if (statuses.has("unavailable")) out.volumeStatus = "partial";
-  else if (statuses.has("estimated")) out.volumeStatus = "estimated";
-  else if (statuses.has("exact")) out.volumeStatus = "exact";
+  out.volumeStatus = combineVolumeStatuses(statuses);
   out.cardio = cardio;
   return out;
 }

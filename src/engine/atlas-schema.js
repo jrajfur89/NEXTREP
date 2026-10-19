@@ -26,7 +26,7 @@ export const PER_IMPLEMENT_MODELS = Object.keys(LOAD_MODELS).filter((m) => LOAD_
 // Measurement types — TECHNICAL PROPOSAL (K2): labels and allowed load models, to be approved with
 // the first batch. A measurement type says what the person types; the load model says what it means.
 export const MEASUREMENT_TYPES = {
-  weight_reps: { labelPl: "Ciężar i powtórzenia", loadModels: ["barbell_total", "dumbbell_pair", "dumbbell_single", "kettlebell_pair", "kettlebell_single", "machine_stack", "plate_loaded", "cable"] },
+  weight_reps: { labelPl: "Ciężar i powtórzenia", loadModels: ["barbell_total", "dumbbell_pair", "dumbbell_single", "kettlebell_pair", "kettlebell_single", "machine_stack", "plate_loaded", "cable", "smith_plates_only"] },
   bodyweight_reps: { labelPl: "Masa ciała i powtórzenia", loadModels: ["bodyweight", "bodyweight_plus", "assisted"] },
   band_reps: { labelPl: "Guma i powtórzenia", loadModels: ["band"] },
   time: { labelPl: "Czas", loadModels: ["time"] },

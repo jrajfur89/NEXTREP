@@ -346,7 +346,7 @@ describe("AT3.2b — T16 and snapshot v2 (AT3-D18, B2)", () => {
   test("snapshot v2: version 2, muscles frozen at save, no stats groups", () => {
     const ex = clone(byId.get("row_barbell_bent_over_pronated"));
     const s = buildLoadSnapshot({ exercise: ex, atlasVersion: 1, now: NOW });
-    assert.equal(s.snapshotVersion, 2);
+    assert.equal(s.snapshotVersion, 3); // v3 since B02/S2 (Smith R columns); the v2 rules stay
     assert.ok(!("primaryGroups" in s) && !("secondaryGroups" in s));
     ex.primaryMuscles.push("biceps_brachii");
     ex.secondaryMuscles.length = 0;

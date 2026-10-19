@@ -17,21 +17,32 @@
 // atlas and private alike (ws_primary_muscle, B2); a cardio snapshot may have none (O-30).
 // No migration: no version-1 snapshot exists in any database (the SQL draft is applied nowhere, S1
 // has no atlas workouts); a version-1 object is simply invalid (→ the F2-4 fault path).
+//
+// Version 3 (B02/S2, B02-D25 A): two columns for the Smith machine — `startingResistanceKg` (R, kg,
+// null = unknown) and `startingResistanceStatus` ("known" | "unknown"; null for every other model).
+// R is copied from the person's exercise setting (exercise-settings.js) when the exercise enters the
+// workout, so a later edit of the card never changes an old workout. New snapshots are version 3.
+// Version 2 stays readable without migration: a version-2 snapshot simply has no R columns (both
+// null) and cannot be a Smith snapshot (ws_snapshot_version_fields, ws_starting_resistance).
 import { normalizeModel, LOAD_MODELS, VOLUME_FORMULA_VERSION } from "./load.js";
 import { MEASUREMENT_TYPES, LATERALITIES, REPS_COUNTINGS } from "./atlas-schema.js";
 import { validateLoadModelChoice } from "./load-model-options.js";
 
-export const LOAD_SNAPSHOT_VERSION = 2;
+export const LOAD_SNAPSHOT_VERSION = 3;
+// versions this contract reads (2 = before B02/S2, same rows without the Smith columns)
+export const LOAD_SNAPSHOT_VERSIONS = [2, 3];
+export const STARTING_RESISTANCE_STATUSES = ["known", "unknown"];
+const SMITH_MODELS = Object.keys(LOAD_MODELS).filter((m) => LOAD_MODELS[m].kg === "plates");
 export const SNAPSHOT_SOURCES = ["atlas", "private", "user_correction"];
 export const SNAPSHOT_CONFIDENCES = ["verified", "high", "low", "unknown"];
 export const SNAPSHOT_LOAD_MODELS = Object.keys(LOAD_MODELS); // incl. external_unknown (private "nie wiem")
 const PAIR = Object.keys(LOAD_MODELS).filter((m) => LOAD_MODELS[m].kg === "per_implement" && LOAD_MODELS[m].implements === 2);
 const SINGLE = Object.keys(LOAD_MODELS).filter((m) => LOAD_MODELS[m].kg === "per_implement" && LOAD_MODELS[m].implements === 1);
-const KG_MODELS = Object.keys(LOAD_MODELS).filter((m) => ["total", "per_implement", "added"].includes(LOAD_MODELS[m].kg));
+const KG_MODELS = Object.keys(LOAD_MODELS).filter((m) => ["total", "per_implement", "added", "plates"].includes(LOAD_MODELS[m].kg));
 
 // name (client / engine) → column (v2 workout_exercises), SQL type, nullability, allowed values
 export const SNAPSHOT_FIELDS = [
-  { name: "snapshotVersion", column: "load_snapshot_version", sql: "smallint", nullable: false, values: [LOAD_SNAPSHOT_VERSION] },
+  { name: "snapshotVersion", column: "load_snapshot_version", sql: "smallint", nullable: false, values: LOAD_SNAPSHOT_VERSIONS },
   { name: "source", column: "load_source", sql: "text", nullable: false, values: SNAPSHOT_SOURCES },
   { name: "catalogExerciseId", column: "catalog_exercise_id", sql: "text", nullable: true },
   { name: "privateExerciseId", column: "private_exercise_id", sql: "uuid", nullable: true },
@@ -51,6 +62,9 @@ export const SNAPSHOT_FIELDS = [
   { name: "volumeFormulaVersion", column: "volume_formula_version", sql: "smallint", nullable: false, values: [VOLUME_FORMULA_VERSION] },
   { name: "capturedAt", column: "load_captured_at", sql: "timestamptz", nullable: false },
   { name: "correctionCount", column: "load_correction_count", sql: "integer", nullable: false },
+  // v3 (B02/S2): Smith starting resistance R, frozen at save
+  { name: "startingResistanceKg", column: "starting_resistance_kg", sql: "numeric", nullable: true },
+  { name: "startingResistanceStatus", column: "starting_resistance_status", sql: "text", nullable: true, values: STARTING_RESISTANCE_STATUSES },
 ];
 
 const isStrList = (v) => Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0);
@@ -95,6 +109,13 @@ export function validateLoadSnapshot(s) {
   if (s.atlasVersion != null && s.atlasVersion < 1) e("ws_atlas_version", "atlasVersion");
   if (s.correctionCount < 0 || (s.source === "user_correction") !== (s.correctionCount > 0)) e("ws_correction_count", "correctionCount");
   if (s.measurementType != null && !MEASUREMENT_TYPES[s.measurementType].loadModels.includes(s.loadModel)) e("ws_measurement_model", "measurementType");
+  // B02/S2: Smith → explicit status, "known" ⇔ R present, R ≥ 0; any other model → no R columns
+  const rKg = s.startingResistanceKg ?? null;
+  const rSt = s.startingResistanceStatus ?? null;
+  const smithOk = SMITH_MODELS.includes(s.loadModel) && rSt != null && (rSt === "known") === (rKg != null) && (rKg == null || rKg >= 0);
+  const otherOk = !SMITH_MODELS.includes(s.loadModel) && rSt == null && rKg == null;
+  if (!smithOk && !otherOk) e("ws_starting_resistance", "startingResistanceStatus");
+  if (s.snapshotVersion < 3 && rSt != null) e("ws_snapshot_version_fields", "snapshotVersion");
   return errors;
 }
 
@@ -107,9 +128,12 @@ export function validateLoadSnapshot(s) {
 // for an atlas exercise whose default is the stack. It must be one of loadModelOptions(exercise,
 // equipment) — `equipment` is the atlas equipment dictionary (or the atlas); without it only the
 // default is accepted. A private exercise has no choice: only its own model. The chosen model is
-// stored in the existing `loadModel` field (contract, versions and SQL unchanged). Without the
-// parameter nothing changes.
-export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = null, now = new Date().toISOString(), loadModel = undefined, equipment = null }) {
+// stored in the existing `loadModel` field. Without the parameter nothing changes.
+//
+// B02/S2: `startingResistanceKg` (optional) is the person's current setting R of a Smith exercise
+// (exerciseSettings.startingResistanceKg): a number ≥ 0 → status "known"; null / absent → "unknown"
+// (never 0). For any other model it must be absent or null (STARTING_RESISTANCE_NOT_APPLICABLE).
+export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = null, now = new Date().toISOString(), loadModel = undefined, equipment = null, startingResistanceKg = null }) {
   const src = exercise || privateExercise;
   if (!src) throw new Error("buildLoadSnapshot: no exercise");
   const isAtlas = Boolean(exercise);
@@ -123,6 +147,10 @@ export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = nu
       throw new Error(`buildLoadSnapshot: LOAD_MODEL_NOT_ALLOWED (${loadModel}; a private exercise has only its own model ${model})`);
     }
   }
+  const isSmith = SMITH_MODELS.includes(model);
+  const r = startingResistanceKg ?? null;
+  if (r != null && !isSmith) throw new Error(`buildLoadSnapshot: STARTING_RESISTANCE_NOT_APPLICABLE (model ${model})`);
+  if (r != null && !(typeof r === "number" && Number.isFinite(r) && r >= 0)) throw new Error("buildLoadSnapshot: STARTING_RESISTANCE_INVALID");
   const snapshot = {
     snapshotVersion: LOAD_SNAPSHOT_VERSION,
     source: isAtlas ? "atlas" : "private",
@@ -144,6 +172,8 @@ export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = nu
     volumeFormulaVersion: VOLUME_FORMULA_VERSION,
     capturedAt: now,
     correctionCount: 0,
+    startingResistanceKg: isSmith ? r : null,
+    startingResistanceStatus: isSmith ? (r == null ? "unknown" : "known") : null,
   };
   const errors = validateLoadSnapshot(snapshot);
   if (errors.length) throw new Error(`buildLoadSnapshot: invalid snapshot (${errors.map((x) => x.code + ":" + x.field).join(", ")})`);
@@ -152,7 +182,8 @@ export function buildLoadSnapshot({ exercise, privateExercise, atlasVersion = nu
 
 // Engine model from a snapshot (for normalizeLoad / exerciseTotals).
 export function modelFromSnapshot(s) {
-  return normalizeModel({ loadModel: s.loadModel, implements: s.implements, laterality: s.laterality, repsCounting: s.repsCounting, loadIncrementKg: s.loadIncrementKg, confidence: s.confidence, source: `snapshot:${s.source}` });
+  const r = s.startingResistanceStatus === "known" ? s.startingResistanceKg : null;
+  return normalizeModel({ loadModel: s.loadModel, implements: s.implements, laterality: s.laterality, repsCounting: s.repsCounting, loadIncrementKg: s.loadIncrementKg, confidence: s.confidence, startingResistanceKg: r, source: `snapshot:${s.source}` });
 }
 
 // Model of an exercise IN A WORKOUT, in the approved order: (1) its valid snapshot; (2) fault — no
@@ -185,6 +216,12 @@ export function correctLoadSnapshot(current, changes, { reason, now = new Date()
   // the person states the model explicitly → verified, unless they still do not know it
   next.confidence = next.loadModel === "external_unknown" ? "unknown" : "verified";
   if (next.loadIncrementKg != null && !KG_MODELS.includes(next.loadModel)) next.loadIncrementKg = null;
+  // the corrected snapshot follows the current contract; R is kept only while the model stays Smith,
+  // becomes "unknown" when the model is corrected TO Smith (never guessed), and is dropped otherwise
+  next.snapshotVersion = LOAD_SNAPSHOT_VERSION;
+  if (SMITH_MODELS.includes(next.loadModel)) {
+    if (!SMITH_MODELS.includes(current.loadModel)) { next.startingResistanceKg = null; next.startingResistanceStatus = "unknown"; }
+  } else { next.startingResistanceKg = null; next.startingResistanceStatus = null; }
   const errors = validateLoadSnapshot(next);
   if (errors.length) throw new Error(`correctLoadSnapshot: invalid result (${errors.map((x) => x.code + ":" + x.field).join(", ")})`);
   return { snapshot: next, correction: { previousSnapshot: current, newSnapshot: next, reason: reason.trim(), correctedAt: now } };

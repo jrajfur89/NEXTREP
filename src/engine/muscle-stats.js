@@ -17,7 +17,7 @@
 //    workout.cardio (sessionTotals, AT3.2c) and cardio-stats.js.
 // Names in the UI (AT3-D17): „Objętość ćwiczeń angażujących partię” (primary) and „… jako mięśnie
 // pomocnicze” (secondary) — not a physiological measure of muscle work.
-import { exerciseTotals, sessionTotals } from "./load.js";
+import { exerciseTotals, sessionTotals, combineVolumeStatuses } from "./load.js";
 import { validateLoadSnapshot, modelFromSnapshot, resolveWorkoutExerciseModel } from "./load-snapshot.js";
 
 const LEVELS = ["categories", "subregions", "muscles"];
@@ -27,8 +27,7 @@ function emptyWork() {
   return { sets: 0, reps: 0, repsAllSides: 0, seconds: 0, volumeKg: 0, volumeStatus: "none", _statuses: new Set(), _seen: new Set() };
 }
 function finish(work) {
-  const s = work._statuses;
-  const volumeStatus = s.has("unavailable") ? "partial" : s.has("estimated") ? "estimated" : s.has("exact") ? "exact" : "none";
+  const volumeStatus = combineVolumeStatuses(work._statuses);
   return { sets: work.sets, reps: work.reps, repsAllSides: work.repsAllSides, seconds: work.seconds, volumeKg: work.volumeKg, volumeStatus };
 }
 

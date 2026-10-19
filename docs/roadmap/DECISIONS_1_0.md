@@ -1,6 +1,10 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 9 · 18.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+Wersja 10 · 19.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+
+Zmiany w wersji 10: B02-D25 A — maszyna Smitha (`smith_plates_only`, opcjonalny opór początkowy R jako
+ustawienie karty, snapshot v3); etap B02/S2 wdrożony w silniku (sekcja 1g); D-3 w sekcji 1f zastąpiona;
+otwarte O-35 (porównania Smitha w PE-B/PE-E) i O-36 (e1RM Smitha).
 
 Zmiany w wersji 9: AT3-D12 A — pełna karta ćwiczenia (`instructionsPl`, `commonMistakesPl`, `safetyPl`);
 etap B02/S1 wdrożony w schemacie i walidatorze (sekcja 1g), obowiązek treści dla rekordów systemowych
@@ -199,7 +203,7 @@ atlasu §6.1; notatka Smitha `docs/atlas/B02-D21-SMITH-S2.md`.
 | B02-D21 | **Konfigurowalny model obciążenia maszyn.** Jedno ćwiczenie katalogowe (np. „Wyciskanie na maszynie”) może być wykonywane na maszynie ze stosem (`machine_stack`) albo ładowanej talerzami (`plate_loaded`); wybór to konfiguracja wykonania (pozycja planu, trening bez planu), utrwalana w snapshocie wykonania. Nie tworzymy osobnych ćwiczeń tylko z powodu konstrukcji maszyny; nie scalamy ćwiczeń różniących się mechaniką, kątem lub wykonaniem. Wpis: stos — wartość ze stosu; talerze — suma dołożonych talerzy; bez doliczania konstrukcji. Wzory tonażu bez zmian (oba modele: ciężar całkowity) | zatwierdzona |
 | B02-D21 / D-1 | Dozwolone modele wynikają z istniejącego słownika sprzętu (wariant A): wybór tylko gdy domyślny model ćwiczenia należy do {`machine_stack`, `plate_loaded`} i jego jedyny sprzęt obciążający (V5) jawnie dopuszcza oba; w innych przypadkach wyłącznie model z atlasu. Bez pola `loadModelOptions` w atlasie, bez wnioskowania z nazw | zatwierdzona, wdrożona w silniku |
 | B02-D21 / D-2 | **Kontrolowany wyjątek od K3 / V3 / I6:** wybór spośród jawnie dopuszczonych modeli maszynowych danego ćwiczenia nie jest nowym wariantem ćwiczenia. Wyjątek nie zezwala na zmianę interpretacji zapisanej historii (snapshot zamraża model wykonania) ani na łączenie różnych ćwiczeń. Porównania kg rozdzielone kluczem `exerciseId + loadModel + entryRev` (D13); zmiana modelu nie jest spadkiem ani wzrostem siły | zatwierdzona |
-| B02-D21 / D-3 | Maszyna Smitha: osobna konwencja (S2) — znany opór początkowy: wpis = opór początkowy + talerze (bez domyślnych 20 kg); nieznany: dopuszczalny wpis samych talerzy, jednoznacznie oznaczony i nieporównywalny bezpośrednio z pełnym ciężarem. Obowiązkowa informacja na karcie: „Szukaj naklejki informacyjnej na maszynie.” Sposób zapisu — po osobnej zgodzie (notatka projektowa) | zatwierdzona produktowo; implementacja niezaczęta |
+| B02-D21 / D-3 | ~~Maszyna Smitha: osobna konwencja (S2) — znany opór początkowy: wpis = opór początkowy + talerze (bez domyślnych 20 kg); nieznany: dopuszczalny wpis samych talerzy, jednoznacznie oznaczony i nieporównywalny bezpośrednio z pełnym ciężarem.~~ Obowiązkowa informacja na karcie: „Szukaj naklejki informacyjnej na maszynie.” | **zastąpiona przez B02-D25 A** (sekcja 1g): użytkownik zawsze wpisuje same talerze P; opór początkowy R to opcjonalne ustawienie karty; wcześniejsza propozycja zapisu przez `barbell_total` / `plate_loaded` wycofana |
 
 **Uwaga do snapshotu.** Wybrany model jest zapisywany w istniejącym polu `loadModel`; `source: atlas` i
 `confidence: verified` pozostają, bo opisują pochodzenie definicji ćwiczenia (atlas), a wybrany model jest
@@ -207,7 +211,7 @@ jednym z modeli dopuszczonych danymi atlasu. Snapshot nie zapisuje jawnie, że m
 (da się to odtworzyć: model ≠ domyślny i należy do opcji). Osobne pole pochodzenia wyboru wymagałoby
 zatwierdzonej zmiany kontraktu i szkicu SQL — nie wprowadzono.
 
-## 1g. AT3-D12 A — pełna karta ćwiczenia; etapy B02/S1 i S4 (18.10.2026)
+## 1g. AT3-D12 A i B02-D25 A — pełna karta ćwiczenia, maszyna Smitha; etapy B02/S1, S2 i S4 (18–19.10.2026)
 
 Źródło: decyzja właściciela AT3-D12 A (rejestr B02-STD-12), audyt B02-STD-13 i polecenie B02/S1
 (18.10.2026). Implementacja S1: `src/engine/atlas-schema.js` (`CARD_CONTENT_FIELDS`, `CARD_CONTENT_LIMITS`,
@@ -220,9 +224,12 @@ zatwierdzonej zmiany kontraktu i szkicu SQL — nie wprowadzono.
 | B02/S1 | Zamknięty schemat zna trzy pola. Pole obecne musi mieć 1–10 punktów; każdy punkt to tekst niepusty po obcięciu spacji, najwyżej 300 znaków (po obcięciu), unikalny po obcięciu. Rekord systemowy: błąd T5 (`CARD_CONTENT_TYPE`, `_EMPTY`, `_TOO_MANY`, `CARD_ITEM_TYPE`, `_EMPTY`, `_TOO_LONG`, `_DUPLICATE`); pusta lista `[]` jest błędem — jedyną dozwoloną formą braku treści jest brak pola. Rekord prywatny: pola opcjonalne, te same problemy jako ostrzeżenie T5, wczytanie starszych danych nigdy nie jest blokowane; do wyświetlania `readCardContent` (kopia poprawnych punktów, bez mutacji rekordu). Walidator nie zmienia rekordów | wdrożona (S1) |
 | B02/S4 | Obowiązek obecności trzech pól w każdym aktywnym rekordzie systemowym włączany razem z treścią 15 kart Batch 01 dostarczoną przez Standaryzację (jeden etap, żeby walidacja atlasu w CI nie została przerwana). Przed S4: szablon importu XLSX (`tools/atlas-xlsx.mjs`) musi przenosić trzy pola — dziś ich nie zna | zaplanowana; nie wdrożona |
 
+| B02-D25 A | **Maszyna Smitha.** Trzy identyfikatory Smitha bez zmian, model `smith_plates_only`: wpisywana jest zawsze masa talerzy **P**. Opcjonalny opór początkowy **R** [kg] to ustawienie karty ćwiczenia danego użytkownika (nie pole wspólnego atlasu); `0` = świadomie podane zero, brak = R nieznane (nigdy 0). R znane: obciążenie P + R, objętość (P + R) × n; R nieznane: obciążenie P, objętość P × n. Obie objętości w głównej objętości treningu (wybór B); wynik bez R ma status `plates_only`, nie `exact`. Snapshot zapisuje R (wartość albo null) i jawny status `known` / `unknown`; edycja karty nie zmienia historii; zmiana maszyny — użytkownik aktualizuje R i odpowiada za porównania; bez katalogu egzemplarzy maszyn. Brak R w wykonanym ćwiczeniu → komunikat raportu `SMITH_STARTING_RESISTANCE_MISSING`. Nie łączyć z `barbell_total`; bez automatycznej konwersji; bez e1RM w S2 | zatwierdzona |
+| B02/S2 | Silnik: `LOAD_MODELS.smith_plates_only` (`kg: "plates"`), `effectiveLoadKg`, `platesKg`, `loadBasis`, `topPlatesKg`, status `plates_only`, `combineVolumeStatuses`, `sessionTotals.notices`; ustawienie R: `src/engine/exercise-settings.js` (parser, walidacja, magazyn w pamięci — trwały adapter TODO S6); snapshot v3 (`startingResistanceKg`, `startingResistanceStatus`, reguły `ws_starting_resistance`, `ws_snapshot_version_fields`; wersja 2 czytelna bez migracji); szkic SQL wygenerowany ponownie; kontrakt serii nr1 (`loadKg` = P). Szczegóły: `docs/atlas/B02-D21-SMITH-S2.md` | wdrożona (S2); UI karty i raportu — S6 |
+
 Kolejność dalszych etapów B02: S2 (`smith_plates_only`) → S3 (model maszyny w pozycji planu) → S4 → S5
 (import 40 rekordów B02 po zatwierdzeniu) → S6 (UI). Notatka `docs/atlas/B02-D21-SMITH-S2.md` dotyczy
-wcześniejszego wariantu zapisu Smitha i zostanie zaktualizowana w S2 (B02-D25 A).
+wcześniejszego wariantu zapisu Smitha; zaktualizowana w S2 (B02-D25 A) z zachowaniem śladu zastąpienia.
 
 ## 2. Decyzje otwarte
 
@@ -262,6 +269,8 @@ wcześniejszego wariantu zapisu Smitha i zostanie zaktualizowana w S2 (B02-D25 A
 | ~~O-32~~ | Suma dystansu różnych aktywności | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
 | ~~O-33~~ | Podpartie w „Cardio i kondycja” | — | — | **rozstrzygnięte 17.10** (sekcja 1e) |
 | O-34 | Niespójność rejestru: handoff B02-D21 przywołuje decyzję **AT3-D20** („obowiązkowe pełne karty ćwiczeń”, w tym karta maszyny Smitha), której nie ma w rejestrze (ostatnia: AT3-D19). Potrzebna treść decyzji od właściciela, aby wpisać ją bez zgadywania | dokumentacja | karta Smitha (D-3), AT3.6b | rejestr nie został uzupełniony samodzielnie |
+| O-35 | Porównania Smitha w PE-B / PE-E: zatwierdzony klucz `exerciseId + loadModel + entryRev` jest wspólny dla sesji z R i bez R; porównanie P + R z samym P dałoby sztuczny progres. Warianty: porównywać same P (`topPlatesKg`), rozdzielać według `loadBasis`, albo oba | produkt | PE-B, PE-E (Smith) | dane S2 przechowują P i R osobno; reguły nie zgadnięto |
+| O-36 | Algorytm e1RM dla Smitha (P + R, same P czy brak e1RM) | produkt | PE (e1RM) dla Smitha | poza S2 (B02-D25 A) |
 
 ## 3. F-4: zgodność Crashlytics ze stosem Capacitor (stan weryfikacji)
 
