@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "atlasVersion": 3,
+  "atlasVersion": 4,
   "dictionaries": {
     "equipment": [
       {
@@ -555,7 +555,7 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 3,
+      "changedIn": 4,
       "instructionsPl": [
         "Połóż się na ławce tak, by oczy były mniej więcej pod gryfem; stopy oprzyj stabilnie o podłogę.",
         "Chwyć gryf nieco szerzej niż barki, ściągnij łopatki i oprzyj je o ławkę.",
@@ -570,9 +570,8 @@
         "Utrata napięcia łopatek w trakcie serii."
       ],
       "safetyPl": [
-        "Przy ciężkich seriach korzystaj z asekurującej osoby albo ze stojaka z ustawionymi zabezpieczeniami.",
-        "Trzymaj gryf pełnym chwytem, kciukiem obejmującym gryf.",
-        "Nie wykonuj ciężkich serii samodzielnie bez asekuracji lub odpowiednio ustawionych zabezpieczeń. Stosuj zaciski zgodnie z zasadami bezpieczeństwa stanowiska i nie traktuj zsuwania talerzy jako planowanej metody awaryjnej."
+        "Przy ciężkich seriach korzystaj z asekurującej osoby albo odpowiednio ustawionych zabezpieczeń. Stosuj zaciski zgodnie z zasadami bezpieczeństwa stanowiska; nie traktuj zsuwania talerzy jako planowanej metody awaryjnej.",
+        "Trzymaj gryf pełnym chwytem, kciukiem obejmującym gryf."
       ]
     },
     {
@@ -902,13 +901,13 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 3,
+      "changedIn": 4,
       "instructionsPl": [
         "W aplikacji wpisuj tylko dodatkowy ciężar (pas z talerzami), bez masy ciała.",
         "Załóż pas i zawieś na nim talerze tak, aby obciążenie wisiało pośrodku, między nogami.",
         "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij na wyprostowanych ramionach.",
         "Napnij brzuch, ściągnij łopatki w dół i podciągnij się, aż broda znajdzie się nad drążkiem.",
-        "Opuść się pod kontrolą do pełnego zwisu, nie pozwalając obciążeniu się rozbujać."
+        "Opuść się pod kontrolą do wyprostu ramion w zakresie tolerowanym przez barki, nie pozwalając obciążeniu się rozbujać."
       ],
       "commonMistakesPl": [
         "Dobieranie obciążenia, przy którym nie da się wykonać pełnego zakresu.",
@@ -961,16 +960,16 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 3,
+      "changedIn": 4,
       "instructionsPl": [
         "Zamocuj gumę pewnie na drążku i ustaw w niej kolano albo stopę.",
         "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij z gumą pod kolanem lub stopą.",
         "Napnij brzuch, ściągnij łopatki w dół i podciągnij się, aż broda znajdzie się nad drążkiem.",
-        "Opuść się pod kontrolą do pełnego zwisu; kontroluj tempo ruchu i nie wykorzystuj sprężystego odbicia gumy."
+        "Opuść się pod kontrolą do wyprostu ramion w zakresie tolerowanym przez barki; kontroluj tempo ruchu i nie wykorzystuj sprężystego odbicia gumy."
       ],
       "commonMistakesPl": [
         "Wykorzystywanie sprężystości gumy do odbijania się z dolnej pozycji.",
-        "Niepełny zakres ruchu na dole.",
+        "Wyraźne skracanie zakresu ruchu bez uzasadnienia technicznego.",
         "Traktowanie koloru gumy jako dokładnej wartości asysty w kg."
       ],
       "safetyPl": [

@@ -16,10 +16,10 @@ const CORRECTED = [
 ];
 
 describe("B01-CORR-01 — release and scope", () => {
-  test("release 3, 0 validator errors; 14 corrected cards have changedIn 3, the lunge keeps changedIn 2", () => {
-    assert.equal(ATLAS.atlasVersion, 3);
+  test("release ≥ 3, 0 validator errors; the 14 corrected cards have changedIn ≥ 3 (later corrections may raise it), the lunge keeps changedIn 2", () => {
+    assert.ok(ATLAS.atlasVersion >= 3);
     assert.equal(validateAtlas(ATLAS).summary.errors, 0);
-    for (const e of ATLAS.exercises) assert.equal(e.changedIn, CORRECTED.includes(e.exerciseId) ? 3 : 2, e.exerciseId);
+    for (const e of ATLAS.exercises) assert.ok(CORRECTED.includes(e.exerciseId) ? e.changedIn >= 3 : e.changedIn === 2, e.exerciseId);
     for (const e of ATLAS.exercises) assert.deepEqual([e.entryRev, e.introducedIn, e.approvedIn], [1, 1, "NEXTREP-F2.3-BATCH01-2026-10-12"], e.exerciseId);
   });
 });
@@ -28,7 +28,8 @@ describe("B01-CORR-01 — regressions", () => {
   test("U01: the bench press card never advises training without collars to slide the plates off", () => {
     const t = text("bench_press_barbell_flat");
     assert.doesNotMatch(t, /Nie zakładaj zacisków|można wtedy zsunąć/);
-    assert.ok(byId("bench_press_barbell_flat").safetyPl.includes("Nie wykonuj ciężkich serii samodzielnie bez asekuracji lub odpowiednio ustawionych zabezpieczeń. Stosuj zaciski zgodnie z zasadami bezpieczeństwa stanowiska i nie traktuj zsuwania talerzy jako planowanej metody awaryjnej."));
+    // U01 text merged into one point by B01-CORR-02 (K02); the intent stays
+    assert.match(byId("bench_press_barbell_flat").safetyPl.join(" "), /nie traktuj zsuwania talerzy jako planowanej metody awaryjnej/);
   });
   test("U02: the front squat card has no unconditional instruction to dump the bar", () => {
     assert.doesNotMatch(text("squat_barbell_front"), /odrzuć sztangę|zrzuć sztangę/);

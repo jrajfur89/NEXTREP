@@ -66,10 +66,10 @@ describe("S4 — the 15 Batch 01 cards in the repository atlas", () => {
       assert.match(ATLAS.exercises.find((e) => e.exerciseId === id).safetyPl.join(" "), /asekur|zabezpiecze/i, id);
     }
   });
-  test("the card changes kept ids, models, muscles, tips, entryRev, introducedIn and approvedIn; changedIn = a card release (2 or 3)", () => {
+  test("the card changes kept ids, models, muscles, tips, entryRev, introducedIn and approvedIn; changedIn = a card release (≥ 2)", () => {
     for (const e of ATLAS.exercises) {
       assert.deepEqual([e.entryRev, e.introducedIn, e.approvedIn], [1, 1, "NEXTREP-F2.3-BATCH01-2026-10-12"], e.exerciseId);
-      assert.ok([2, 3].includes(e.changedIn), e.exerciseId);
+      assert.ok(Number.isInteger(e.changedIn) && e.changedIn >= 2 && e.changedIn <= ATLAS.atlasVersion, e.exerciseId);
       assert.ok(typeof e.tipsPl === "string" && e.tipsPl.length > 0);
     }
     assert.deepEqual(ATLAS.issuedIds, B01);

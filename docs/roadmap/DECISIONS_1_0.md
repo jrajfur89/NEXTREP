@@ -1,6 +1,9 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 13 · 19.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+Wersja 14 · 19.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+
+Zmiany w wersji 14: B01-CORR-02 — K01 (zakres ruchu w podciąganiu z obciążeniem i z gumą) i K02 (scalona
+zasada asekuracji w wyciskaniu sztangi), wydanie atlasu 4 (sekcja 1g).
 
 Zmiany w wersji 13: B01-CORR-01 — korekta treści 14 kart Batch 01 (U01–U12, U14–U16; U13 odrzucona),
 wydanie atlasu 3 (sekcja 1g).
@@ -238,6 +241,7 @@ zatwierdzonej zmiany kontraktu i szkicu SQL — nie wprowadzono.
 | B02/S2 | Silnik: `LOAD_MODELS.smith_plates_only` (`kg: "plates"`), `effectiveLoadKg`, `platesKg`, `loadBasis`, `topPlatesKg`, status `plates_only`, `combineVolumeStatuses`, `sessionTotals.notices`; ustawienie R: `src/engine/exercise-settings.js` (parser, walidacja, magazyn w pamięci — trwały adapter TODO S6); snapshot v3 (`startingResistanceKg`, `startingResistanceStatus`, reguły `ws_starting_resistance`, `ws_snapshot_version_fields`; wersja 2 czytelna bez migracji); szkic SQL wygenerowany ponownie; kontrakt serii nr1 (`loadKg` = P). Szczegóły: `docs/atlas/B02-D21-SMITH-S2.md` | wdrożona (S2); UI karty i raportu — S6 |
 | B02/S3 | **Model maszyny w planie (B02-D21).** Pozycja planu nr1 ma pole `loadModel` (wybór osoby albo `null`); nie zmienia `exerciseId` ani `entryRev`. Dopuszczalność wyłącznie przez istniejące `loadModelOptions` / `validateLoadModelChoice` (`src/nr1/contracts/plan-load-model.js`, bez drugiego walidatora). Ćwiczenie z wyborem: model obowiązkowy przy dodaniu i edycji (`LOAD_MODEL_MISSING` / `LOAD_MODEL_NOT_ALLOWED`); ćwiczenie z jednym modelem i ćwiczenie prywatne: `null`, model z atlasu / własny, obcy model odrzucany. `null` w zapisanej lub importowanej pozycji ćwiczenia z wyborem = stan do rozstrzygnięcia: trening nie startuje (`LOAD_MODEL_MISSING`), bez cichego `machine_stack`. Budowa treningu z planu (`src/nr1/domain/workout-from-plan.js`): wszystkie pozycje sprawdzane przed utworzeniem treningu, snapshot v3 przez `buildLoadSnapshot` (model z planu, R Smitha z ustawień karty), `planItemId` i supersety zachowane; edycja planu lub atlasu nie zmienia zbudowanych treningów. Szkic SY: kolumna `plan_items.load_model` (znany model atlasu albo `null`) | wdrożona (S3) w domenie nr1; UI wyboru, karty i ekranu treningu — S6 |
 | B01-CORR-01 | **Korekta kart Batch 01** zatwierdzona przez właściciela 19.10.2026: U01–U12 i U14–U16 przyjęte, **U13 odrzucona** (nazwa „Wykroki w miejscu z hantlami” bez zmian). Zmienione wyłącznie właściwe punkty `instructionsPl` / `commonMistakesPl` / `safetyPl` w 14 kartach (20 edycji), w tym punkty zależne dla spójności (U09 bezpieczeństwo, U10 i U16 typowe błędy, U15 bezpieczeństwo). Import szablonem XLSX v2: **wydanie atlasu 3**, `changedIn` = 3 w 14 rekordach (wykroki: 2), `entryRev`, `approvedIn`, `introducedIn`, nazwy, aliasy, modele i słowniki bez zmian. Numer wydania dla B02 (S5) liczony od bieżącego wydania w chwili importu — nie rezerwowany | wdrożona |
+| B01-CORR-02 | **Końcowe korekty kart Batch 01**, zatwierdzone przez właściciela 19.10.2026: K01 — `pullup_pronated_weighted` i `pullup_pronated_band_assisted`: „wyprost ramion w zakresie tolerowanym przez barki” zamiast „pełnego zwisu”, błąd o zakresie przeformułowany; K02 — `bench_press_barbell_flat`: punkty 1 i 3 `safetyPl` scalone w jeden (karta ma 2 punkty bezpieczeństwa). Import szablonem XLSX v2: **wydanie atlasu 4**, `changedIn` = 4 w 3 rekordach; pozostałe 12 kart i wszystkie inne pola bez zmian | wdrożona |
 
 Kolejność dalszych etapów B02: S2 (`smith_plates_only`) → S3 (model maszyny w pozycji planu) → S4 → S5
 (import 40 rekordów B02 po zatwierdzeniu) → S6 (UI). Notatka `docs/atlas/B02-D21-SMITH-S2.md` dotyczy
