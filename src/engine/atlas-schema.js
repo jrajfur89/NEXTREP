@@ -44,9 +44,9 @@ export const VARIANT_DIMENSIONS = ["grip", "angle", "position", "laterality", "i
 
 // Full exercise card (AT3-D12 A, B02/S1): three editorial lists of Polish points, in system and
 // private records. Editorial only — never in CALC_FIELDS or INTERPRETATION_FIELDS, so editing the text
-// does not raise entryRev and never reinterprets history. In S1 the fields are optional everywhere
-// (a system record may omit them; `[]` is not allowed); S4 makes them required for system records,
-// together with the content of the 15 Batch 01 cards.
+// does not raise entryRev and never reinterprets history. Since B02/S4 every SYSTEM record must have
+// all three (validator T5 CARD_CONTENT_REQUIRED); in private records they stay optional. `[]` is never
+// allowed — an absent field is the only "no content".
 export const CARD_CONTENT_FIELDS = ["instructionsPl", "commonMistakesPl", "safetyPl"];
 export const CARD_CONTENT_LIMITS = Object.freeze({ minItems: 1, maxItems: 10, maxItemLength: 300 });
 

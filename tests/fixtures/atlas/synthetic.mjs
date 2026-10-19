@@ -67,6 +67,10 @@ export const ex = (exerciseId, over = {}) => ({
   changedIn: 1,
   approvedIn: "test-batch-0",
   correction: null,
+  // full card (AT3-D12 A; required for system records since B02/S4) — synthetic text
+  instructionsPl: [`[TEST] Instrukcja ${exerciseId}: ustaw się i wykonaj ruch pod kontrolą.`],
+  commonMistakesPl: [`[TEST] Typowy błąd ${exerciseId}.`],
+  safetyPl: [`[TEST] Bezpieczeństwo ${exerciseId}.`],
   ...over,
 });
 

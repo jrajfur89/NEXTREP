@@ -24,7 +24,7 @@ każdej partii i zatwierdzane przed importem. Ten katalog i narzędzia niczego n
 | `src/engine/muscle-stats.js` | (AT3.2b) praca mięśni, podpartii i kategorii: główna i pomocnicza osobno, seria raz na węzeł, suma treningu niezależna (AT3-D17); zastąpił `muscle-work.js` (10 grup, F2) |
 | `src/atlas/navigation.json` | (AT3.2b) wspólna hierarchia nawigacji i statystyk, `hierarchyVersion` 1: 6 kategorii mięśniowych, 18 podpartii, „Cardio i kondycja” bez podpartii; 4 kody planowane (AT3-D16) |
 | `db/v2-draft/001_load_snapshot.sql` | SZKIC schematu v2 z kontraktu; nie jest migracją, nigdzie nie uruchomiony |
-| `docs/atlas/nextrep-atlas-batch-template.xlsx` | pusty szablon partii |
+| `docs/atlas/nextrep-atlas-batch-template.xlsx` | pusty szablon partii (wersja `nextrep-atlas-batch-2`, z kolumnami karty ćwiczenia) |
 | `docs/atlas/przyklad/` | partia syntetyczna (dane TEST) i jej raport importu |
 | `tools/import-atlas-batch.mjs` | sprawdzenie partii i raport; zapis atlasu tylko z `--write` |
 | `tools/build-nr1.mjs` | walidacja atlasu przy buildzie `src/nr1/` (błąd blokuje build) i generowanie metadanych wydania (C01-4); `issuedIds` pozostaje w `atlas.json`. Po K01 zostaje jako dodatkowa kontrola atlasu w CI |
@@ -56,7 +56,21 @@ NEXTREP 1.0 to istniejąca aplikacja `src/app/` (K01-1), a atlas jest jej jedyny
    względem poprzedniego wydania, zapisuje `partia.raport.xlsx` (zakładka „Raport walidacji”)
    i wypisuje raport. Repozytorium się nie zmienia.
 3. Po akceptacji raportu (0 błędów): ten sam import z `--write` zapisuje `src/atlas/atlas.json`
-   z nowym numerem wydania. `entryRev` podnosi się automatycznie przy zmianie pól obliczeniowych.
+   z nowym numerem wydania. `entryRev` podnosi się automatycznie przy zmianie pól obliczeniowych;
+   zmiana samej treści karty (`instructionsPl`, `commonMistakesPl`, `safetyPl`, `tipsPl`) daje nowe
+   wydanie i `changedIn`, bez zmiany `entryRev`. Kolejność kluczy rekordu zostaje zachowana.
+
+**Karta ćwiczenia w szablonie (B02/S4, wersja `nextrep-atlas-batch-2`).** Kolumny `instructionsPl_1…10`,
+`commonMistakesPl_1…10`, `safetyPl_1…10` na końcu zakładki „Ćwiczenia”: jedna komórka = jeden punkt
+(do 300 znaków), puste komórki są pomijane, kolejność punktów = kolejność kolumn. Komórka może zawierać
+dowolne znaki, także średnik, cudzysłowy i nową linię (Alt+Enter); spacje na początku i końcu komórki są
+obcinane, jak w każdej komórce szablonu. Pole bez żadnego punktu nie jest zapisywane, więc ćwiczenie
+systemowe dostaje błąd `CARD_CONTENT_REQUIRED` (nigdy pustą listę).
+
+**Starsze pliki `nextrep-atlas-batch-1`** (bez kolumn karty) są czytane jawnie: raport ma informację
+`BATCH_TEMPLATE_V1_NO_CARDS`; istniejące ćwiczenia zachowują treść karty z atlasu (`changes.cardContentKept`),
+a nowe ćwiczenie systemowe z takiego pliku jest odrzucane (`CARD_CONTENT_REQUIRED`). Narzędzie niczego nie
+dopisuje. Nową partię przygotowuje się w szablonie wersji 2.
 
 ## Reguły walidatora (projekt F2 v2, zatwierdzony 11.10.2026)
 
@@ -86,9 +100,10 @@ Błąd blokuje import; ostrzeżenie i informacja idą do oceny.
 | I5 zmiana pól obliczeniowych = wyższy `entryRev` | `ENTRY_REV_NOT_BUMPED`, `ENTRY_REV_DECREASED` | błąd |
 | I6 zmiana interpretacji = nowy wariant albo zatwierdzona poprawka | `LOAD_INTERPRETATION_CHANGED` / `CORRECTION_APPLIED`, `CORRECTION_INVALID` | błąd / informacja |
 | T1–T4 pola techniczne kompletne i spójne | `REQUIRED_FIELD_MISSING`, `BILATERAL_PER_SIDE`, `LOAD_MODEL_UNKNOWN`, `MEASUREMENT_*`, `LOAD_INCREMENT_*` | błąd (brak kroku: ostrzeżenie) |
-| T5 pełna karta (AT3-D12 A): pole obecne = 1–10 niepustych, unikalnych punktów po ≤ 300 znaków; `[]` niedozwolone | `CARD_CONTENT_TYPE`, `CARD_CONTENT_EMPTY`, `CARD_CONTENT_TOO_MANY`, `CARD_ITEM_TYPE`, `CARD_ITEM_EMPTY`, `CARD_ITEM_TOO_LONG`, `CARD_ITEM_DUPLICATE` | błąd (rekord prywatny: ostrzeżenie); obecność pól wymagana od S4 |
+| T5 pełna karta (AT3-D12 A): rekord systemowy ma trzy pola (od B02/S4); pole obecne = 1–10 niepustych, unikalnych punktów po ≤ 300 znaków; `[]` niedozwolone | `CARD_CONTENT_REQUIRED`, `CARD_CONTENT_TYPE`, `CARD_CONTENT_EMPTY`, `CARD_CONTENT_TOO_MANY`, `CARD_ITEM_TYPE`, `CARD_ITEM_EMPTY`, `CARD_ITEM_TOO_LONG`, `CARD_ITEM_DUPLICATE` | błąd; rekord prywatny: pola opcjonalne, wadliwy tekst — ostrzeżenie |
 | S1–S2 słowniki i zamknięty schemat | `UNKNOWN_FIELD`, `SCOPE_INVALID`, `STATUS_INVALID`, `DICT_*`, `EQUIPMENT_*`, `VARIANT_*`, `ATLAS_VERSION_*` | błąd |
 | B problemy pliku partii | `BATCH_TEMPLATE_VERSION`, `BATCH_TEMPLATE_CHANGED`, `BATCH_DUPLICATE_ROW` | błąd |
+| B starszy szablon bez kolumn karty | `BATCH_TEMPLATE_V1_NO_CARDS` | informacja |
 
 `MULTIPLE_LOAD_SOURCES_UNSUPPORTED` to ograniczenie obecnego silnika, nie zakaz takich ćwiczeń
 w NEXTREP: wróci, gdy silnik dostanie model sumowania kilku obciążeń.

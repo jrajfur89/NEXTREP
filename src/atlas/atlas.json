@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "atlasVersion": 1,
+  "atlasVersion": 2,
   "dictionaries": {
     "equipment": [
       {
@@ -379,7 +379,26 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Ustaw sztangę w stojaku mniej więcej na wysokości mostka i ustaw zabezpieczenia nieco poniżej najniższego punktu przysiadu.",
+        "Wejdź pod sztangę, ułóż ją na górnej części mięśni czworobocznych, ściągnij łopatki i chwyć gryf pewnie, symetrycznie.",
+        "Zdejmij sztangę, cofnij się dwoma, trzema krokami i ustaw stopy mniej więcej na szerokość barków, palce lekko na zewnątrz.",
+        "Weź wdech, napnij brzuch i schodź w dół, prowadząc biodra w tył i w dół, a kolana w kierunku palców stóp.",
+        "Zejdź na głębokość, na której utrzymujesz neutralne plecy i pełne stopy na podłodze, a następnie wstań, wypychając podłogę stopami.",
+        "Po ostatnim powtórzeniu podejdź do stojaka i odłóż sztangę na oba haki jednocześnie."
+      ],
+      "commonMistakesPl": [
+        "Schodzenie kolan do środka podczas wstawania.",
+        "Odrywanie pięt od podłogi i przenoszenie ciężaru na palce.",
+        "Zaokrąglanie dolnej części pleców w najniższym punkcie przysiadu.",
+        "Szybsze unoszenie bioder niż barków, przez które ruch zamienia się w skłon."
+      ],
+      "safetyPl": [
+        "Przy ciężkich seriach ćwicz w stojaku z ustawionymi zabezpieczeniami albo z asekurującą osobą.",
+        "Zakładaj zaciski na talerze, żeby obciążenie nie przesuwało się na gryfie.",
+        "Przerwij serię, jeśli pojawia się ostry ból kolan, bioder lub pleców."
+      ]
     },
     {
       "exerciseId": "squat_barbell_front",
@@ -420,7 +439,24 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Ustaw sztangę w stojaku na wysokości obojczyków i ustaw zabezpieczenia nieco poniżej najniższego punktu przysiadu.",
+        "Ułóż gryf na przednich częściach barków, blisko szyi; łokcie unieś wysoko, a palce trzymaj luźno na gryfie lub użyj chwytu skrzyżowanego.",
+        "Zdejmij sztangę, cofnij się i ustaw stopy na szerokość barków lub nieco szerzej.",
+        "Weź wdech, napnij brzuch i schodź w dół, utrzymując tułów możliwie pionowo i łokcie w górze.",
+        "Wstań, prowadząc kolana w kierunku palców stóp i nie pozwalając, by łokcie opadały."
+      ],
+      "commonMistakesPl": [
+        "Opadanie łokci, przez które sztanga zsuwa się z barków do przodu.",
+        "Pochylanie tułowia w przód przy wstawaniu.",
+        "Trzymanie ciężaru na zaciśniętych nadgarstkach zamiast na barkach."
+      ],
+      "safetyPl": [
+        "Ćwicz w stojaku z ustawionymi zabezpieczeniami; jeśli tracisz pozycję, odrzuć sztangę w przód na zabezpieczenia.",
+        "Przy ograniczonej ruchomości nadgarstków stosuj chwyt skrzyżowany lub paski zamiast forsowania zgięcia.",
+        "Przerwij serię przy ostrym bólu nadgarstków, kolan lub pleców."
+      ]
     },
     {
       "exerciseId": "deadlift_barbell_conventional",
@@ -461,7 +497,25 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Stań ze stopami na szerokość bioder, gryf nad środkiem stopy.",
+        "Pochyl się, chwyć gryf tuż na zewnątrz kolan i opuść biodra, aż piszczele dotkną gryfu.",
+        "Ustaw plecy w neutralnej pozycji, ściągnij łopatki w dół, weź wdech i napnij brzuch.",
+        "Odepchnij podłogę nogami i prowadź sztangę blisko ciała, prostując jednocześnie biodra i kolana.",
+        "W górze stań prosto bez odchylania się w tył, a następnie opuść sztangę tą samą drogą pod kontrolą."
+      ],
+      "commonMistakesPl": [
+        "Zaokrąglanie pleców przy odrywaniu sztangi od podłogi.",
+        "Oddalanie sztangi od nóg, przez które ciężar ucieka do przodu.",
+        "Szarpanie sztangi zamiast napięcia ciała przed odrywaniem.",
+        "Nadmierne odchylanie się w tył w pozycji końcowej."
+      ],
+      "safetyPl": [
+        "Przy pojawieniu się zaokrąglenia pleców zmniejsz ciężar albo zakończ serię.",
+        "Zakładaj zaciski na talerze i ćwicz na stabilnej, nieśliskiej powierzchni.",
+        "Przerwij serię przy ostrym bólu pleców i nie ćwicz ponownie bez konsultacji, jeśli ból się utrzymuje."
+      ]
     },
     {
       "exerciseId": "bench_press_barbell_flat",
@@ -501,7 +555,25 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Połóż się na ławce tak, by oczy były mniej więcej pod gryfem; stopy oprzyj stabilnie o podłogę.",
+        "Chwyć gryf nieco szerzej niż barki, ściągnij łopatki i oprzyj je o ławkę.",
+        "Zdejmij sztangę ze stojaka i ustaw ją nad barkami na wyprostowanych ramionach.",
+        "Opuszczaj sztangę pod kontrolą do dolnej części klatki piersiowej, z łokciami lekko przy tułowiu.",
+        "Wyciśnij sztangę w górę, utrzymując pośladki na ławce i łopatki ściągnięte."
+      ],
+      "commonMistakesPl": [
+        "Odbijanie sztangi od klatki piersiowej.",
+        "Odrywanie pośladków od ławki przy wyciskaniu.",
+        "Szerokie rozkładanie łokci pod kątem prostym do tułowia.",
+        "Utrata napięcia łopatek w trakcie serii."
+      ],
+      "safetyPl": [
+        "Przy ciężkich seriach korzystaj z asekurującej osoby albo ze stojaka z ustawionymi zabezpieczeniami.",
+        "Trzymaj gryf pełnym chwytem, kciukiem obejmującym gryf.",
+        "Nie zakładaj zacisków, jeśli ćwiczysz sam bez zabezpieczeń — w razie problemu talerze można wtedy zsunąć z gryfu."
+      ]
     },
     {
       "exerciseId": "bench_press_dumbbell_pair_flat",
@@ -541,7 +613,24 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Usiądź na ławce z hantlami opartymi o uda, a następnie połóż się, przenosząc hantle na wysokość klatki piersiowej.",
+        "Oprzyj stopy stabilnie o podłogę i ściągnij łopatki.",
+        "Wyciśnij hantle nad klatkę piersiową, utrzymując nadgarstki prosto nad łokciami.",
+        "Opuszczaj hantle pod kontrolą po bokach klatki piersiowej, do zakresu, w którym barki pozostają stabilne.",
+        "Wyciśnij hantle w górę, zbliżając je do siebie bez uderzania nimi."
+      ],
+      "commonMistakesPl": [
+        "Opuszczanie hantli zbyt głęboko kosztem stabilności barków.",
+        "Uciekanie nadgarstków do tyłu i prowadzenie hantli niesymetrycznie.",
+        "Rzucanie hantli na boki po zakończeniu serii."
+      ],
+      "safetyPl": [
+        "Po serii opuść hantle na uda, siadając, zamiast upuszczać je na boki.",
+        "Przy ciężkich hantlach poproś o pomoc przy podaniu ich do pozycji startowej.",
+        "Przerwij serię przy ostrym bólu barku."
+      ]
     },
     {
       "exerciseId": "overhead_press_barbell_standing",
@@ -581,7 +670,24 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Zdejmij sztangę ze stojaka z wysokości obojczyków, chwyt nieco szerszy niż barki.",
+        "Stań ze stopami na szerokość bioder, napnij brzuch i pośladki.",
+        "Wyciśnij sztangę pionowo nad głowę, odsuwając głowę lekko w tył, aby przepuścić gryf.",
+        "W górze ustaw sztangę nad środkiem stopy, z głową lekko w przód między ramionami.",
+        "Opuść sztangę pod kontrolą na przód barków."
+      ],
+      "commonMistakesPl": [
+        "Nadmierne wyginanie odcinka lędźwiowego i odchylanie tułowia w tył.",
+        "Prowadzenie sztangi łukiem przed twarzą zamiast blisko niej.",
+        "Pomaganie sobie ugięciem nóg, przez co ćwiczenie przestaje być wyciskaniem ścisłym."
+      ],
+      "safetyPl": [
+        "Ćwicz w stojaku, z którego zdejmujesz i do którego odkładasz sztangę.",
+        "Zmniejsz ciężar, jeśli nie utrzymujesz napiętego brzucha i pośladków.",
+        "Przerwij serię przy bólu barków lub dolnej części pleców."
+      ]
     },
     {
       "exerciseId": "row_barbell_bent_over_pronated",
@@ -622,7 +728,23 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Chwyć sztangę nachwytem nieco szerzej niż barki i stań ze stopami na szerokość bioder.",
+        "Ugnij lekko kolana i pochyl tułów w przód z neutralnymi plecami, aż sztanga zwiśnie poniżej kolan.",
+        "Przyciągnij sztangę do dolnej części brzucha, prowadząc łokcie w tył i ściągając łopatki.",
+        "Opuść sztangę pod kontrolą do wyprostu ramion, utrzymując ten sam kąt tułowia."
+      ],
+      "commonMistakesPl": [
+        "Prostowanie tułowia przy każdym powtórzeniu i podrywanie sztangi plecami.",
+        "Zaokrąglanie pleców w opadzie.",
+        "Przyciąganie sztangi tylko rękami, bez ruchu łopatek."
+      ],
+      "safetyPl": [
+        "Dobierz ciężar tak, by utrzymać stały kąt tułowia przez całą serię.",
+        "Przy zmęczeniu dolnej części pleców odłóż sztangę i odpocznij przed kolejną serią.",
+        "Przerwij serię przy ostrym bólu pleców."
+      ]
     },
     {
       "exerciseId": "row_dumbbell_single_bench_supported",
@@ -664,7 +786,23 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Oprzyj kolano i dłoń tej samej strony o ławkę, druga stopa stabilnie na podłodze.",
+        "Chwyć hantel wolną ręką i ustaw plecy w neutralnej, poziomej pozycji.",
+        "Przyciągnij hantel w kierunku biodra, prowadząc łokieć blisko tułowia.",
+        "Opuść hantel pod kontrolą do wyprostu ramienia bez rotowania tułowia.",
+        "Wykonaj serię jedną ręką, a następnie zmień stronę; zapisuj powtórzenia na stronę."
+      ],
+      "commonMistakesPl": [
+        "Obracanie tułowia, żeby dociągnąć hantel.",
+        "Prowadzenie hantla do barku zamiast w kierunku biodra.",
+        "Szarpanie hantla na początku ruchu."
+      ],
+      "safetyPl": [
+        "Używaj stabilnej ławki i pewnie oprzyj na niej kolano i dłoń.",
+        "Przerwij serię przy bólu dolnej części pleców lub barku."
+      ]
     },
     {
       "exerciseId": "pullup_pronated_bodyweight",
@@ -705,7 +843,23 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij na wyprostowanych ramionach.",
+        "Napnij brzuch i ściągnij łopatki w dół przed rozpoczęciem ruchu.",
+        "Podciągnij się, prowadząc łokcie w dół, aż broda znajdzie się nad drążkiem.",
+        "Opuść się pod kontrolą do pełnego zwisu."
+      ],
+      "commonMistakesPl": [
+        "Bujanie ciałem i wykorzystywanie rozpędu.",
+        "Niepełny zakres: brak pełnego zwisu na dole lub brody nad drążkiem.",
+        "Wysuwanie głowy w przód zamiast podciągania tułowia."
+      ],
+      "safetyPl": [
+        "Sprawdź, czy drążek jest stabilnie zamocowany.",
+        "Zeskakuj z drążka pod kontrolą, bez gwałtownego puszczania chwytu z dużej wysokości.",
+        "Przerwij serię przy bólu barków lub łokci."
+      ]
     },
     {
       "exerciseId": "pullup_pronated_weighted",
@@ -748,7 +902,24 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Załóż pas i zawieś na nim talerze tak, aby obciążenie wisiało pośrodku, między nogami.",
+        "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij na wyprostowanych ramionach.",
+        "Napnij brzuch, ściągnij łopatki w dół i podciągnij się, aż broda znajdzie się nad drążkiem.",
+        "Opuść się pod kontrolą do pełnego zwisu, nie pozwalając obciążeniu się rozbujać.",
+        "Wpisuj tylko masę dodanego obciążenia, bez masy ciała."
+      ],
+      "commonMistakesPl": [
+        "Dobieranie obciążenia, przy którym nie da się wykonać pełnego zakresu.",
+        "Bujanie się z obciążeniem i podciąganie z rozpędu.",
+        "Wpisywanie masy ciała razem z dodanym obciążeniem."
+      ],
+      "safetyPl": [
+        "Sprawdź zapięcie pasa i łańcucha przed każdą serią.",
+        "Schodź z drążka spokojnie, bez zeskakiwania z obciążeniem.",
+        "Przerwij serię przy bólu barków lub łokci."
+      ]
     },
     {
       "exerciseId": "pullup_pronated_band_assisted",
@@ -790,7 +961,23 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Zamocuj gumę pewnie na drążku i ustaw w niej kolano albo stopę.",
+        "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij z gumą pod kolanem lub stopą.",
+        "Napnij brzuch, ściągnij łopatki w dół i podciągnij się, aż broda znajdzie się nad drążkiem.",
+        "Opuść się pod kontrolą do pełnego zwisu, nie pozwalając gumie wyrzucić cię w górę."
+      ],
+      "commonMistakesPl": [
+        "Wykorzystywanie sprężystości gumy do odbijania się z dolnej pozycji.",
+        "Niepełny zakres ruchu na dole.",
+        "Traktowanie koloru gumy jako dokładnej wartości asysty w kg."
+      ],
+      "safetyPl": [
+        "Przed serią sprawdź gumę pod kątem nacięć i pęknięć.",
+        "Wysuwaj nogę z gumy ostrożnie, trzymając drążek, żeby guma nie odbiła się w stronę ciała.",
+        "Przerwij serię przy bólu barków lub łokci."
+      ]
     },
     {
       "exerciseId": "lunge_dumbbell_pair_stationary",
@@ -831,7 +1018,23 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Chwyć hantle w obie ręce i stań w rozkroku wykrocznym: jedna noga z przodu, druga z tyłu na palcach.",
+        "Utrzymując tułów prosto, opuść się, aż tylne kolano znajdzie się tuż nad podłogą.",
+        "Wróć do góry, odpychając się głównie przednią nogą, bez przestawiania stóp.",
+        "Wykonaj serię na jedną nogę, a następnie zmień nogi; zapisuj powtórzenia na nogę."
+      ],
+      "commonMistakesPl": [
+        "Uciekanie przedniego kolana do środka.",
+        "Zbyt wąskie ustawienie stóp, przez które trudno utrzymać równowagę.",
+        "Uderzanie tylnym kolanem o podłogę."
+      ],
+      "safetyPl": [
+        "Zacznij od mniejszych hantli, jeśli masz kłopot z równowagą.",
+        "Ćwicz na nieśliskiej powierzchni i z wolną przestrzenią wokół.",
+        "Przerwij serię przy bólu kolana."
+      ]
     },
     {
       "exerciseId": "curl_dumbbell_pair_standing",
@@ -871,7 +1074,22 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Stań prosto z hantlami w obu rękach, ramiona przy tułowiu.",
+        "Ugnij łokcie, unosząc hantle obiema rękami jednocześnie, bez obracania przedramion w trakcie ruchu.",
+        "Utrzymuj łokcie przy tułowiu i nie przesuwaj ich w przód.",
+        "Opuść hantle pod kontrolą do pełnego wyprostu łokci."
+      ],
+      "commonMistakesPl": [
+        "Kołysanie tułowiem, żeby unieść hantle.",
+        "Wysuwanie łokci w przód w górnej fazie ruchu.",
+        "Skracanie zakresu przez niepełne prostowanie łokci."
+      ],
+      "safetyPl": [
+        "Dobierz ciężar tak, żeby nie odchylać tułowia w tył.",
+        "Przerwij serię przy bólu łokci lub nadgarstków."
+      ]
     },
     {
       "exerciseId": "plank_forearm",
@@ -911,7 +1129,22 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Oprzyj przedramiona o matę, łokcie pod barkami.",
+        "Wyprostuj nogi i oprzyj się na palcach stóp, tworząc linię prostą od głowy do pięt.",
+        "Napnij brzuch i pośladki, utrzymując miednicę w neutralnej pozycji.",
+        "Oddychaj spokojnie i utrzymuj pozycję przez zaplanowany czas; zapisuj czas w sekundach."
+      ],
+      "commonMistakesPl": [
+        "Opadanie bioder i wyginanie odcinka lędźwiowego.",
+        "Unoszenie bioder zbyt wysoko.",
+        "Wstrzymywanie oddechu."
+      ],
+      "safetyPl": [
+        "Zakończ ćwiczenie, gdy nie utrzymujesz prostej linii ciała, zamiast przedłużać je w złej pozycji.",
+        "Przerwij ćwiczenie przy bólu dolnej części pleców."
+      ]
     },
     {
       "exerciseId": "hanging_knee_raise",
@@ -950,7 +1183,23 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 1
+      "changedIn": 2,
+      "instructionsPl": [
+        "Zawiśnij na drążku na wyprostowanych ramionach, chwytem na szerokość barków.",
+        "Napnij brzuch i ustabilizuj ciało, żeby się nie bujało.",
+        "Unieś kolana w kierunku klatki piersiowej, podwijając miednicę pod koniec ruchu.",
+        "Opuść nogi pod kontrolą, bez rozbujania ciała."
+      ],
+      "commonMistakesPl": [
+        "Bujanie ciałem i unoszenie nóg z rozpędu.",
+        "Unoszenie kolan tylko do poziomu bioder, bez podwinięcia miednicy.",
+        "Gwałtowne opuszczanie nóg."
+      ],
+      "safetyPl": [
+        "Sprawdź, czy drążek jest stabilnie zamocowany.",
+        "Jeśli chwyt słabnie, zakończ serię przed upadkiem z drążka.",
+        "Przerwij ćwiczenie przy bólu barków lub dolnej części pleców."
+      ]
     }
   ],
   "issuedIds": [

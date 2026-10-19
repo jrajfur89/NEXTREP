@@ -70,13 +70,13 @@ describe("B02/S1 schema: closed schema accepts the three card fields", () => {
   });
 });
 
-describe("B02/S1 Batch 01 compatibility", () => {
-  test("the real Batch 01 atlas without card content still validates with 0 errors and no T5 issues", () => {
+describe("B02/S1 Batch 01 compatibility (since S4: Batch 01 has its cards)", () => {
+  test("the real Batch 01 atlas validates with 0 errors and no T5 issues; every record has the three fields (S4)", () => {
     const r = validateAtlas(ATLAS);
     assert.equal(r.ok, true);
     assert.equal(r.summary.errors, 0);
     assert.deepEqual(t5(r), []);
-    assert.ok(ATLAS.exercises.every((x) => CARD_CONTENT_FIELDS.every((f) => !(f in x))), "B01 has no card fields yet (S4)");
+    assert.ok(ATLAS.exercises.every((x) => CARD_CONTENT_FIELDS.every((f) => Array.isArray(x[f]) && x[f].length > 0)), "B01 cards present (S4)");
   });
   test("a system record with all three valid fields passes (no new errors, warnings unchanged)", () => {
     const a = clone(ATLAS);
@@ -87,9 +87,13 @@ describe("B02/S1 Batch 01 compatibility", () => {
     assert.deepEqual(t5(r), []);
     assert.equal(r.summary.warnings, base.summary.warnings);
   });
-  test("a system record may have only some of the fields in S1 (presence required from S4)", () => {
-    const r = validateAtlas(withField("safetyPl", ["Asekuracja przy ciężkich seriach."]));
-    assert.equal(r.ok, true);
+  test("since S4 a system record without one of the fields is rejected (CARD_CONTENT_REQUIRED)", () => {
+    for (const f of CARD_CONTENT_FIELDS) {
+      const a = clone(ATLAS);
+      delete a.exercises[0][f];
+      const hit = t5(validateAtlas(a)).filter((i) => i.code === "CARD_CONTENT_REQUIRED");
+      assert.deepEqual(hit.map((i) => [i.level, i.field, i.exerciseId]), [["error", f, FIRST]], f);
+    }
   });
   test("validation never changes the record", () => {
     const a = withField("instructionsPl", ["  ze spacjami  ", "drugi"]);
@@ -208,7 +212,7 @@ describe("B02/S1 helpers", () => {
     assert.deepEqual(rec, before);
     assert.ok(Object.isFrozen(c) && Object.isFrozen(c.instructionsPl));
     assert.deepEqual(readCardContent(undefined), { instructionsPl: [], commonMistakesPl: [], safetyPl: [] });
-    assert.deepEqual(readCardContent(ATLAS.exercises[0]), { instructionsPl: [], commonMistakesPl: [], safetyPl: [] });
+    assert.deepEqual(readCardContent(ATLAS.exercises[0]), { instructionsPl: ATLAS.exercises[0].instructionsPl, commonMistakesPl: ATLAS.exercises[0].commonMistakesPl, safetyPl: ATLAS.exercises[0].safetyPl });
     assert.equal(readCardContent({ instructionsPl: Array.from({ length: 12 }, (_, i) => `p${i}`) }).instructionsPl.length, 10);
   });
 });

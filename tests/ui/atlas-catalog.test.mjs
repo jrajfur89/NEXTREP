@@ -39,8 +39,9 @@ describe("AT2 adapter: atlas release → read-only catalog", () => {
     assert.throws(() => { "use strict"; A.ATLAS_CATALOG.exercises.push({}); });
   });
 
-  test("Batch 01 (atlas release 1): 15 exercises with every label resolved from the dictionaries", () => {
-    if (repoAtlas.atlasVersion !== 1) return; // the expectations below describe release 1 exactly
+  test("Batch 01 (atlas releases 1–2): 15 exercises with every label resolved from the dictionaries", () => {
+    // release 2 (B02/S4) = the same 15 Batch 01 exercises with the full card content added
+    if (![1, 2].includes(repoAtlas.atlasVersion)) return; // the expectations below describe Batch 01 exactly
     assert.equal(A.ATLAS_CATALOG.exercises.length, 15);
     for (const ex of A.ATLAS_CATALOG.exercises) {
       const src = repoAtlas.exercises.find((e) => e.exerciseId === ex.exerciseId);

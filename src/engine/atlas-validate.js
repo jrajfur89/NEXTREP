@@ -22,6 +22,7 @@ const CARD_MESSAGES = {
   CARD_ITEM_EMPTY: (f, i) => `Punkt ${i + 1} pola ${f} jest pusty.`,
   CARD_ITEM_TOO_LONG: (f, i) => `Punkt ${i + 1} pola ${f} przekracza ${CARD_CONTENT_LIMITS.maxItemLength} znaków.`,
   CARD_ITEM_DUPLICATE: (f, i) => `Punkt ${i + 1} pola ${f} powtarza wcześniejszy punkt.`,
+  CARD_CONTENT_REQUIRED: (f) => `Brak pola ${f}: ćwiczenie systemowe wymaga pełnej karty (instrukcja, typowe błędy, bezpieczeństwo; od B02/S4).`,
 };
 
 const arr = (v) => (Array.isArray(v) ? v : []);
@@ -109,9 +110,11 @@ export function validateExercise(ex, ctx, add) {
   if (isSystem) req("approvedIn", typeof ex.approvedIn === "string" && ex.approvedIn.trim().length > 0);
   for (const f of ["aliasesPl", "variantAttributes", "equipment", "primaryMuscles", "secondaryMuscles"]) if (ex[f] != null && !Array.isArray(ex[f])) add("error", "S1", "FIELD_TYPE", where, f, `Pole ${f} musi być listą.`);
 
-  // full card (T5, AT3-D12 A). Optional in S1; a present field must be valid. System record → error;
-  // private record → warning (older private data must stay loadable; display through readCardContent).
+  // full card (T5, AT3-D12 A). A present field must be valid: system record → error; private record →
+  // warning (older private data must stay loadable; display through readCardContent). Since B02/S4
+  // every SYSTEM record must have all three fields (CARD_CONTENT_REQUIRED); private records: optional.
   for (const f of CARD_CONTENT_FIELDS) {
+    if (isSystem && ex[f] === undefined) { add("error", "T5", "CARD_CONTENT_REQUIRED", where, f, CARD_MESSAGES.CARD_CONTENT_REQUIRED(f)); continue; }
     for (const p of cardContentProblems(ex[f])) add(isSystem ? "error" : "warning", "T5", p.code, where, f, CARD_MESSAGES[p.code](f, p.index));
   }
 

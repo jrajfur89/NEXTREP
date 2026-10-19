@@ -4,11 +4,15 @@
 // so this module has no package import of its own. Nothing here decides atlas content.
 import {
   SCOPES, STATUSES, REPS_COUNTINGS, LATERALITIES, LOAD_MODEL_CODES, MEASUREMENT_TYPES, STATS_GROUPS, EQUIPMENT_ROLES,
-  VARIANT_DIMENSIONS, CALC_FIELDS, emptyAtlas,
+  VARIANT_DIMENSIONS, CALC_FIELDS, CARD_CONTENT_FIELDS, CARD_CONTENT_LIMITS, emptyAtlas,
 } from "../src/engine/atlas-schema.js";
 import { validateAtlas } from "../src/engine/atlas-validate.js";
 
-export const TEMPLATE_VERSION = "nextrep-atlas-batch-1";
+// Version 2 (B02/S4): the three card lists (AT3-D12 A) — one column per point, 10 per field, so a
+// point may contain any character (semicolons, commas, quotes, line breaks) without a separator.
+// Version 1 files (no card columns) are still read, explicitly: see readBatch / mergeBatch.
+export const TEMPLATE_VERSION = "nextrep-atlas-batch-2";
+export const LEGACY_TEMPLATE_VERSIONS = ["nextrep-atlas-batch-1"];
 const FIRST_ROW = 3; // row 1: Polish header, row 2: technical key, data from row 3
 const MAX_ROWS = 1000;
 const FONT = { name: "Arial", size: 10 };
@@ -44,6 +48,11 @@ export const EXERCISE_COLUMNS = [
   { key: "correctionApprovedIn", label: "Poprawka błędu: zatwierdzona w", width: 20 },
   { key: "correctionNote", label: "Poprawka błędu: opis", width: 28 },
 ];
+// v1 columns stay first and in place, so a v1 file and a v2 file agree on every common column
+export const EXERCISE_COLUMNS_V1 = [...EXERCISE_COLUMNS];
+const CARD_LABELS = { instructionsPl: "Instrukcja", commonMistakesPl: "Typowy błąd", safetyPl: "Bezpieczeństwo" };
+export const CARD_COLUMNS = CARD_CONTENT_FIELDS.flatMap((f) => n(f, CARD_CONTENT_LIMITS.maxItems).map((k, i) => ({ key: k, label: `${CARD_LABELS[f]} — punkt ${i + 1}`, width: 36, text: true, required: i === 0 })));
+EXERCISE_COLUMNS.push(...CARD_COLUMNS);
 const SHEETS = {
   families: { name: "Rodziny", columns: [{ key: "familyId", label: "Identyfikator rodziny", width: 26 }, { key: "namePl", label: "Nazwa rodziny", width: 40 }, { key: "status", label: "Status", width: 11, list: "tech:status" }] },
   equipment: { name: "Słownik sprzętu", columns: [{ key: "code", label: "Kod", width: 22 }, { key: "labelPl", label: "Etykieta polska", width: 32 }, { key: "role", label: "Rola", width: 12, list: "tech:role" }, { key: "loadModels", label: "Dozwolone modele (oddziel ;)", width: 34 }, { key: "status", label: "Status", width: 11, list: "tech:status" }] },
@@ -82,6 +91,7 @@ function dataSheet(wb, name, columns, { inputFill = true } = {}) {
       const formula = c.list.startsWith("tech:") ? techRange(c.list.slice(5)) : c.list;
       ws.dataValidations.add(addr, { type: "list", allowBlank: true, formulae: [formula], showErrorMessage: true, errorStyle: "stop", errorTitle: "Wartość spoza słownika", error: "Wybierz wartość z listy (słowniki są zamknięte)." });
     }
+    if (c.text) ws.getColumn(i + 1).alignment = { wrapText: true, vertical: "top" };
     if (c.decimal) ws.dataValidations.add(addr, { type: "decimal", operator: "greaterThan", allowBlank: true, formulae: [0], showErrorMessage: true, errorTitle: "Krok ciężaru", error: "Podaj liczbę większą od 0 (kg)." });
   });
   ws.getRow(1).height = 32;
@@ -109,6 +119,7 @@ export async function createTemplate(ExcelJS, { dictionaries = null } = {}) {
     ["Czego nie zmieniasz", "Wiersz 2 (klucze techniczne), zakładka „Listy techniczne” (wartości silnika) i „Raport walidacji” (wypełnia narzędzie importu)."],
     ["Listy", "Pola słownikowe mają listy rozwijane. Słowniki są zamknięte: wartości spoza listy są odrzucane. Listy wielowartościowe (sprzęt, cechy, mięśnie) mają osobne kolumny 1…n. Aliasy oddziel średnikiem."],
     ["Pola techniczne (K2)", "Typ pomiaru, model obciążenia, liczba przyrządów, lateralność, liczenie powtórzeń, krok ciężaru: proponowane dla partii i zatwierdzane przed importem. Ciężar hantli wpisuje się na jeden hantel; liczba przyrządów mówi, ile hantli."],
+    ["Karta ćwiczenia (AT3-D12 A)", "Instrukcja, typowe błędy, bezpieczeństwo: jedna komórka = jeden punkt, do 10 punktów na pole, każdy do 300 znaków. W komórce wolno użyć dowolnych znaków, także średnika i nowej linii (Alt+Enter). Ćwiczenie systemowe wymaga co najmniej jednego punktu w każdym polu."],
     ["Import", "node tools/import-atlas-batch.mjs <plik.xlsx> — sprawdza partię razem z całym atlasem i zapisuje kopię pliku z wypełnionym „Raportem walidacji”. Niczego nie zapisuje w atlasie. Zapis do src/atlas/atlas.json tylko z --write, po akceptacji raportu, i tylko gdy nie ma błędów."],
     ["", ""],
     ["Przykład formatu (NIE importowany)", "Wiersz poniżej pokazuje format na danych jawnie testowych; prawdziwe wiersze wpisuje się w zakładce „Ćwiczenia”."],
@@ -132,7 +143,7 @@ export async function createTemplate(ExcelJS, { dictionaries = null } = {}) {
     r.getCell(2).alignment = { wrapText: true, vertical: "top" };
   });
   info.getCell("A1").font = { ...FONT, size: 14, bold: true };
-  for (let i = 11; i <= 20; i++) info.getRow(i).getCell(2).font = { ...FONT, italic: true, color: { argb: "FF6B7280" } };
+  for (let i = 12; i <= 21; i++) info.getRow(i).getCell(2).font = { ...FONT, italic: true, color: { argb: "FF6B7280" } };
 
   const ex = dataSheet(wb, "Ćwiczenia", EXERCISE_COLUMNS);
   // highlight a missing required value once the row has an exerciseId
@@ -185,6 +196,7 @@ export function exerciseToRow(e) {
   spread("secondary", e.secondaryMuscles, 6);
   row.correctionApprovedIn = e.correction ? e.correction.approvedIn : null;
   row.correctionNote = e.correction ? e.correction.note : null;
+  for (const f of CARD_CONTENT_FIELDS) { spread(f, Array.isArray(e[f]) ? e[f] : null, CARD_CONTENT_LIMITS.maxItems); delete row[f]; }
   return row;
 }
 export function fillBatch(wb, { exercises = [], families = [], dictionaries = {} } = {}) {
@@ -228,7 +240,11 @@ function readSheet(ws, columns) {
   return { rows, problems };
 }
 
-export function rowToExercise(row) {
+// `cardColumns: false` (a v1 file): the card fields are NOT in the file — they are left out of the
+// record (not empty) and mergeBatch keeps the atlas content of an existing exercise.
+// v2: the points of a field are its non-empty cells in column order; no point → the field is left
+// out (for a system record the validator then reports CARD_CONTENT_REQUIRED).
+export function rowToExercise(row, { cardColumns = true } = {}) {
   const list = (key, max) => n(key, max).map((k) => row[k]).filter((v) => v != null).map(String);
   const e = {
     exerciseId: row.exerciseId == null ? null : String(row.exerciseId),
@@ -241,6 +257,10 @@ export function rowToExercise(row) {
     successorHint: row.successorHint, approvedIn: row.approvedIn == null ? null : String(row.approvedIn),
     correction: row.correctionApprovedIn || row.correctionNote ? { approvedIn: row.correctionApprovedIn, note: row.correctionNote } : null,
   };
+  if (cardColumns) for (const f of CARD_CONTENT_FIELDS) {
+    const points = list(f, CARD_CONTENT_LIMITS.maxItems);
+    if (points.length) e[f] = points;
+  }
   return e;
 }
 
@@ -249,12 +269,15 @@ export async function readBatch(ExcelJS, file) {
   await wb.xlsx.readFile(file);
   const problems = [];
   const version = wb.getWorksheet("Instrukcja") && cellValue(wb.getWorksheet("Instrukcja").getCell("B2"));
-  if (version !== TEMPLATE_VERSION) problems.push({ code: "BATCH_TEMPLATE_VERSION", message: `Plik nie jest szablonem ${TEMPLATE_VERSION} (ma: ${version ?? "brak"}).` });
-  const exRead = readSheet(wb.getWorksheet("Ćwiczenia"), EXERCISE_COLUMNS);
+  const legacy = LEGACY_TEMPLATE_VERSIONS.includes(version);
+  if (version !== TEMPLATE_VERSION && !legacy) problems.push({ code: "BATCH_TEMPLATE_VERSION", message: `Plik nie jest szablonem ${TEMPLATE_VERSION} (ma: ${version ?? "brak"}).` });
+  const exRead = readSheet(wb.getWorksheet("Ćwiczenia"), legacy ? EXERCISE_COLUMNS_V1 : EXERCISE_COLUMNS);
   problems.push(...exRead.problems);
-  const batch = { exercises: [], families: [], dictionaries: {}, rows: {} };
+  // B02/S4: a v1 file has no card columns — read explicitly, never filled with invented content
+  const batch = { exercises: [], families: [], dictionaries: {}, rows: {}, templateVersion: version ?? null, cardColumns: !legacy, notices: [] };
+  if (legacy) batch.notices.push({ code: "BATCH_TEMPLATE_V1_NO_CARDS", message: `Plik w starszej wersji szablonu (${version}) nie ma kolumn karty ćwiczenia: istniejące ćwiczenia zachowują treść karty z atlasu, nowe ćwiczenia systemowe zostaną odrzucone bez karty (CARD_CONTENT_REQUIRED).` });
   for (const row of exRead.rows) {
-    const e = rowToExercise(row);
+    const e = rowToExercise(row, { cardColumns: !legacy });
     batch.exercises.push(e);
     batch.rows[e.exerciseId] = row.__row;
   }
@@ -289,7 +312,7 @@ const same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical
 export function mergeBatch(base, batch) {
   const atlas = JSON.parse(JSON.stringify(base || emptyAtlas()));
   const nextVersion = (atlas.atlasVersion || 0) + 1;
-  const changes = { added: [], changed: [], unchanged: [], families: 0, dictionary: 0 };
+  const changes = { added: [], changed: [], unchanged: [], families: 0, dictionary: 0, cardContentKept: [] };
   for (const kind of ["equipment", "muscles", "variantAttributes"]) {
     const list = atlas.dictionaries[kind] || (atlas.dictionaries[kind] = []);
     for (const v of (batch.dictionaries && batch.dictionaries[kind]) || []) {
@@ -317,10 +340,18 @@ export function mergeBatch(base, batch) {
     }
     const prev = atlas.exercises[i];
     const keep = { entryRev: prev.entryRev, introducedIn: prev.introducedIn, changedIn: prev.changedIn };
+    // a v1 file says nothing about the card: the atlas content stays (never deleted, never invented)
+    if (batch.cardColumns === false) {
+      let kept = false;
+      for (const f of CARD_CONTENT_FIELDS) if (!(f in e) && prev[f] !== undefined) { keep[f] = prev[f]; kept = true; }
+      if (kept) changes.cardContentKept.push(e.exerciseId);
+    }
     const next = { ...e, ...keep };
     if (same(next, prev)) { changes.unchanged.push(e.exerciseId); continue; }
     const calc = CALC_FIELDS.some((f) => !same(next[f], prev[f]));
-    atlas.exercises[i] = { ...next, entryRev: calc ? prev.entryRev + 1 : prev.entryRev, changedIn: nextVersion };
+    const merged = { ...next, entryRev: calc ? prev.entryRev + 1 : prev.entryRev, changedIn: nextVersion };
+    // the record keeps its key order (new fields last), so the atlas diff shows only real changes
+    atlas.exercises[i] = Object.fromEntries([...Object.keys(prev).filter((k) => k in merged), ...Object.keys(merged).filter((k) => !(k in prev))].map((k) => [k, merged[k]]));
     changes.changed.push(e.exerciseId);
   }
   const anything = changes.added.length + changes.changed.length + changes.families + changes.dictionary > 0;
@@ -333,7 +364,8 @@ export function checkBatch(base, batch, problems = []) {
   const { atlas, changes } = mergeBatch(base, batch);
   const report = validateAtlas(atlas, { previous: base && base.atlasVersion > 0 ? base : null });
   const batchIssues = problems.map((p) => ({ level: "error", rule: "B", code: p.code, exerciseId: p.exerciseId ?? null, field: null, message: p.message }));
-  const issues = [...batchIssues, ...report.issues];
+  const batchNotices = (batch.notices || []).map((p) => ({ level: "info", rule: "B", code: p.code, exerciseId: null, field: null, message: p.message }));
+  const issues = [...batchIssues, ...batchNotices, ...report.issues];
   const errors = issues.filter((i) => i.level === "error").length;
   return {
     ok: errors === 0,
