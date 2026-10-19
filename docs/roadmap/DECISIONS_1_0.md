@@ -1,6 +1,9 @@
 # NEXTREP 1.0 — rejestr decyzji
 
-Wersja 10 · 19.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+Wersja 11 · 19.10.2026 · gałąź `release/1.0` (projekt do odbioru)
+
+Zmiany w wersji 11: etap B02/S3 — model obciążenia wybrany w pozycji planu nr1 trafia do snapshotu
+treningu (sekcja 1g); szkic SY `db/v2-draft/002_plan_item_load_model.sql`.
 
 Zmiany w wersji 10: B02-D25 A — maszyna Smitha (`smith_plates_only`, opcjonalny opór początkowy R jako
 ustawienie karty, snapshot v3); etap B02/S2 wdrożony w silniku (sekcja 1g); D-3 w sekcji 1f zastąpiona;
@@ -211,7 +214,7 @@ jednym z modeli dopuszczonych danymi atlasu. Snapshot nie zapisuje jawnie, że m
 (da się to odtworzyć: model ≠ domyślny i należy do opcji). Osobne pole pochodzenia wyboru wymagałoby
 zatwierdzonej zmiany kontraktu i szkicu SQL — nie wprowadzono.
 
-## 1g. AT3-D12 A i B02-D25 A — pełna karta ćwiczenia, maszyna Smitha; etapy B02/S1, S2 i S4 (18–19.10.2026)
+## 1g. AT3-D12 A i B02-D25 A — pełna karta ćwiczenia, maszyna Smitha, model maszyny w planie; etapy B02/S1–S4 (18–19.10.2026)
 
 Źródło: decyzja właściciela AT3-D12 A (rejestr B02-STD-12), audyt B02-STD-13 i polecenie B02/S1
 (18.10.2026). Implementacja S1: `src/engine/atlas-schema.js` (`CARD_CONTENT_FIELDS`, `CARD_CONTENT_LIMITS`,
@@ -226,6 +229,7 @@ zatwierdzonej zmiany kontraktu i szkicu SQL — nie wprowadzono.
 
 | B02-D25 A | **Maszyna Smitha.** Trzy identyfikatory Smitha bez zmian, model `smith_plates_only`: wpisywana jest zawsze masa talerzy **P**. Opcjonalny opór początkowy **R** [kg] to ustawienie karty ćwiczenia danego użytkownika (nie pole wspólnego atlasu); `0` = świadomie podane zero, brak = R nieznane (nigdy 0). R znane: obciążenie P + R, objętość (P + R) × n; R nieznane: obciążenie P, objętość P × n. Obie objętości w głównej objętości treningu (wybór B); wynik bez R ma status `plates_only`, nie `exact`. Snapshot zapisuje R (wartość albo null) i jawny status `known` / `unknown`; edycja karty nie zmienia historii; zmiana maszyny — użytkownik aktualizuje R i odpowiada za porównania; bez katalogu egzemplarzy maszyn. Brak R w wykonanym ćwiczeniu → komunikat raportu `SMITH_STARTING_RESISTANCE_MISSING`. Nie łączyć z `barbell_total`; bez automatycznej konwersji; bez e1RM w S2 | zatwierdzona |
 | B02/S2 | Silnik: `LOAD_MODELS.smith_plates_only` (`kg: "plates"`), `effectiveLoadKg`, `platesKg`, `loadBasis`, `topPlatesKg`, status `plates_only`, `combineVolumeStatuses`, `sessionTotals.notices`; ustawienie R: `src/engine/exercise-settings.js` (parser, walidacja, magazyn w pamięci — trwały adapter TODO S6); snapshot v3 (`startingResistanceKg`, `startingResistanceStatus`, reguły `ws_starting_resistance`, `ws_snapshot_version_fields`; wersja 2 czytelna bez migracji); szkic SQL wygenerowany ponownie; kontrakt serii nr1 (`loadKg` = P). Szczegóły: `docs/atlas/B02-D21-SMITH-S2.md` | wdrożona (S2); UI karty i raportu — S6 |
+| B02/S3 | **Model maszyny w planie (B02-D21).** Pozycja planu nr1 ma pole `loadModel` (wybór osoby albo `null`); nie zmienia `exerciseId` ani `entryRev`. Dopuszczalność wyłącznie przez istniejące `loadModelOptions` / `validateLoadModelChoice` (`src/nr1/contracts/plan-load-model.js`, bez drugiego walidatora). Ćwiczenie z wyborem: model obowiązkowy przy dodaniu i edycji (`LOAD_MODEL_MISSING` / `LOAD_MODEL_NOT_ALLOWED`); ćwiczenie z jednym modelem i ćwiczenie prywatne: `null`, model z atlasu / własny, obcy model odrzucany. `null` w zapisanej lub importowanej pozycji ćwiczenia z wyborem = stan do rozstrzygnięcia: trening nie startuje (`LOAD_MODEL_MISSING`), bez cichego `machine_stack`. Budowa treningu z planu (`src/nr1/domain/workout-from-plan.js`): wszystkie pozycje sprawdzane przed utworzeniem treningu, snapshot v3 przez `buildLoadSnapshot` (model z planu, R Smitha z ustawień karty), `planItemId` i supersety zachowane; edycja planu lub atlasu nie zmienia zbudowanych treningów. Szkic SY: kolumna `plan_items.load_model` (znany model atlasu albo `null`) | wdrożona (S3) w domenie nr1; UI wyboru, karty i ekranu treningu — S6 |
 
 Kolejność dalszych etapów B02: S2 (`smith_plates_only`) → S3 (model maszyny w pozycji planu) → S4 → S5
 (import 40 rekordów B02 po zatwierdzeniu) → S6 (UI). Notatka `docs/atlas/B02-D21-SMITH-S2.md` dotyczy

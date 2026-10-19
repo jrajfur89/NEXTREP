@@ -3,11 +3,13 @@
 // Every planned set has its own goal (PE-28): a rep range (repsMin..repsMax) OR a time range
 // (durationMinSec..durationMaxSec), and a target RIR category or null. A plan has an explicit status
 // active / archived (D3). Plan items reference exactly one exercise; supersets are contiguous groups.
+// A plan item may store the chosen load model `loadModel` (B02/S3, B02-D21).
 import { validateEntity, isLive, isUuid } from "../domain/entity.js";
 import { liveSiblings } from "../domain/ordering.js";
 import { validateSupersets } from "../domain/superset.js";
 import { validateExerciseRef } from "./exercise-ref.js";
 import { RIR_CATEGORIES, PLAN_SET_TYPES, PLAN_STATUSES, LIMITS } from "./constants.js";
+import { LOAD_MODEL_CODES } from "../../engine/atlas-schema.js";
 
 const intIn = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 
@@ -49,6 +51,9 @@ export function validatePlanState(state) {
     if (it.planId !== plan.id) errors.push({ code: "PARENT_MISMATCH", field: "planId", ...where, id: it.id });
     if (!Number.isInteger(it.position) || it.position < 0) errors.push({ code: "POSITION_INVALID", field: "position", ...where, id: it.id });
     errors.push(...validateExerciseRef(it, { ...where, id: it.id }));
+    // B02/S3: the chosen load model — null / absent (not chosen, or older items) or a known atlas model.
+    // Whether it is allowed for THIS exercise needs the atlas: contracts/plan-load-model.js.
+    if (it.loadModel != null && !LOAD_MODEL_CODES.includes(it.loadModel)) errors.push({ code: "PLAN_ITEM_LOAD_MODEL_INVALID", field: "loadModel", ...where, id: it.id });
     if (isLive(it) && plan.deletedAt) errors.push({ code: "LIVE_CHILD_OF_DELETED", field: "deletedAt", ...where, id: it.id });
   }
   errors.push(...validateSupersets(liveSiblings(items, "planId", plan.id)).map((x) => ({ ...x, kind: "planItem" })));

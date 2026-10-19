@@ -283,6 +283,11 @@ obowiązują bez zmian; snapshot v2 (bez kolumn R, nigdy Smith) pozostaje popraw
   2. Maszyna ładowana talerzami. Pytania nie ma, gdy jest jedna opcja.
 - Snapshot wykonania zapisuje wybrany model w polu `loadModel` (`buildLoadSnapshot({ …, loadModel,
   equipment })`, model spoza opcji → `LOAD_MODEL_NOT_ALLOWED`). Zmiana planu nie zmienia starych sesji.
+- B02/S3 (wdrożone w domenie nr1): pozycja planu przechowuje wybór w polu `loadModel`
+  (`addPlanItem` / `updatePlanItem` z `exercise` i `atlas`; kontrakt `src/nr1/contracts/plan-load-model.js`).
+  Pusta wartość przy ćwiczeniu z wyborem nie oznacza domyślnego modelu: `startWorkoutFromPlan`
+  (`src/nr1/domain/workout-from-plan.js`) sprawdza wszystkie pozycje i odmawia startu z `LOAD_MODEL_MISSING`.
+  Ćwiczenie z jednym modelem i ćwiczenie prywatne — bez pytania. Szkic SY: `db/v2-draft/002_plan_item_load_model.sql`.
 - Wpis ciężaru: stos — wartość ze stosu (50 kg → 50 kg); talerze — suma dołożonych talerzy (20 + 20 kg →
   40 kg); konstrukcja maszyny nie jest doliczana. Tonaż bez zmian wzorów.
 - Porównania kg i rekordy: rozdzielone kluczem `comparabilityKey` = `exerciseId + loadModel + entryRev`

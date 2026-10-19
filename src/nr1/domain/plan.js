@@ -12,6 +12,7 @@ import { join, leave, moveOne, moveGroup } from "./superset.js";
 import { insertChild, removeChild, tombstoneChildren, structureChanged } from "./list-ops.js";
 import { validatePlanState, validatePlanItemSet } from "../contracts/plan-goal.js";
 import { validateExerciseRef } from "../contracts/exercise-ref.js";
+import { resolvePlanItemLoadModel } from "../contracts/plan-load-model.js";
 import { DEFAULT_RIR_TARGET, PLAN_STATUSES } from "../contracts/constants.js";
 
 const ITEM = { parentKey: "planId", supersets: true };
@@ -113,21 +114,40 @@ export function updatePlan(state, { changes, now }) {
   return commit(state, { ...state, plan: bump(state.plan, c, { now }) }, { now });
 }
 
-export function addPlanItem(state, { exerciseRef, index = null, fields = {}, now, newId = defaultNewId }) {
+// B02/S3: `loadModel` is the person's choice of the load model (B02-D21), checked against
+// `exercise` (the atlas or private record of exerciseRef) and `atlas` (equipment dictionary) by
+// contracts/plan-load-model.js. With the exercise known and a choice possible, the choice is
+// required (LOAD_MODEL_MISSING). Without `exercise` only "not chosen" (null) can be stored — the
+// workout then refuses to start until it is resolved.
+function checkLoadModel(ref, loadModel, exercise, atlas) {
+  const r = resolvePlanItemLoadModel({ ref, loadModel, exercise, atlas });
+  if (!r.ok) throw new DomainError(r.errors[0].code, "load model of the plan item is not allowed", { errors: r.errors, options: r.options });
+  return r.loadModel;
+}
+
+export function addPlanItem(state, { exerciseRef, index = null, fields = {}, loadModel = null, exercise = null, atlas = null, now, newId = defaultNewId }) {
   requireNow(now);
   const ref = { catalogExerciseId: exerciseRef?.catalogExerciseId ?? null, privateExerciseId: exerciseRef?.privateExerciseId ?? null };
   const refErrors = validateExerciseRef(ref);
   if (refErrors.length) throw new DomainError("EXERCISE_REF_INVALID", "invalid exercise reference", { errors: refErrors });
   for (const k of Object.keys(fields)) if (!ITEM_FIELDS.includes(k)) throw new DomainError("FIELD_NOT_EDITABLE", `${k} cannot be set here`, { field: k });
-  const { list: items, record } = insertChild(state.items, { ...ITEM, parentId: state.plan.id, fields: { ...ref, restSec: null, notes: "", ...fields }, index, now, newId });
+  const model = checkLoadModel(ref, loadModel, exercise, atlas);
+  const { list: items, record } = insertChild(state.items, { ...ITEM, parentId: state.plan.id, fields: { ...ref, restSec: null, notes: "", loadModel: model, ...fields }, index, now, newId });
   return { state: commit(state, { ...state, items }, { now }), item: record };
 }
 
-export function updatePlanItem(state, { itemId, changes, now }) {
+// `changes.loadModel` (B02/S3) needs `exercise` (and `atlas`) to be checked; the new model applies
+// to FUTURE workouts only — workouts already built keep their own snapshots.
+export function updatePlanItem(state, { itemId, changes, exercise = null, atlas = null, now }) {
   requireNow(now);
-  for (const k of Object.keys(changes)) if (!ITEM_FIELDS.includes(k)) throw new DomainError("FIELD_NOT_EDITABLE", `${k} cannot be changed here`, { field: k });
+  for (const k of Object.keys(changes)) if (!ITEM_FIELDS.includes(k) && k !== "loadModel") throw new DomainError("FIELD_NOT_EDITABLE", `${k} cannot be changed here`, { field: k });
   const it = liveItem(state, itemId);
-  return commit(state, { ...state, items: state.items.map((i) => (i.id === it.id ? bump(i, changes, { now }) : i)) }, { now });
+  const c = { ...changes };
+  if ("loadModel" in c) {
+    if (!exercise) throw new DomainError("LOAD_MODEL_CONTEXT_MISSING", "changing the load model needs the exercise", { field: "loadModel" });
+    c.loadModel = checkLoadModel({ catalogExerciseId: it.catalogExerciseId ?? null, privateExerciseId: it.privateExerciseId ?? null }, c.loadModel, exercise, atlas);
+  }
+  return commit(state, { ...state, items: state.items.map((i) => (i.id === it.id ? bump(i, c, { now }) : i)) }, { now });
 }
 
 export function movePlanItem(state, { itemId, toIndex, now }) {
