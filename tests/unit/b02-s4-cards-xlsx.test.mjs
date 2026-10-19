@@ -42,8 +42,8 @@ const toV1 = (wb) => {
 };
 
 describe("S4 — the 15 Batch 01 cards in the repository atlas", () => {
-  test("release 2: exactly the 15 Batch 01 exercises, each with the three valid lists; 0 validator errors", () => {
-    assert.equal(ATLAS.atlasVersion, 2);
+  test("release ≥ 2 (S4; B01-CORR-01: 3): exactly the 15 Batch 01 exercises, each with the three valid lists; 0 validator errors", () => {
+    assert.ok(ATLAS.atlasVersion >= 2);
     assert.deepEqual(ATLAS.exercises.map((e) => e.exerciseId), B01);
     const r = validateAtlas(ATLAS);
     assert.deepEqual(r.issues.filter((i) => i.level === "error"), []);
@@ -66,9 +66,10 @@ describe("S4 — the 15 Batch 01 cards in the repository atlas", () => {
       assert.match(ATLAS.exercises.find((e) => e.exerciseId === id).safetyPl.join(" "), /asekur|zabezpiecze/i, id);
     }
   });
-  test("the card change kept ids, models, muscles, tips, entryRev, introducedIn and approvedIn; changedIn = 2", () => {
+  test("the card changes kept ids, models, muscles, tips, entryRev, introducedIn and approvedIn; changedIn = a card release (2 or 3)", () => {
     for (const e of ATLAS.exercises) {
-      assert.deepEqual([e.entryRev, e.introducedIn, e.changedIn, e.approvedIn], [1, 1, 2, "NEXTREP-F2.3-BATCH01-2026-10-12"], e.exerciseId);
+      assert.deepEqual([e.entryRev, e.introducedIn, e.approvedIn], [1, 1, "NEXTREP-F2.3-BATCH01-2026-10-12"], e.exerciseId);
+      assert.ok([2, 3].includes(e.changedIn), e.exerciseId);
       assert.ok(typeof e.tipsPl === "string" && e.tipsPl.length > 0);
     }
     assert.deepEqual(ATLAS.issuedIds, B01);
@@ -163,7 +164,7 @@ describe("S4 — XLSX template v2 keeps the three card lists", () => {
     assert.equal(r.ok, true, JSON.stringify(r.issues.filter((i) => i.level === "error")));
     assert.deepEqual(r.changes.changed, ["squat_barbell_back"]);
     const after = r.atlas.exercises[0];
-    assert.deepEqual([after.entryRev, after.changedIn, r.atlas.atlasVersion], [1, 3, 3]);
+    assert.deepEqual([after.entryRev, after.changedIn, r.atlas.atlasVersion], [1, ATLAS.atlasVersion + 1, ATLAS.atlasVersion + 1]);
     for (const f of CARD_CONTENT_FIELDS) assert.ok(!CALC_FIELDS.includes(f));
     assert.ok(!r.issues.some((i) => ["ENTRY_REV_NOT_BUMPED", "LOAD_INTERPRETATION_CHANGED"].includes(i.code)));
   });
@@ -183,7 +184,7 @@ describe("S4 — older v1 batch files are read explicitly", () => {
     const r = checkBatch(ATLAS, batch);
     assert.equal(r.ok, true, JSON.stringify(r.issues.filter((i) => i.level === "error")));
     assert.deepEqual(r.changes.cardContentKept, B01);
-    assert.deepEqual([r.changes.changed.length, r.changes.unchanged.length, r.atlas.atlasVersion], [0, 15, 2]);
+    assert.deepEqual([r.changes.changed.length, r.changes.unchanged.length, r.atlas.atlasVersion], [0, 15, ATLAS.atlasVersion]);
     assert.deepEqual(r.atlas, ATLAS);
   });
   test("a NEW system exercise from a v1 file has no card → rejected with CARD_CONTENT_REQUIRED", async () => {

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "atlasVersion": 2,
+  "atlasVersion": 3,
   "dictionaries": {
     "equipment": [
       {
@@ -379,10 +379,10 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Ustaw sztangę w stojaku mniej więcej na wysokości mostka i ustaw zabezpieczenia nieco poniżej najniższego punktu przysiadu.",
-        "Wejdź pod sztangę, ułóż ją na górnej części mięśni czworobocznych, ściągnij łopatki i chwyć gryf pewnie, symetrycznie.",
+        "Wejdź pod sztangę i ułóż gryf stabilnie na górnej części pleców, zgodnie z wybraną techniką przysiadu. Chwyć sztangę symetrycznie, ustabilizuj obręcz barkową i utrzymuj napięcie tułowia.",
         "Zdejmij sztangę, cofnij się dwoma, trzema krokami i ustaw stopy mniej więcej na szerokość barków, palce lekko na zewnątrz.",
         "Weź wdech, napnij brzuch i schodź w dół, prowadząc biodra w tył i w dół, a kolana w kierunku palców stóp.",
         "Zejdź na głębokość, na której utrzymujesz neutralne plecy i pełne stopy na podłodze, a następnie wstań, wypychając podłogę stopami.",
@@ -439,10 +439,10 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Ustaw sztangę w stojaku na wysokości obojczyków i ustaw zabezpieczenia nieco poniżej najniższego punktu przysiadu.",
-        "Ułóż gryf na przednich częściach barków, blisko szyi; łokcie unieś wysoko, a palce trzymaj luźno na gryfie lub użyj chwytu skrzyżowanego.",
+        "Ułóż gryf oparty na przedniej części barków, bez uciskania szyi; łokcie unieś wysoko, a palce trzymaj luźno na gryfie lub użyj chwytu skrzyżowanego.",
         "Zdejmij sztangę, cofnij się i ustaw stopy na szerokość barków lub nieco szerzej.",
         "Weź wdech, napnij brzuch i schodź w dół, utrzymując tułów możliwie pionowo i łokcie w górze.",
         "Wstań, prowadząc kolana w kierunku palców stóp i nie pozwalając, by łokcie opadały."
@@ -453,7 +453,7 @@
         "Trzymanie ciężaru na zaciśniętych nadgarstkach zamiast na barkach."
       ],
       "safetyPl": [
-        "Ćwicz w stojaku z ustawionymi zabezpieczeniami; jeśli tracisz pozycję, odrzuć sztangę w przód na zabezpieczenia.",
+        "Ćwicz w odpowiednio przygotowanym stanowisku z zabezpieczeniami. Przed serią upewnij się, jak bezpiecznie zakończyć nieudane powtórzenie. Nie próbuj ratować utraconej pozycji kosztem kontroli nad sztangą.",
         "Przy ograniczonej ruchomości nadgarstków stosuj chwyt skrzyżowany lub paski zamiast forsowania zgięcia.",
         "Przerwij serię przy ostrym bólu nadgarstków, kolan lub pleców."
       ]
@@ -497,11 +497,11 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Stań ze stopami na szerokość bioder, gryf nad środkiem stopy.",
         "Pochyl się, chwyć gryf tuż na zewnątrz kolan i opuść biodra, aż piszczele dotkną gryfu.",
-        "Ustaw plecy w neutralnej pozycji, ściągnij łopatki w dół, weź wdech i napnij brzuch.",
+        "Ustaw kręgosłup w stabilnej pozycji, napnij mięśnie tułowia i grzbietu, utrzymując ramiona wyprostowane. Przed oderwaniem sztangi zbuduj napięcie całego ciała bez szarpania gryfu.",
         "Odepchnij podłogę nogami i prowadź sztangę blisko ciała, prostując jednocześnie biodra i kolana.",
         "W górze stań prosto bez odchylania się w tył, a następnie opuść sztangę tą samą drogą pod kontrolą."
       ],
@@ -555,7 +555,7 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Połóż się na ławce tak, by oczy były mniej więcej pod gryfem; stopy oprzyj stabilnie o podłogę.",
         "Chwyć gryf nieco szerzej niż barki, ściągnij łopatki i oprzyj je o ławkę.",
@@ -572,7 +572,7 @@
       "safetyPl": [
         "Przy ciężkich seriach korzystaj z asekurującej osoby albo ze stojaka z ustawionymi zabezpieczeniami.",
         "Trzymaj gryf pełnym chwytem, kciukiem obejmującym gryf.",
-        "Nie zakładaj zacisków, jeśli ćwiczysz sam bez zabezpieczeń — w razie problemu talerze można wtedy zsunąć z gryfu."
+        "Nie wykonuj ciężkich serii samodzielnie bez asekuracji lub odpowiednio ustawionych zabezpieczeń. Stosuj zaciski zgodnie z zasadami bezpieczeństwa stanowiska i nie traktuj zsuwania talerzy jako planowanej metody awaryjnej."
       ]
     },
     {
@@ -613,7 +613,7 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Usiądź na ławce z hantlami opartymi o uda, a następnie połóż się, przenosząc hantle na wysokość klatki piersiowej.",
         "Oprzyj stopy stabilnie o podłogę i ściągnij łopatki.",
@@ -627,7 +627,7 @@
         "Rzucanie hantli na boki po zakończeniu serii."
       ],
       "safetyPl": [
-        "Po serii opuść hantle na uda, siadając, zamiast upuszczać je na boki.",
+        "Zakończ serię kontrolowanym powrotem do pozycji siedzącej, jeśli potrafisz bezpiecznie wykonać ten manewr; przy dużym ciężarze skorzystaj z pomocy.",
         "Przy ciężkich hantlach poproś o pomoc przy podaniu ich do pozycji startowej.",
         "Przerwij serię przy ostrym bólu barku."
       ]
@@ -670,11 +670,11 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Zdejmij sztangę ze stojaka z wysokości obojczyków, chwyt nieco szerszy niż barki.",
         "Stań ze stopami na szerokość bioder, napnij brzuch i pośladki.",
-        "Wyciśnij sztangę pionowo nad głowę, odsuwając głowę lekko w tył, aby przepuścić gryf.",
+        "Wyciskaj sztangę w górę, prowadząc gryf blisko twarzy (odsuń głowę lekko w tył, aby go przepuścić), a po jej minięciu ustaw sztangę nad stabilnym środkiem ciężkości.",
         "W górze ustaw sztangę nad środkiem stopy, z głową lekko w przód między ramionami.",
         "Opuść sztangę pod kontrolą na przód barków."
       ],
@@ -728,10 +728,10 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Chwyć sztangę nachwytem nieco szerzej niż barki i stań ze stopami na szerokość bioder.",
-        "Ugnij lekko kolana i pochyl tułów w przód z neutralnymi plecami, aż sztanga zwiśnie poniżej kolan.",
+        "Ugnij lekko kolana i pochyl tułów do kąta umożliwiającego stabilny ruch i prowadzenie sztangi bez utraty pozycji pleców.",
         "Przyciągnij sztangę do dolnej części brzucha, prowadząc łokcie w tył i ściągając łopatki.",
         "Opuść sztangę pod kontrolą do wyprostu ramion, utrzymując ten sam kąt tułowia."
       ],
@@ -786,9 +786,9 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
-        "Oprzyj kolano i dłoń tej samej strony o ławkę, druga stopa stabilnie na podłodze.",
+        "Ustaw stabilne podparcie: oprzyj dłoń o ławkę, a kolano tej samej strony na ławce albo obie stopy na podłodze w stabilnym rozkroku.",
         "Chwyć hantel wolną ręką i ustaw plecy w neutralnej, poziomej pozycji.",
         "Przyciągnij hantel w kierunku biodra, prowadząc łokieć blisko tułowia.",
         "Opuść hantel pod kontrolą do wyprostu ramienia bez rotowania tułowia.",
@@ -800,7 +800,7 @@
         "Szarpanie hantla na początku ruchu."
       ],
       "safetyPl": [
-        "Używaj stabilnej ławki i pewnie oprzyj na niej kolano i dłoń.",
+        "Używaj stabilnej ławki i pewnie oprzyj na niej dłoń (oraz kolano, jeśli wybierasz ten wariant podparcia).",
         "Przerwij serię przy bólu dolnej części pleców lub barku."
       ]
     },
@@ -843,16 +843,16 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij na wyprostowanych ramionach.",
         "Napnij brzuch i ściągnij łopatki w dół przed rozpoczęciem ruchu.",
         "Podciągnij się, prowadząc łokcie w dół, aż broda znajdzie się nad drążkiem.",
-        "Opuść się pod kontrolą do pełnego zwisu."
+        "Opuść się do kontrolowanego wyprostu ramion w zakresie tolerowanym przez barki."
       ],
       "commonMistakesPl": [
         "Bujanie ciałem i wykorzystywanie rozpędu.",
-        "Niepełny zakres: brak pełnego zwisu na dole lub brody nad drążkiem.",
+        "Wyraźne skracanie zakresu: zatrzymywanie ruchu daleko przed wyprostem ramion albo przed doprowadzeniem brody nad drążek.",
         "Wysuwanie głowy w przód zamiast podciągania tułowia."
       ],
       "safetyPl": [
@@ -902,13 +902,13 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
+        "W aplikacji wpisuj tylko dodatkowy ciężar (pas z talerzami), bez masy ciała.",
         "Załóż pas i zawieś na nim talerze tak, aby obciążenie wisiało pośrodku, między nogami.",
         "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij na wyprostowanych ramionach.",
         "Napnij brzuch, ściągnij łopatki w dół i podciągnij się, aż broda znajdzie się nad drążkiem.",
-        "Opuść się pod kontrolą do pełnego zwisu, nie pozwalając obciążeniu się rozbujać.",
-        "Wpisuj tylko masę dodanego obciążenia, bez masy ciała."
+        "Opuść się pod kontrolą do pełnego zwisu, nie pozwalając obciążeniu się rozbujać."
       ],
       "commonMistakesPl": [
         "Dobieranie obciążenia, przy którym nie da się wykonać pełnego zakresu.",
@@ -961,12 +961,12 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Zamocuj gumę pewnie na drążku i ustaw w niej kolano albo stopę.",
         "Chwyć drążek nachwytem nieco szerzej niż barki i zawiśnij z gumą pod kolanem lub stopą.",
         "Napnij brzuch, ściągnij łopatki w dół i podciągnij się, aż broda znajdzie się nad drążkiem.",
-        "Opuść się pod kontrolą do pełnego zwisu, nie pozwalając gumie wyrzucić cię w górę."
+        "Opuść się pod kontrolą do pełnego zwisu; kontroluj tempo ruchu i nie wykorzystuj sprężystego odbicia gumy."
       ],
       "commonMistakesPl": [
         "Wykorzystywanie sprężystości gumy do odbijania się z dolnej pozycji.",
@@ -1074,10 +1074,10 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Stań prosto z hantlami w obu rękach, ramiona przy tułowiu.",
-        "Ugnij łokcie, unosząc hantle obiema rękami jednocześnie, bez obracania przedramion w trakcie ruchu.",
+        "Ugnij łokcie, unosząc hantle obiema rękami jednocześnie. Utrzymuj ustaloną pozycję dłoni przez całe powtórzenie, bez aktywnej supinacji.",
         "Utrzymuj łokcie przy tułowiu i nie przesuwaj ich w przód.",
         "Opuść hantle pod kontrolą do pełnego wyprostu łokci."
       ],
@@ -1129,10 +1129,10 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Oprzyj przedramiona o matę, łokcie pod barkami.",
-        "Wyprostuj nogi i oprzyj się na palcach stóp, tworząc linię prostą od głowy do pięt.",
+        "Wyprostuj nogi i oprzyj się na palcach stóp. Utrzymuj głowę, tułów i miednicę w stabilnym ustawieniu, bez nadmiernego wygięcia lędźwi.",
         "Napnij brzuch i pośladki, utrzymując miednicę w neutralnej pozycji.",
         "Oddychaj spokojnie i utrzymuj pozycję przez zaplanowany czas; zapisuj czas w sekundach."
       ],
@@ -1142,7 +1142,7 @@
         "Wstrzymywanie oddechu."
       ],
       "safetyPl": [
-        "Zakończ ćwiczenie, gdy nie utrzymujesz prostej linii ciała, zamiast przedłużać je w złej pozycji.",
+        "Zakończ ćwiczenie, gdy nie utrzymujesz stabilnego ustawienia głowy, tułowia i miednicy, zamiast przedłużać je w złej pozycji.",
         "Przerwij ćwiczenie przy bólu dolnej części pleców."
       ]
     },
@@ -1183,16 +1183,16 @@
       "correction": null,
       "entryRev": 1,
       "introducedIn": 1,
-      "changedIn": 2,
+      "changedIn": 3,
       "instructionsPl": [
         "Zawiśnij na drążku na wyprostowanych ramionach, chwytem na szerokość barków.",
         "Napnij brzuch i ustabilizuj ciało, żeby się nie bujało.",
-        "Unieś kolana w kierunku klatki piersiowej, podwijając miednicę pod koniec ruchu.",
+        "Unoś kolana bez bujania, na wysokość dostosowaną do swoich możliwości; celem technicznym jest podwinięcie miednicy pod koniec ruchu.",
         "Opuść nogi pod kontrolą, bez rozbujania ciała."
       ],
       "commonMistakesPl": [
         "Bujanie ciałem i unoszenie nóg z rozpędu.",
-        "Unoszenie kolan tylko do poziomu bioder, bez podwinięcia miednicy.",
+        "Unoszenie nóg bez podwinięcia miednicy, wyłącznie ruchem w stawach biodrowych.",
         "Gwałtowne opuszczanie nóg."
       ],
       "safetyPl": [
