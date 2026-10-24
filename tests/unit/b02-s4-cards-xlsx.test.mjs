@@ -4,6 +4,7 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { batch01Of } from "../fixtures/atlas/batch01.mjs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
@@ -14,7 +15,9 @@ import {
 import { validateAtlas, validateExercise } from "../../src/engine/atlas-validate.js";
 import { CARD_CONTENT_FIELDS, CARD_CONTENT_LIMITS, CALC_FIELDS } from "../../src/engine/atlas-schema.js";
 
-const ATLAS = JSON.parse(readFileSync(new URL("../../src/atlas/atlas.json", import.meta.url), "utf8"));
+// Batch 01 as published (release 1) — since B02-S5 a subset of the repository atlas (fixtures/atlas/batch01.mjs)
+const REPO_ATLAS = JSON.parse(readFileSync(new URL("../../src/atlas/atlas.json", import.meta.url), "utf8"));
+const ATLAS = batch01Of(REPO_ATLAS);
 const clone = (x) => structuredClone(x);
 const B01 = [
   "squat_barbell_back", "squat_barbell_front", "deadlift_barbell_conventional", "bench_press_barbell_flat", "bench_press_dumbbell_pair_flat",

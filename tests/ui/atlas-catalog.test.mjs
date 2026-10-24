@@ -39,11 +39,12 @@ describe("AT2 adapter: atlas release → read-only catalog", () => {
     assert.throws(() => { "use strict"; A.ATLAS_CATALOG.exercises.push({}); });
   });
 
-  test("Batch 01 (atlas releases 1–4): 15 exercises with every label resolved from the dictionaries", () => {
-    // releases 2 (B02/S4), 3 (B01-CORR-01) and 4 (B01-CORR-02) = the same 15 Batch 01 exercises with card content added / corrected
-    if (![1, 2, 3, 4].includes(repoAtlas.atlasVersion)) return; // the expectations below describe Batch 01 exactly
-    assert.equal(A.ATLAS_CATALOG.exercises.length, 15);
-    for (const ex of A.ATLAS_CATALOG.exercises) {
+  test("Batch 01 (release 1, in every later release): 15 exercises with every label resolved from the dictionaries", () => {
+    // since B02-S5 the catalog holds more batches; Batch 01 = the exercises introduced in release 1
+    const b01Ids = new Set(repoAtlas.exercises.filter((e) => e.introducedIn === 1).map((e) => e.exerciseId));
+    const b01 = A.ATLAS_CATALOG.exercises.filter((e) => b01Ids.has(e.exerciseId));
+    assert.equal(b01.length, 15);
+    for (const ex of b01) {
       const src = repoAtlas.exercises.find((e) => e.exerciseId === ex.exerciseId);
       assert.equal(ex.name, src.namePl);
       assert.deepEqual(ex.aliases, src.aliasesPl);
@@ -65,6 +66,14 @@ describe("AT2 adapter: atlas release → read-only catalog", () => {
     assert.equal(weighted.loadModel.label, "Masa ciała + dodatkowy ciężar — wpisujesz tylko dodane kg");
     const squat = A.ATLAS_CATALOG.exercises.find((e) => e.exerciseId === "squat_barbell_back");
     assert.deepEqual(squat.statsGroups.map((g) => g.label), ["Uda — przód", "Uda — tył i pośladki"]);
+  });
+
+  test("whole release: every load model, measurement type, laterality and reps counting has a Polish label (incl. smith_plates_only, B02-S5)", () => {
+    for (const ex of A.ATLAS_CATALOG.exercises) for (const k of ["loadModel", "measurementType", "laterality", "repsCounting"]) {
+      assert.notEqual(ex[k].label, ex[k].code, `${ex.exerciseId}: ${k} label`);
+    }
+    const smith = A.ATLAS_CATALOG.exercises.find((e) => e.exerciseId === "bench_press_smith_flat");
+    assert.equal(smith.loadModel.label, "Maszyna Smitha — wpisujesz tylko masę talerzy");
   });
 
   test("pure and defensive: input untouched, archived exercises hidden, unknown codes shown as codes, empty atlas", () => {
@@ -140,8 +149,11 @@ describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () =>
     // no edit / delete / add controls in the catalog
     assert.equal($$("button").filter((b) => /Dodaj|Usuń|Edytuj/.test(b.textContent)).length, 0);
 
-    const ex = A.ATLAS_CATALOG.exercises[0];
-    await click(items[0]);
+    // the first exercise that has aliases (the aliases section is shown only when there are some)
+    const at = A.ATLAS_CATALOG.exercises.findIndex((e) => e.aliases.length > 0);
+    assert.ok(at >= 0, "the catalog has an exercise with aliases");
+    const ex = A.ATLAS_CATALOG.exercises[at];
+    await click(items[at]);
     assert.ok(byTestId("atlas-detail"));
     assert.equal(byTestId("atlas-detail-name").textContent, ex.name);
     assert.equal(byTestId("atlas-detail-aliases").textContent, ex.aliases.join(" · "));

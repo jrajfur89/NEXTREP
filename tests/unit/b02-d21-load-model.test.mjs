@@ -7,12 +7,14 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MACHINE_LOAD_MODEL_CHOICE, loadModelOptions, validateLoadModelChoice, comparabilityKey } from "../../src/engine/load-model-options.js";
+import { batch01Of } from "../fixtures/atlas/batch01.mjs";
 import { buildLoadSnapshot, validateLoadSnapshot, modelFromSnapshot, resolveWorkoutExerciseModel, snapshotToRow, rowToSnapshot } from "../../src/engine/load-snapshot.js";
 import { exerciseTotals, sessionTotals } from "../../src/engine/load.js";
 import { validateAtlas } from "../../src/engine/atlas-validate.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const BATCH01 = JSON.parse(readFileSync(resolve(ROOT, "src/atlas/atlas.json"), "utf8"));
+const REPO_ATLAS = JSON.parse(readFileSync(resolve(ROOT, "src/atlas/atlas.json"), "utf8"));
+const BATCH01 = batch01Of(REPO_ATLAS); // Batch 01 as published (release 1); a subset since B02-S5
 const NOW = "2026-10-18T15:00:00.000Z";
 
 function machineAtlas() {
@@ -40,7 +42,9 @@ const set = (weight, reps) => ({ weight: String(weight), reps: String(reps), set
 describe("B02-D21 — the synthetic machine atlas is valid (20)", () => {
   test("validator: 0 errors with the machine equipment and exercises; the published atlas is untouched", () => {
     assert.deepEqual(validateAtlas(ATLAS).issues.filter((i) => i.level === "error"), []);
-    assert.ok(!BATCH01.dictionaries.equipment.some((e) => /machine/.test(e.code)));
+    // the test-only codes never reach the published atlas; Batch 01 itself is unchanged
+    for (const code of ["machine_press_test", "machine_stack_only_test"]) assert.ok(!REPO_ATLAS.dictionaries.equipment.some((e) => e.code === code), code);
+    for (const id of ["machine_press_test", "pec_deck_test"]) assert.ok(!REPO_ATLAS.issuedIds.includes(id), id);
     assert.equal(BATCH01.exercises.length, 15);
   });
 });

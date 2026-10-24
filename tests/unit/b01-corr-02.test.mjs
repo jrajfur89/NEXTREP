@@ -4,9 +4,12 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { batch01Of } from "../fixtures/atlas/batch01.mjs";
 import { validateAtlas } from "../../src/engine/atlas-validate.js";
 
-const ATLAS = JSON.parse(readFileSync(new URL("../../src/atlas/atlas.json", import.meta.url), "utf8"));
+// Batch 01 as published (release 1) — since B02-S5 a subset of the repository atlas (fixtures/atlas/batch01.mjs)
+const REPO_ATLAS = JSON.parse(readFileSync(new URL("../../src/atlas/atlas.json", import.meta.url), "utf8"));
+const ATLAS = batch01Of(REPO_ATLAS);
 const byId = (id) => ATLAS.exercises.find((e) => e.exerciseId === id);
 const all = (id) => [...byId(id).instructionsPl, ...byId(id).commonMistakesPl, ...byId(id).safetyPl];
 const CHANGED = ["bench_press_barbell_flat", "pullup_pronated_weighted", "pullup_pronated_band_assisted"];

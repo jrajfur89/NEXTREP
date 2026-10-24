@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "atlasVersion": 4,
+  "atlasVersion": 5,
   "dictionaries": {
     "equipment": [
       {
@@ -72,6 +72,94 @@
         "role": "load",
         "loadModels": [
           "bodyweight_plus"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "chest_press_machine",
+        "labelPl": "Maszyna do wyciskania na klatkę",
+        "role": "load",
+        "loadModels": [
+          "machine_stack",
+          "plate_loaded"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "smith_machine",
+        "labelPl": "Maszyna Smitha",
+        "role": "load",
+        "loadModels": [
+          "smith_plates_only"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "pec_deck",
+        "labelPl": "Maszyna do rozpiętek (butterfly)",
+        "role": "load",
+        "loadModels": [
+          "machine_stack"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "cable_machine",
+        "labelPl": "Wyciąg treningowy",
+        "role": "load",
+        "loadModels": [
+          "cable"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "resistance_band",
+        "labelPl": "Guma oporowa",
+        "role": "load",
+        "loadModels": [
+          "band"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "weight_vest",
+        "labelPl": "Kamizelka obciążeniowa",
+        "role": "load",
+        "loadModels": [
+          "bodyweight_plus"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "dip_bars",
+        "labelPl": "Poręcze do dipów",
+        "role": "support",
+        "loadModels": [],
+        "status": "active"
+      },
+      {
+        "code": "gymnastic_rings",
+        "labelPl": "Kółka gimnastyczne",
+        "role": "support",
+        "loadModels": [],
+        "status": "active"
+      },
+      {
+        "code": "assisted_dip_machine",
+        "labelPl": "Maszyna do dipów z asystą",
+        "role": "assist",
+        "loadModels": [
+          "assisted"
+        ],
+        "status": "active"
+      },
+      {
+        "code": "kettlebell",
+        "labelPl": "Odważnik kettlebell",
+        "role": "load",
+        "loadModels": [
+          "kettlebell_single",
+          "kettlebell_pair"
         ],
         "status": "active"
       }
@@ -284,6 +372,116 @@
         "labelPl": "Unoszenie kolan w zwisie",
         "dimension": "execution",
         "status": "active"
+      },
+      {
+        "code": "angle.decline",
+        "labelPl": "Ławka skośna ujemna",
+        "dimension": "angle",
+        "status": "active"
+      },
+      {
+        "code": "angle.incline",
+        "labelPl": "Ławka skośna dodatnia",
+        "dimension": "angle",
+        "status": "active"
+      },
+      {
+        "code": "execution.band_resisted",
+        "labelPl": "Opór gumy",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.chest_lean",
+        "labelPl": "Pochylenie tułowia na klatkę",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.explosive",
+        "labelPl": "Wykonanie eksplozywne",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.high_to_low",
+        "labelPl": "Tor z góry w dół",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.low_to_high",
+        "labelPl": "Tor z dołu w górę",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.machine_assisted",
+        "labelPl": "Asysta maszyny",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.mid",
+        "labelPl": "Tor na wysokości klatki",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.rings",
+        "labelPl": "Na kółkach gimnastycznych",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "execution.squeeze",
+        "labelPl": "Dociskanie hantli do siebie",
+        "dimension": "execution",
+        "status": "active"
+      },
+      {
+        "code": "grip.neutral",
+        "labelPl": "Chwyt neutralny",
+        "dimension": "grip",
+        "status": "active"
+      },
+      {
+        "code": "grip.wide",
+        "labelPl": "Szeroki rozstaw dłoni",
+        "dimension": "grip",
+        "status": "active"
+      },
+      {
+        "code": "laterality.alternating",
+        "labelPl": "Naprzemiennie, powtórzenia łącznie",
+        "dimension": "laterality",
+        "laterality": "alternating",
+        "repsCounting": "total",
+        "status": "active"
+      },
+      {
+        "code": "position.feet_elevated",
+        "labelPl": "Stopy na podwyższeniu",
+        "dimension": "position",
+        "status": "active"
+      },
+      {
+        "code": "position.floor",
+        "labelPl": "Leżąc na podłodze",
+        "dimension": "position",
+        "status": "active"
+      },
+      {
+        "code": "position.hands_elevated",
+        "labelPl": "Dłonie na podwyższeniu",
+        "dimension": "position",
+        "status": "active"
+      },
+      {
+        "code": "position.seated",
+        "labelPl": "Pozycja siedząca",
+        "dimension": "position",
+        "status": "active"
       }
     ]
   },
@@ -336,6 +534,31 @@
     {
       "familyId": "leg_raise",
       "namePl": "Unoszenie nóg i kolan",
+      "status": "active"
+    },
+    {
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki",
+      "status": "active"
+    },
+    {
+      "familyId": "chest_press_machine",
+      "namePl": "Wyciskanie na maszynie",
+      "status": "active"
+    },
+    {
+      "familyId": "chest_press_standing",
+      "namePl": "Wyciskanie stojąc",
+      "status": "active"
+    },
+    {
+      "familyId": "dip",
+      "namePl": "Dipy",
+      "status": "active"
+    },
+    {
+      "familyId": "pushup",
+      "namePl": "Pompki",
       "status": "active"
     }
   ],
@@ -1199,6 +1422,2113 @@
         "Jeśli chwyt słabnie, zakończ serię przed upadkiem z drążka.",
         "Przerwij ćwiczenie przy bólu barków lub dolnej części pleców."
       ]
+    },
+    {
+      "exerciseId": "bench_press_barbell_incline",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie sztangi na ławce skośnej dodatniej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.incline"
+      ],
+      "equipment": [
+        "barbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Umiarkowany skos pomaga zaakcentować górną klatkę; zbyt stromy częściej przenosi wysiłek na przednie barki.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę pod umiarkowanym skosem dodatnim, zwykle około 30–45°, i dopasuj wysokość stojaków.",
+        "Połóż się stabilnie, oprzyj stopy i łopatki, a sztangę chwyć pełnym, symetrycznym chwytem nieco szerzej niż barki.",
+        "Zdejmij sztangę ze stojaków i opuszczaj ją pod kontrolą ku górnej części klatki; utrzymuj nadgarstki nad przedramionami.",
+        "Wyciśnij sztangę bez odbijania od klatki, prowadząc łokcie w naturalnym torze i nie odrywając pośladków.",
+        "Po ostatnim powtórzeniu odprowadź sztangę na stojaki i upewnij się, że gryf spoczywa na obu hakach."
+      ],
+      "commonMistakesPl": [
+        "Zbyt duży kąt oparcia i unoszenie barków.",
+        "Odbijanie sztangi od klatki lub szybkie opuszczanie.",
+        "Odrywanie pośladków i utrata stabilności łopatek."
+      ],
+      "safetyPl": [
+        "Przy ciężkich seriach zapewnij asekurację lub ustaw odpowiednie zabezpieczenia.",
+        "Utrzymuj pełny chwyt gryfu i nie odkładaj sztangi tylko na jeden hak."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_barbell_decline",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie sztangi na ławce skośnej ujemnej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.decline"
+      ],
+      "equipment": [
+        "barbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Niewielki skos zwykle wystarcza; większe pochylenie nie zastąpi stabilnego ustawienia i kontrolowanego ruchu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę na niewielkim skosie ujemnym; sprawdź mocowanie ławki i podparcie nóg.",
+        "Połóż się stabilnie, zabezpiecz nogi i ustaw łopatki; chwyć sztangę symetrycznie pełnym chwytem.",
+        "Zdejmij sztangę i opuszczaj ją pod kontrolą w stronę dolnej części mostka, nie pozwalając łokciom uciekać wysoko ku barkom.",
+        "Wyciśnij sztangę bez odbijania od klatki i bez zsuwania się po ławce.",
+        "Po zakończeniu serii odłóż gryf na oba haki, zanim zmienisz pozycję ciała."
+      ],
+      "commonMistakesPl": [
+        "Zsuwanie się po ławce i utrata oparcia nóg.",
+        "Opuszczanie gryfu w stronę szyi zamiast dolnej części klatki.",
+        "Odbijanie sztangi i wyginanie nadgarstków."
+      ],
+      "safetyPl": [
+        "Sprawdź zabezpieczenie nóg i możliwość odłożenia gryfu.",
+        "Przy ciężkich seriach korzystaj z asekuracji lub odpowiednich ograniczników."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "floor_press_barbell",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie sztangi leżąc na podłodze",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.floor"
+      ],
+      "equipment": [
+        "barbell",
+        "mat"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "barbell_total",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Krótka pauza przy podłodze pomaga ograniczyć rozpęd i skoncentrować pracę na wyciskaniu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Przygotuj sztangę i miejsce do ćwiczenia. Upewnij się, że możesz bezpiecznie przyjąć pozycję startową i zakończyć serię; w razie potrzeby skorzystaj ze stojaków z zabezpieczeniami lub pomocy drugiej osoby.",
+        "Połóż się pod sztangą, zegnij kolana, ustabilizuj łopatki i chwyć gryf symetrycznie pełnym chwytem.",
+        "Opuść sztangę powoli, aż tylne części ramion delikatnie zetkną się z podłożem; nie uderzaj łokciami.",
+        "Po krótkiej kontroli dolnej pozycji wyciśnij sztangę, bez odbijania ramion od podłogi.",
+        "Po ostatnim powtórzeniu odłóż sztangę w kontrolowany sposób, korzystając z przygotowanego wcześniej sposobu zakończenia serii. Dopiero potem wstań."
+      ],
+      "commonMistakesPl": [
+        "Uderzanie ramionami o podłogę.",
+        "Odbijanie z dolnej pozycji i odrywanie barków.",
+        "Zbyt wysokie lub zbyt niskie ustawienie stojaków."
+      ],
+      "safetyPl": [
+        "Nie wykonuj wariantu bez możliwości bezpiecznego odłożenia sztangi.",
+        "Przy dużym obciążeniu zapewnij asekurację; nie próbuj przetaczać gryfu po tułowiu."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_smith_flat",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie na maszynie Smitha na ławce poziomej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat"
+      ],
+      "equipment": [
+        "smith_machine",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "smith_plates_only",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Najważniejsze jest ustawienie ławki względem prowadnicy. Stały tor Smitha powinien odpowiadać Twojej budowie i wygodnemu torowi wyciskania, a nie wymuszać nienaturalne ustawienie barków.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę poziomo pod prowadnicą Smitha. Sprawdź kierunek ruchu gryfu, ustaw ograniczniki bezpieczeństwa i dopasuj położenie ławki do toru maszyny.",
+        "Połóż się stabilnie, oprzyj stopy o podłoże i ustaw łopatki na ławce. Chwyć gryf symetrycznie, nieco szerzej niż barki, i upewnij się, że możesz wygodnie obsługiwać blokady.",
+        "Odblokuj gryf i opuszczaj go powoli w kierunku środkowej części klatki. Prowadź łokcie w naturalnym ustawieniu, bez wymuszania ich szerokiego rozstawienia.",
+        "Opuść gryf do zakresu, w którym utrzymujesz stabilność barków. Nie odbijaj go od klatki ani nie próbuj dopasowywać ciała do niewygodnego toru prowadnicy.",
+        "Wyciśnij gryf w górę po prowadnicy, bez odrywania pośladków i barków od ławki. Po ostatnim powtórzeniu prawidłowo zablokuj gryf na zaczepach."
+      ],
+      "commonMistakesPl": [
+        "Nieprawidłowe ustawienie ławki, przez które gryf porusza się po niewygodnym torze względem klatki.",
+        "Odbijanie gryfu od klatki i zbyt szybkie opuszczanie.",
+        "Odrywanie pośladków od ławki w celu dokończenia powtórzenia.",
+        "Zakładanie, że prowadnica całkowicie eliminuje potrzebę stabilizacji barków."
+      ],
+      "safetyPl": [
+        "Przed serią sprawdź działanie zaczepów i ustaw ograniczniki odpowiednio do zakresu ruchu.",
+        "Upewnij się, że potrafisz zablokować gryf z pozycji leżącej.",
+        "Nie kontynuuj serii, jeżeli tor prowadnicy powoduje ból barków lub wymusza utratę stabilnej pozycji."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_smith_incline",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie na maszynie Smitha na ławce skośnej dodatniej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.incline"
+      ],
+      "equipment": [
+        "smith_machine",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "smith_plates_only",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Dopasuj położenie ławki do rzeczywistego toru Smitha; większy skos nie musi lepiej angażować górnej klatki.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę pod umiarkowanym skosem dodatnim pod prowadnicą Smitha; sprawdź ograniczniki i zaczepy.",
+        "Połóż się tak, aby gryf schodził w stronę górnej klatki bez wymuszania cofnięcia barków; oprzyj stopy i łopatki.",
+        "Odblokuj gryf i opuszczaj go powoli, utrzymując nadgarstki nad przedramionami i stabilny tułów.",
+        "Wyciśnij gryf po prowadnicy bez odbijania od klatki ani odrywania barków i pośladków od ławki.",
+        "Po ostatnim powtórzeniu przekręć gryf do pewnego zablokowania i sprawdź zaczepy przed puszczeniem chwytu."
+      ],
+      "commonMistakesPl": [
+        "Ławka ustawiona tak, że gryf schodzi zbyt blisko szyi.",
+        "Zbyt stromy skos i unoszenie barków.",
+        "Odbijanie gryfu lub niepełne zablokowanie zaczepów."
+      ],
+      "safetyPl": [
+        "Przed serią ustaw ograniczniki i przećwicz blokowanie gryfu.",
+        "Przerwij, jeśli prowadnica wymusza bolesny tor barków."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_smith_decline",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie na maszynie Smitha na ławce skośnej ujemnej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.decline"
+      ],
+      "equipment": [
+        "smith_machine",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "smith_plates_only",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "W tym wariancie ustawienie ławki i możliwość bezpiecznego zablokowania gryfu są ważniejsze niż głębokość skosu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę na niewielkim skosie ujemnym pod Smithem; sprawdź stabilność ławki, blokadę nóg i ograniczniki.",
+        "Połóż się tak, by prowadnica kierowała gryf w stronę dolnej klatki, a nie szyi; ustabilizuj łopatki.",
+        "Odblokuj gryf i opuszczaj go powoli do zakresu, w którym barki pozostają stabilne.",
+        "Wyciśnij gryf bez odbijania od klatki i bez zsuwania się po ławce.",
+        "Po serii zablokuj gryf na zaczepach i sprawdź jego osadzenie przed wyjściem z pozycji."
+      ],
+      "commonMistakesPl": [
+        "Zsuwanie się z ławki pod wpływem skosu.",
+        "Niewygodny tor gryfu wynikający ze złego ustawienia ławki.",
+        "Gwałtowne opuszczanie i odbijanie od tułowia."
+      ],
+      "safetyPl": [
+        "Sprawdź blokadę nóg oraz ograniczniki przed zdjęciem gryfu.",
+        "Nie wykonuj wariantu, jeśli nie możesz pewnie obsłużyć zaczepów z pozycji leżącej."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_dumbbell_pair_incline",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantli na ławce skośnej dodatniej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.incline"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Kontroluj opuszczanie hantli i wykorzystuj rozciągnięcie klatki w zakresie tolerowanym przez barki. Nie skracaj ruchu tylko po to, by użyć cięższych hantli.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw oparcie ławki pod umiarkowanym kątem, zwykle około 30–45°. Większy kąt zwiększa udział przednich części barków.",
+        "Usiądź z hantlami opartymi o uda. Połóż się, pomagając sobie przenieść hantle do pozycji startowej. Oprzyj stabilnie stopy, a łopatki ustaw na ławce.",
+        "Opuszczaj hantle powoli po bokach górnej części klatki. Prowadź łokcie nieco poniżej linii barków, z przedramionami zbliżonymi do pionu. Schodź do głębokości, przy której zachowujesz kontrolę nad barkami.",
+        "Bez odbijania z dolnej pozycji wyciśnij hantle w górę i lekko do środka, po naturalnym łuku. Nie uderzaj hantlami o siebie.",
+        "Utrzymuj kontrolę również w górnej pozycji, bez gwałtownego blokowania łokci. Po zakończeniu serii sprowadź hantle do ud i wróć do siadu, jeśli potrafisz bezpiecznie wykonać ten manewr."
+      ],
+      "commonMistakesPl": [
+        "Zbyt stromy kąt ławki, przez który przednie barki przejmują większą część pracy.",
+        "Gwałtowne opuszczanie hantli i odbijanie z dolnej pozycji.",
+        "Nadmierne rozsuwanie łokci i utrata stabilności barków.",
+        "Uderzanie hantlami o siebie w górze zamiast kontrolowanego zakończenia ruchu."
+      ],
+      "safetyPl": [
+        "Przy ciężkich hantlach poproś o pomoc przy przyjęciu pozycji startowej i zakończeniu serii.",
+        "Nie wymuszaj głębokiego opuszczania, jeżeli powoduje ból lub utratę kontroli nad barkami.",
+        "Nie upuszczaj hantli na boki; zaplanuj bezpieczne zakończenie serii."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_dumbbell_pair_decline",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantli na ławce skośnej ujemnej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.decline"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Nie pogłębiaj skosu dla samego kąta; kontrolowane rozciągnięcie i stabilność mają większe znaczenie.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę na niewielkim skosie ujemnym i sprawdź podparcie nóg oraz drogę bezpiecznego zakończenia serii.",
+        "Przyjmij pozycję z hantlami nad klatką, utrzymując łopatki stabilnie na ławce i tułów bez zsuwania.",
+        "Opuszczaj hantle po bokach dolnej części klatki, z przedramionami bliskimi pionu, do zakresu tolerowanego przez barki.",
+        "Wyciśnij hantle po naturalnym łuku w górę, nie uderzając nimi o siebie i nie zmieniając ustawienia barków.",
+        "Zakończ serię z pomocą osoby asekurującej lub kontrolowanym odłożeniem hantli przed zejściem z ławki."
+      ],
+      "commonMistakesPl": [
+        "Zsuwanie się po ławce.",
+        "Nierówny tor obu hantli i skręcanie tułowia.",
+        "Zbyt głębokie opuszczanie z utratą stabilności barków."
+      ],
+      "safetyPl": [
+        "Przed serią sprawdź mocowanie ławki i podparcie nóg.",
+        "Przy ciężkich hantlach zaplanuj pomoc przy rozpoczęciu i zakończeniu serii."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_dumbbell_neutral",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantli chwytem neutralnym na ławce poziomej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat",
+        "grip.neutral"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Neutralny chwyt powinien pomagać znaleźć wygodny tor ramion, nie wymuszać przesadnie wąskiego prowadzenia łokci.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę poziomo, usiądź z hantlami na udach i połóż się, pomagając sobie przenieść je nad klatkę.",
+        "Skieruj dłonie ku sobie, ustaw łopatki na ławce i oprzyj stopy stabilnie o podłoże.",
+        "Opuszczaj hantle po bokach klatki, prowadząc łokcie bliżej tułowia, ale bez dociskania ich na siłę do żeber.",
+        "Wyciśnij hantle po naturalnym torze nad klatkę, zachowując neutralny chwyt i proste nadgarstki.",
+        "Po serii sprowadź hantle do ud i wróć do siadu, jeśli potrafisz wykonać to bezpiecznie."
+      ],
+      "commonMistakesPl": [
+        "Wyginanie nadgarstków mimo neutralnego chwytu.",
+        "Nadmierne dociskanie łokci do tułowia.",
+        "Zderzanie hantli i utrata kontroli nad końcem ruchu."
+      ],
+      "safetyPl": [
+        "Dobierz hantle pozwalające stabilnie kontrolować obie ręce.",
+        "Przy ciężkich hantlach zapewnij pomoc w wejściu i wyjściu z pozycji."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_dumbbell_alternating",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantli naprzemiennie na ławce poziomej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat",
+        "laterality.alternating"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "alternating",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Najważniejsze jest nieruchome położenie tułowia i hantli pozostającej w górze — nie przyspieszaj zmiany rąk.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Połóż się na poziomej ławce z parą hantli i wyciśnij obie nad klatkę.",
+        "Ustaw stopy i łopatki stabilnie; jedną hantlę utrzymuj nieruchomo nad klatką, gdy druga wykonuje ruch.",
+        "Opuść pracującą hantlę kontrolowanie po boku klatki, nie obracając barków ani bioder.",
+        "Wyciśnij ją do pozycji startowej, a następnie powtórz ten sam ruch drugą ręką.",
+        "Kontynuuj naprzemiennie z równą kontrolą obu stron; zakończ serię bezpiecznym sprowadzeniem hantli."
+      ],
+      "commonMistakesPl": [
+        "Przechylanie tułowia w stronę pracującej ręki.",
+        "Opuszczanie obu hantli jednocześnie mimo wariantu naprzemiennego.",
+        "Skracanie zakresu słabszej ręki."
+      ],
+      "safetyPl": [
+        "Nie używaj hantli, których nie potrafisz stabilnie utrzymać nad klatką.",
+        "Zaplanuj bezpieczne zakończenie serii bez rzucania hantli na boki."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "floor_press_dumbbell_pair",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantli leżąc na podłodze",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.floor"
+      ],
+      "equipment": [
+        "dumbbell",
+        "mat"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Zatrzymanie na podłodze powinno być delikatnym kontaktem, nie sposobem na uzyskanie odbicia.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Usiądź na podłodze z hantlami blisko bioder i przejdź do leżenia w sposób pozwalający zachować nad nimi kontrolę.",
+        "Ugnij kolana, oprzyj stopy i ustaw hantle nad klatką, z łopatkami stabilnie na podłożu.",
+        "Opuszczaj hantle powoli, aż tylne części ramion lekko dotkną podłogi; nie uderzaj łokciami.",
+        "Wyciśnij hantle bez odbijania od podłoża, utrzymując podobny tor obu ramion.",
+        "Po serii sprowadź hantle blisko tułowia i odłóż je bezpiecznie, zanim usiądziesz."
+      ],
+      "commonMistakesPl": [
+        "Uderzanie ramionami o podłoże.",
+        "Odrywanie barków i wypychanie hantli ruchem tułowia.",
+        "Niesymetryczne prowadzenie hantli."
+      ],
+      "safetyPl": [
+        "Zostaw wolną przestrzeń wokół głowy i łokci.",
+        "Nie przenoś ciężkich hantli za głowę podczas odkładania."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "bench_press_dumbbell_single",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantla jednorącz na ławce poziomej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat",
+        "laterality.unilateral"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_single",
+      "implements": 1,
+      "laterality": "unilateral",
+      "repsCounting": "per_side",
+      "loadIncrementKg": null,
+      "tipsPl": "Nie pozwól, by asymetryczne obciążenie obracało tułów — kontrola pozycji jest istotą tego wariantu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Połóż się na poziomej ławce z jednym hantlem nad klatką; ustaw stopy szeroko i stabilnie.",
+        "Napnij brzuch, oprzyj łopatki o ławkę, a wolną rękę ustaw tak, by pomagała utrzymać równowagę.",
+        "Opuszczaj hantel po boku klatki, bez obracania tułowia w stronę pracującej ręki.",
+        "Wyciśnij hantel po naturalnym łuku, utrzymując barki i biodra w tym samym położeniu.",
+        "Bezpiecznie odłóż hantel, a następnie wykonaj serię drugą ręką w porównywalnym zakresie."
+      ],
+      "commonMistakesPl": [
+        "Skręcanie barków i bioder za hantlem.",
+        "Zbyt szerokie prowadzenie łokcia.",
+        "Odrywanie przeciwnej strony tułowia od ławki."
+      ],
+      "safetyPl": [
+        "Dobierz hantel umożliwiający kontrolę bez przechylania się.",
+        "Nie sięgaj po hantel ani nie odkładaj go poza stabilnym zasięgiem."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "squeeze_press_dumbbell_pair",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie hantli z dociskiem do siebie",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat",
+        "execution.squeeze"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Docisk hantli powinien być równomierny przez cały ruch, nie tak silny, by zaburzał ustawienie nadgarstków.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Połóż się na poziomej ławce z dwiema hantlami trzymanymi blisko siebie nad mostkiem.",
+        "Ustaw dłonie chwytem neutralnym, z wnętrzami dłoni skierowanymi ku sobie. Oprzyj stabilnie łopatki i stopy, utrzymując umiarkowany docisk hantli przez cały ruch.",
+        "Opuszczaj hantle razem wzdłuż mostka, zachowując ich kontakt i naturalne ustawienie nadgarstków.",
+        "Wyciśnij hantle w górę, stale lekko dociskając je do siebie, ale bez skracania ruchu.",
+        "Po serii bezpiecznie rozdziel i sprowadź hantle do ud przed powrotem do siadu."
+      ],
+      "commonMistakesPl": [
+        "Rozsuwanie hantli w dolnej fazie.",
+        "Zbyt mocne ściskanie powodujące wyginanie nadgarstków.",
+        "Odbijanie hantli od mostka."
+      ],
+      "safetyPl": [
+        "Używaj hantli, których kształt pozwala utrzymać stabilny kontakt.",
+        "Nie kontynuuj, gdy hantle ślizgają się względem siebie."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "chest_press_machine_flat",
+      "scope": "system",
+      "familyId": "chest_press_machine",
+      "namePl": "Wyciskanie na maszynie poziomo",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat"
+      ],
+      "equipment": [
+        "chest_press_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "machine_stack",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Dobierz ustawienie siedziska tak, aby początek ruchu dawał odczuwalne rozciągnięcie klatki bez wymuszania cofnięcia barków.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw wysokość siedziska tak, aby uchwyty startowały w okolicy środkowej klatki piersiowej.",
+        "Oprzyj plecy, ustaw stopy stabilnie i chwyć uchwyty z nadgarstkami w naturalnej pozycji.",
+        "Pozwól ramionom maszyny cofnąć się powoli, do zakresu, w którym barki pozostają stabilne.",
+        "Wypchnij uchwyty przed siebie po torze maszyny, nie odrywając pleców od oparcia.",
+        "Wróć pod kontrolą, nie pozwalając stosowi uderzyć o pozostałe obciążniki."
+      ],
+      "commonMistakesPl": [
+        "Zbyt wysokie lub niskie siedzisko względem uchwytów.",
+        "Odrywanie pleców od oparcia w trudnej fazie.",
+        "Gwałtowne zderzanie stosu między powtórzeniami."
+      ],
+      "safetyPl": [
+        "Sprawdź regulację siedziska i zakres pracy maszyny.",
+        "Trzymaj dłonie poza ruchomymi elementami i stosem."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "chest_press_machine_incline",
+      "scope": "system",
+      "familyId": "chest_press_machine",
+      "namePl": "Wyciskanie na maszynie pod skosem dodatnim",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.incline"
+      ],
+      "equipment": [
+        "chest_press_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "machine_stack",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Zbyt niskie siedzisko może zamienić ruch w wyciskanie mocno angażujące barki — dopasuj je do własnej budowy.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw siedzisko maszyny skośnej tak, aby uchwyty znajdowały się na wysokości odpowiadającej górnej części klatki.",
+        "Oprzyj plecy i stopy, ustaw barki stabilnie względem toru ramion maszyny.",
+        "Pozwól uchwytom cofnąć się powoli, bez wymuszania zbyt głębokiego ustawienia łokci za tułowiem.",
+        "Wypchnij uchwyty w górę i do przodu po torze maszyny, nie odrywając pleców od oparcia.",
+        "Wróć kontrolowanie do rozciągnięcia, nie pozwalając ramionom maszyny gwałtownie opaść."
+      ],
+      "commonMistakesPl": [
+        "Nieprawidłowa wysokość siedziska i unoszenie barków.",
+        "Odrywanie pleców w końcowej fazie.",
+        "Wymuszanie głębokiego cofnięcia uchwytów."
+      ],
+      "safetyPl": [
+        "Sprawdź ograniczniki i zakres regulacji maszyny.",
+        "Nie pozwalaj ramionom maszyny uderzać o pozycję spoczynkową."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "chest_press_machine_unilateral",
+      "scope": "system",
+      "familyId": "chest_press_machine",
+      "namePl": "Wyciskanie na maszynie jednorącz",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat",
+        "laterality.unilateral"
+      ],
+      "equipment": [
+        "chest_press_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "machine_stack",
+      "implements": null,
+      "laterality": "unilateral",
+      "repsCounting": "per_side",
+      "loadIncrementKg": null,
+      "tipsPl": "Pracuj tak, aby oparcie stabilizowało tułów — obracanie klatki piersiowej nie powinno pomagać w wyciskaniu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw siedzisko tak, aby uchwyt pracującej ręki startował na wysokości klatki piersiowej.",
+        "Oprzyj plecy i stopy; chwyć jeden uchwyt, utrzymując barki i biodra równolegle do oparcia.",
+        "Cofaj ramię maszyny pod kontrolą do zakresu, w którym nie tracisz ustawienia barku.",
+        "Wypchnij uchwyt do przodu bez skręcania tułowia i bez unoszenia pracującego barku.",
+        "Powoli wróć do startu; następnie wykonaj serię drugą ręką przy tym samym ustawieniu maszyny."
+      ],
+      "commonMistakesPl": [
+        "Skręcanie tułowia w stronę pracującej ręki.",
+        "Odrywanie barku od oparcia.",
+        "Nierówny zakres ruchu między stronami wynikający z pośpiechu."
+      ],
+      "safetyPl": [
+        "Upewnij się, że konstrukcja maszyny dopuszcza ruch jednorącz.",
+        "Nie przekraczaj zakresu prowadnic ani ograniczników."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_dumbbell_flat",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki hantlami na ławce poziomej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.flat"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Wyobraź sobie, że obejmujesz ramionami szeroki przedmiot. Ruch powinien wynikać przede wszystkim ze zbliżania ramion, a nie z prostowania łokci.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę poziomo. Usiądź z hantlami na udach, a następnie połóż się i ustaw hantle nad klatką piersiową, z dłońmi skierowanymi ku sobie.",
+        "Oprzyj stabilnie stopy i łopatki o ławkę. Utrzymuj łokcie lekko ugięte, a nadgarstki w naturalnej pozycji.",
+        "Rozprowadzaj hantle powoli na boki po szerokim łuku. Utrzymuj zbliżony kąt ugięcia łokci i pozwól mięśniom klatki stopniowo się rozciągać.",
+        "Zatrzymaj opuszczanie w momencie, gdy osiągasz wyraźne rozciągnięcie klatki, ale nadal kontrolujesz barki. Nie próbuj opuszczać hantli jak najniżej za wszelką cenę.",
+        "Zbliżaj ramiona po tym samym łuku, prowadząc hantle nad klatkę. Zatrzymaj ruch przed zderzeniem hantli i rozpocznij kolejne kontrolowane opuszczanie."
+      ],
+      "commonMistakesPl": [
+        "Używanie zbyt ciężkich hantli i zamienianie rozpiętek w wyciskanie.",
+        "Nadmierne prostowanie łokci, które zwiększa wymagania wobec stawów.",
+        "Opuszczanie hantli zbyt głęboko, mimo utraty stabilności barków.",
+        "Szybkie zamykanie ramion z wykorzystaniem rozpędu."
+      ],
+      "safetyPl": [
+        "Dobierz hantle pozwalające kontrolować całe opuszczanie, szczególnie w dolnej pozycji.",
+        "Nie wymuszaj rozciągnięcia powodującego ból w przedniej części barku.",
+        "Po serii bezpiecznie sprowadź hantle do pozycji umożliwiającej powrót do siadu; nie odkładaj ich gwałtownie na boki."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_dumbbell_incline",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki hantlami na ławce skośnej dodatniej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.incline"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Umiarkowany skos pomaga utrzymać pracę górnej klatki; zbyt duży może przenosić większy wysiłek na barki.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę pod umiarkowanym skosem dodatnim i przyjmij pozycję z hantlami nad górną klatką.",
+        "Oprzyj stopy i łopatki stabilnie; skieruj dłonie ku sobie, pozostawiając łokcie lekko ugięte.",
+        "Rozprowadzaj hantle powoli po łuku na boki, utrzymując zbliżony kąt łokci i kontrolę nad barkami.",
+        "Zatrzymaj opuszczanie w tolerowanym rozciągnięciu, bez nadmiernego cofania ramion za tułów.",
+        "Zbliżaj ramiona po tym samym łuku nad górną klatkę, bez zamiany ruchu w wyciskanie."
+      ],
+      "commonMistakesPl": [
+        "Zbyt stromy skos ławki.",
+        "Zginanie łokci podczas unoszenia hantli jak przy wyciskaniu.",
+        "Opuszczanie hantli zbyt głęboko bez kontroli barków."
+      ],
+      "safetyPl": [
+        "Dobierz hantle umożliwiające spokojną fazę opuszczania.",
+        "Nie wymuszaj rozciągnięcia, które powoduje ostry ból barku."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_dumbbell_decline",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki hantlami na ławce skośnej ujemnej",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "angle.decline"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Najważniejsza jest stabilność na ławce ujemnej; głębszy skos nie gwarantuje lepszego bodźca.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw ławkę na niewielkim skosie ujemnym i sprawdź mocowanie oraz podparcie nóg.",
+        "Przyjmij stabilną pozycję z hantlami nad dolną częścią klatki, dłońmi skierowanymi ku sobie i lekko ugiętymi łokciami.",
+        "Rozprowadzaj hantle na boki szerokim łukiem, kontrolując ich ciężar i nie pozwalając barkom odrywać się od ławki.",
+        "Zatrzymaj ruch w zakresie tolerowanego rozciągnięcia klatki; nie pogłębiaj go kosztem stabilności.",
+        "Zbliżaj ramiona po tym samym łuku nad klatkę, a po serii bezpiecznie zakończ pozycję na skosie."
+      ],
+      "commonMistakesPl": [
+        "Zsuwanie się po ławce podczas rozpiętek.",
+        "Zmienianie ruchu w wyciskanie przez uginanie łokci.",
+        "Opuszczanie hantli poza kontrolowany zakres barków."
+      ],
+      "safetyPl": [
+        "Sprawdź podparcie nóg i stabilność ławki.",
+        "Zaplanuj pomoc przy rozpoczęciu i zakończeniu serii z ciężkimi hantlami."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_pec_deck",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki na maszynie pec deck",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.seated"
+      ],
+      "equipment": [
+        "pec_deck"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "machine_stack",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Skup się na zbliżaniu ramion, a nie na mocnym ściskaniu uchwytów; nie potrzebujesz maksymalnego otwarcia maszyny.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw siedzisko pec deck tak, aby uchwyty lub podpory ramion znajdowały się na wysokości odpowiedniej dla klatki.",
+        "Oprzyj plecy i stopy, ustaw łokcie zgodnie z konstrukcją maszyny, bez wymuszania wysokiego uniesienia barków.",
+        "Pozwól ramionom maszyny otworzyć się powoli, do zakresu, w którym klatka rozciąga się bez bólu barków.",
+        "Zbliż ramiona przed klatką, utrzymując plecy na oparciu i nie popychając uchwytów samymi dłońmi.",
+        "Wróć pod kontrolą, nie dopuszczając do uderzenia stosu i utraty stabilności barków."
+      ],
+      "commonMistakesPl": [
+        "Zbyt dalekie cofanie ramion poza tolerowany zakres.",
+        "Odrywanie pleców od oparcia.",
+        "Gwałtowne otwieranie ramion pod wpływem stosu."
+      ],
+      "safetyPl": [
+        "Sprawdź zakres regulacji i ustawienie pozycji startowej.",
+        "Trzymaj dłonie poza przegubami i ruchomymi elementami maszyny."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_cable_high_to_low",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki na wyciągu z góry w dół",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.high_to_low"
+      ],
+      "equipment": [
+        "cable_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "cable",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Prowadź dłonie z góry w dół, zamiast wypychać je poziomo; to właśnie kierunek przywodzenia odróżnia ten wariant.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw bloczki obu wyciągów powyżej barków i chwyć pojedyncze uchwyty.",
+        "Stań stabilnie w wykroku między wyciągami, lekko pochyl tułów i utrzymuj łokcie delikatnie ugięte.",
+        "Pozwól ramionom otworzyć się powoli w górę i na boki, do zakresu stabilnego dla barków.",
+        "Ściągaj ramiona po łuku w dół i do środka, kierując dłonie przed dolną część klatki, bez prostowania łokci jak przy wyciskaniu.",
+        "Wróć po tym samym łuku pod kontrolą, nie pozwalając stosom szarpnąć ramionami."
+      ],
+      "commonMistakesPl": [
+        "Wypychanie uchwytów przed siebie jak przy wyciskaniu.",
+        "Pochylanie całego tułowia, aby pomóc linkom.",
+        "Gwałtowne cofanie ramion pod wpływem stosów."
+      ],
+      "safetyPl": [
+        "Sprawdź karabińczyki, linki i równe ustawienie bloczków.",
+        "Nie ustawiaj zbyt dużego zakresu otwarcia, jeśli linki ciągną barki za daleko w tył.",
+        "Po zakończeniu serii odprowadź uchwyty do pozycji spoczynkowej, zamiast puszczać je pod napięciem."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_cable_mid",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki na wyciągu na wysokości klatki",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.mid"
+      ],
+      "equipment": [
+        "cable_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "cable",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj lekko ugięte łokcie w podobnej pozycji przez cały ruch. Dzięki temu pracę wykonuje przede wszystkim klatka, a nie tricepsy prostujące ramiona.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw oba bloczki wyciągu mniej więcej na wysokości klatki piersiowej. Dobierz jednakowe obciążenie po obu stronach i chwyć pojedyncze uchwyty.",
+        "Stań pomiędzy wyciągami w stabilnym wykroku. Lekko pochyl tułów, napnij brzuch i ustaw ramiona po bokach klatki z delikatnie ugiętymi łokciami.",
+        "Pozwól ramionom powoli otworzyć się na boki, kontrolując napięcie linek. Zatrzymaj ruch, gdy czujesz rozciągnięcie klatki bez utraty stabilności barków.",
+        "Zbliżaj ramiona szerokim łukiem przed klatką, utrzymując podobny kąt łokci. Skup się na zbliżaniu ramion, a nie na prostowaniu ich jak podczas wyciskania.",
+        "Zakończ zbliżanie dłoni bez gwałtownego krzyżowania linek. Powoli wróć do pozycji rozciągnięcia, nie pozwalając stosom szarpnąć ramionami."
+      ],
+      "commonMistakesPl": [
+        "Zbyt duże obciążenie stosów, powodujące kołysanie tułowiem.",
+        "Zginanie i prostowanie łokci, przez które rozpiętki zamieniają się w wyciskanie.",
+        "Nadmierne cofanie ramion i utrata kontroli nad barkami.",
+        "Gwałtowne puszczanie uchwytów podczas fazy powrotnej."
+      ],
+      "safetyPl": [
+        "Sprawdź stan linek, uchwytów i karabińczyków oraz prawidłowe osadzenie obciążenia.",
+        "Nie pozwalaj stosom gwałtownie odciągać ramion do tyłu.",
+        "Po zakończeniu serii odprowadź uchwyty do pozycji spoczynkowej, zamiast puszczać je pod napięciem."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_cable_low_to_high",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki na wyciągu z dołu do góry",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.low_to_high"
+      ],
+      "equipment": [
+        "cable_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "cable",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Ruch powinien przypominać obejmowanie klatki od dołu; unikaj unoszenia barków i zamieniania go w wznosy ramion.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw oba bloczki wyciągu nisko, chwyć uchwyty i stań stabilnie między urządzeniami.",
+        "Utrzymuj lekko ugięte łokcie, napięty brzuch i naturalną pozycję barków.",
+        "Pozwól dłoniom cofnąć się i rozejść na boki pod kontrolą, bez nadmiernego odciągania ramion do tyłu.",
+        "Zbliżaj ramiona po łuku z dołu do góry, prowadząc dłonie przed górną część klatki, a nie wypychając je przed siebie.",
+        "Powoli odwróć tor ruchu, utrzymując podobny kąt łokci i bez zderzania stosów."
+      ],
+      "commonMistakesPl": [
+        "Zbyt wysokie unoszenie dłoni i przejmowanie pracy przez barki.",
+        "Zginanie łokci w celu wypchnięcia uchwytów.",
+        "Kołysanie tułowiem pod wpływem stosów."
+      ],
+      "safetyPl": [
+        "Sprawdź stan linek i zaczepów.",
+        "Nie pozwalaj wyciągom gwałtownie odciągać ramion w dół i do tyłu.",
+        "Po zakończeniu serii odprowadź uchwyty do pozycji spoczynkowej, zamiast puszczać je pod napięciem."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_cable_unilateral",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki na wyciągu jednorącz",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "laterality.unilateral"
+      ],
+      "equipment": [
+        "cable_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "cable",
+      "implements": null,
+      "laterality": "unilateral",
+      "repsCounting": "per_side",
+      "loadIncrementKg": null,
+      "tipsPl": "Nie nadrabiaj ruchu skrętem barków — przywodzenie powinno pochodzić z pracy ramienia względem tułowia.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw bloczek wyciągu na wysokości odpowiadającej wybranemu torowi rozpiętek i chwyć pojedynczy uchwyt.",
+        "Stań stabilnie bokiem lub lekko skośnie do wyciągu, napnij brzuch i pozostaw łokieć lekko ugięty.",
+        "Otwórz pracujące ramię powoli, do zakresu, w którym bark pozostaje stabilny i nie skręcasz tułowia.",
+        "Przywiedź ramię łukiem przed klatkę, zachowując podobny kąt łokcia i nieruchome biodra.",
+        "Wróć po tym samym łuku i wykonaj serię drugą ręką, zachowując porównywalny zakres."
+      ],
+      "commonMistakesPl": [
+        "Obracanie bioder i klatki za uchwytem.",
+        "Zmienianie rozpiętek w wyciskanie przez prostowanie łokcia.",
+        "Szarpanie linką przy powrocie."
+      ],
+      "safetyPl": [
+        "Sprawdź mocowanie karabińczyka i tor linki.",
+        "Dobierz stos, który nie odciąga barku poza kontrolowany zakres."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_band_standing",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki z gumą stojąc",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.standing"
+      ],
+      "equipment": [
+        "resistance_band"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "band_reps",
+      "loadModel": "band",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Opór gumy narasta przy zbliżaniu dłoni — kontroluj końcową fazę bez szarpania i wyginania tułowia.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Zamocuj gumę stabilnie za plecami na wysokości klatki i sprawdź jej stan.",
+        "Stań w stabilnym wykroku, chwyć końce gumy i ustaw ramiona na boki z lekko ugiętymi łokciami.",
+        "Pozwól ramionom otworzyć się pod kontrolą, nie oddając barków gwałtownie do tyłu.",
+        "Zbliżaj dłonie przed klatką po szerokim łuku, zachowując podobny kąt łokci przez cały ruch.",
+        "Powoli wróć do otwarcia ramion, nie wykorzystując sprężystości gumy do odbicia."
+      ],
+      "commonMistakesPl": [
+        "Prostowanie łokci i zamienianie rozpiętek w wyciskanie.",
+        "Zbyt dalekie cofanie ramion pod napięciem gumy.",
+        "Kołysanie tułowiem w trudniejszej fazie."
+      ],
+      "safetyPl": [
+        "Sprawdź gumę pod kątem przetarć i pewność zakotwienia.",
+        "Nie ustawiaj napiętej gumy na linii twarzy."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "fly_dumbbell_floor",
+      "scope": "system",
+      "familyId": "chest_fly",
+      "namePl": "Rozpiętki hantlami leżąc na podłodze",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.floor"
+      ],
+      "equipment": [
+        "dumbbell",
+        "mat"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "dumbbell_pair",
+      "implements": 2,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Podłoga ogranicza zakres rozciągnięcia — nie próbuj go zwiększać przez unoszenie barków lub odrywanie pleców.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Usiądź z hantlami blisko bioder i połóż się na podłodze z ugiętymi kolanami.",
+        "Ustaw hantle nad klatką z dłońmi ku sobie, łokciami lekko ugiętymi i łopatkami opartymi o podłoże.",
+        "Rozprowadzaj hantle szerokim łukiem na boki, utrzymując podobny kąt łokci.",
+        "Zatrzymaj ruch przy delikatnym kontakcie ramion z podłogą, bez uderzania łokciami i odrywania barków.",
+        "Zbliżaj ramiona po tym samym łuku nad klatkę, a po serii bezpiecznie odłóż hantle obok tułowia."
+      ],
+      "commonMistakesPl": [
+        "Uderzanie ramionami o podłogę.",
+        "Zbyt duże zginanie łokci w fazie unoszenia hantli.",
+        "Odrywanie barków od podłoża."
+      ],
+      "safetyPl": [
+        "Zostaw wolne miejsce po bokach tułowia.",
+        "Nie odkładaj hantli gwałtownie ani za głowę."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_standard",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki klasyczne",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.bodyweight"
+      ],
+      "equipment": [],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Kontrolowane opuszczanie i stabilna linia tułowia są ważniejsze niż szybkie dokładanie kolejnych powtórzeń.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw dłonie nieco szerzej niż barki, oprzyj palce stóp o podłogę i ustaw ciało w jednej linii.",
+        "Napnij brzuch i pośladki, utrzymując naturalne ustawienie głowy oraz kontrolę łopatek.",
+        "Uginaj łokcie i opuszczaj klatkę między dłońmi do zakresu, w którym nie zapadają się biodra ani barki.",
+        "Odepchnij podłoże, prostując ramiona bez gwałtownego blokowania łokci i przeprostu lędźwi.",
+        "Powtarzaj z podobną głębokością, dopóki zachowujesz kontrolę całego ciała."
+      ],
+      "commonMistakesPl": [
+        "Opadanie bioder i wyginanie lędźwi.",
+        "Rozstawianie łokci prostopadle do tułowia.",
+        "Coraz płytsze powtórzenia w miarę zmęczenia."
+      ],
+      "safetyPl": [
+        "Ćwicz na stabilnym, nieśliskim podłożu.",
+        "Przy bólu nadgarstków lub barków dostosuj ustawienie dłoni albo wariant pompki."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_wide",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki z szerokim ustawieniem dłoni",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "grip.wide"
+      ],
+      "equipment": [],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Szerszy rozstaw nie musi dawać większej pracy klatki — wybierz taki, przy którym możesz ją kontrolować bez bólu barków.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw dłonie szerzej niż w klasycznej pompce, ale nie tak daleko, by wymuszać bolesne ustawienie barków.",
+        "Napnij brzuch i pośladki, utrzymując prostą linię ciała od głowy do pięt.",
+        "Opuszczaj klatkę między dłońmi, prowadząc łokcie w wygodnym torze i nie zapadając barków.",
+        "Odepchnij podłogę bez unoszenia bioder i bez gwałtownego prostowania łokci.",
+        "Kontynuuj z podobnym zakresem, dopóki zachowujesz stabilną pozycję."
+      ],
+      "commonMistakesPl": [
+        "Przesadnie szeroki rozstaw dłoni.",
+        "Zapadanie barków przy opuszczaniu.",
+        "Opadanie bioder i skracanie ruchu."
+      ],
+      "safetyPl": [
+        "Nie zwiększaj rozstawu kosztem komfortu barków.",
+        "Upewnij się, że dłonie nie ślizgają się po podłożu."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_feet_elevated",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki z nogami na podwyższeniu",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.feet_elevated"
+      ],
+      "equipment": [
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Nie zwiększaj wysokości stóp tylko po to, by utrudnić ruch — zbyt duży kąt może mocniej angażować barki.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Oprzyj stopy na stabilnym, niezbyt wysokim podwyższeniu i ustaw dłonie na podłodze.",
+        "Napnij tułów i pośladki, utrzymując ciało w jednej linii bez unoszenia bioder.",
+        "Opuszczaj klatkę między dłońmi, prowadząc łokcie w naturalnym torze i kontrolując barki.",
+        "Odepchnij podłogę, utrzymując stopy na podwyższeniu i nie załamując pozycji w biodrach.",
+        "Zakończ serię, zanim utracisz kontrolę tułowia; bezpiecznie zejdź z podwyższenia."
+      ],
+      "commonMistakesPl": [
+        "Zbyt wysokie podwyższenie i unoszenie bioder.",
+        "Opadanie lędźwi podczas opuszczania.",
+        "Przesuwanie się stóp na niestabilnym podparciu."
+      ],
+      "safetyPl": [
+        "Sprawdź, czy podwyższenie nie przesuwa się pod naciskiem.",
+        "Zejdź z niego przed całkowitą utratą kontroli ramion."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_hands_elevated",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki z rękami na podwyższeniu",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.hands_elevated"
+      ],
+      "equipment": [
+        "bench"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Wysokość podparcia dobierz tak, by wykonywać powtarzalne, kontrolowane opuszczanie zamiast urywać ruch w połowie.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Oprzyj dłonie na stabilnym podwyższeniu, mniej więcej na szerokość barków.",
+        "Odejdź stopami do tyłu i napnij brzuch oraz pośladki, ustawiając ciało w jednej linii.",
+        "Uginaj łokcie i zbliżaj klatkę do podwyższenia, bez załamywania bioder.",
+        "Odepchnij podparcie, prostując ramiona i utrzymując stabilne barki.",
+        "Powtarzaj ruch kontrolowanie; obniżaj podparcie dopiero wtedy, gdy zachowujesz pełną kontrolę."
+      ],
+      "commonMistakesPl": [
+        "Oparcie dłoni na chwiejnym meblu.",
+        "Opadanie bioder i wysuwanie głowy.",
+        "Zbyt płytki zakres mimo możliwości głębszego ruchu."
+      ],
+      "safetyPl": [
+        "Korzystaj tylko z podparcia, które nie przesuwa się ani nie przewraca.",
+        "Sprawdź przyczepność dłoni do powierzchni."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_weighted",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki z dodatkowym obciążeniem",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.weighted"
+      ],
+      "equipment": [
+        "weight_vest"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight_plus",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Dodatkowe obciążenie ma zwiększać pracę mięśni, a nie wymuszać płytsze powtórzenia i zapadanie bioder.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Załóż i dopasuj kamizelkę obciążeniową tak, by nie przemieszczała się podczas ruchu.",
+        "Ustaw dłonie i stopy jak do klasycznej pompki, napnij brzuch i pośladki.",
+        "Opuszczaj klatkę pod kontrolą, utrzymując stabilne barki i prostą linię tułowia.",
+        "Odepchnij podłogę bez zapadania lędźwi i bez gwałtownego prostowania łokci.",
+        "Zakończ serię, gdy obciążenie zaczyna zmieniać tor ruchu lub głębokość kolejnych powtórzeń."
+      ],
+      "commonMistakesPl": [
+        "Zbyt szybkie zwiększanie obciążenia kamizelki.",
+        "Opadanie bioder podczas trudnej fazy.",
+        "Skracanie zakresu w kolejnych powtórzeniach."
+      ],
+      "safetyPl": [
+        "Sprawdź zapięcia i równomierne rozłożenie kamizelki.",
+        "Nie kontynuuj serii po utracie kontroli barków lub tułowia."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_band_resisted",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki z oporem gumy",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.band_resisted"
+      ],
+      "equipment": [
+        "resistance_band"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "band_reps",
+      "loadModel": "band",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Opór gumy często jest największy blisko wyprostu — utrzymuj wtedy stabilny tułów zamiast przyspieszać ruchem bioder.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Przełóż gumę przez górną część pleców i stabilnie przytrzymaj jej końce pod dłońmi.",
+        "Ustaw ciało jak do klasycznej pompki, napnij brzuch i sprawdź, czy guma nie przesuwa się ku szyi.",
+        "Opuszczaj klatkę pod kontrolą, nie wykorzystując sprężystości gumy do odbicia.",
+        "Odepchnij podłogę przeciw rosnącemu oporowi, nie wypychając bioder ani nie przeprostowując lędźwi.",
+        "Powtarzaj płynnie, kontrolując szczególnie końcową fazę wyprostu ramion."
+      ],
+      "commonMistakesPl": [
+        "Przesuwanie gumy na szyję.",
+        "Gwałtowne odbijanie z dolnej pozycji.",
+        "Zapadanie lędźwi w trudnej fazie wyprostu."
+      ],
+      "safetyPl": [
+        "Sprawdź gumę pod kątem pęknięć i pewność jej zamocowania pod dłońmi.",
+        "Nie używaj ułożenia, w którym guma może zsunąć się na twarz."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_rings",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki na kółkach gimnastycznych",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.rings"
+      ],
+      "equipment": [
+        "gymnastic_rings"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Wyższe zawieszenie kółek zmniejsza trudność — najpierw opanuj stabilizację, dopiero potem zwiększaj zakres.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Zawieś kółka na równej wysokości i dobierz ustawienie pozwalające bezpiecznie kontrolować podpór.",
+        "Chwyć kółka i ustaw napięty tułów; utrzymuj uchwyty blisko linii barków.",
+        "Opuszczaj klatkę między kółka powoli, nie pozwalając im niekontrolowanie rozjeżdżać się na boki.",
+        "Odepchnij się, zbliżając ramiona po naturalnym torze i bez gwałtownego ściągania kółek.",
+        "Zakończ serię, gdy nie możesz utrzymać stabilnych barków i jednej linii tułowia."
+      ],
+      "commonMistakesPl": [
+        "Rozjeżdżanie się kółek przy opuszczaniu.",
+        "Wymuszanie zbyt głębokiego zejścia.",
+        "Zapadanie barków i opadanie bioder."
+      ],
+      "safetyPl": [
+        "Sprawdź pasy, klamry i punkt mocowania kółek.",
+        "Ustaw wysokość pozwalającą bezpiecznie przerwać serię."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "pushup_explosive",
+      "scope": "system",
+      "familyId": "pushup",
+      "namePl": "Pompki eksplozywne",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.explosive"
+      ],
+      "equipment": [],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "To wariant mocy: priorytetem jest szybkie wybicie i miękkie lądowanie, a nie maksymalne zmęczenie mięśni.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw dłonie jak do klasycznej pompki i napnij tułów w jednej linii.",
+        "Opuść klatkę pod kontrolą, utrzymując barki i łokcie w stabilnym ustawieniu.",
+        "Odepchnij podłogę dynamicznie tak, by dłonie na chwilę oderwały się od podłoża.",
+        "Wyląduj miękko na lekko ugiętych łokciach, amortyzując kontakt dłońmi i ramionami.",
+        "Wykonuj kolejne powtórzenia tylko wtedy, gdy zachowujesz jakość wybicia i lądowania."
+      ],
+      "commonMistakesPl": [
+        "Lądowanie na sztywno z zablokowanymi łokciami.",
+        "Zapadanie tułowia podczas wybicia.",
+        "Kontynuowanie po utracie szybkości i kontroli."
+      ],
+      "safetyPl": [
+        "Ćwicz na nieśliskiej powierzchni z wolną przestrzenią przed sobą.",
+        "Nie przechodź do oderwania dłoni, jeśli nie kontrolujesz zwykłych pompek."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "dip_chest",
+      "scope": "system",
+      "familyId": "dip",
+      "namePl": "Dipy z pochyleniem tułowia na klatkę",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.chest_lean"
+      ],
+      "equipment": [
+        "dip_bars"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major",
+        "triceps_brachii"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Utrzymuj umiarkowane pochylenie tułowia przez cały ruch. Nie próbuj zwiększać udziału klatki przez przesadnie głębokie schodzenie — ważniejsze jest kontrolowane rozciągnięcie.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Chwyć poręcze i wejdź do stabilnego podporu na wyprostowanych ramionach. Ustaw barki pod kontrolą, bez zapadania się między poręczami.",
+        "Pochyl tułów umiarkowanie do przodu, utrzymując napięty brzuch. Nogi możesz lekko ugiąć, jeśli pomaga to zachować stabilną pozycję.",
+        "Opuszczaj ciało powoli, uginając łokcie i pozwalając im kierować się nieco na boki. Utrzymuj pochylenie tułowia bez bujania nogami.",
+        "Zatrzymaj opuszczanie na głębokości, przy której czujesz pracę i rozciągnięcie klatki, ale zachowujesz kontrolę nad barkami. Nie wymuszaj zejścia poniżej własnego komfortowego zakresu.",
+        "Wypchnij ciało w górę, utrzymując podobne pochylenie tułowia. Unikaj odbijania z dolnej pozycji i gwałtownego blokowania łokci."
+      ],
+      "commonMistakesPl": [
+        "Zbyt pionowy tułów, który zwiększa względny udział tricepsów.",
+        "Nadmiernie głębokie opuszczanie mimo utraty stabilności barków.",
+        "Odbijanie z dolnej pozycji i bujanie nogami.",
+        "Unoszenie barków i zapadanie się między poręczami pod koniec serii."
+      ],
+      "safetyPl": [
+        "Sprawdź stabilność poręczy i możliwość bezpiecznego wejścia oraz zejścia.",
+        "Nie wymuszaj głębokości, szczególnie jeśli odczuwasz dyskomfort z przodu barków.",
+        "Jeżeli nie potrafisz wykonać kontrolowanego ruchu z masą własnego ciała, wybierz wariant z asystą."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "dip_chest_weighted",
+      "scope": "system",
+      "familyId": "dip",
+      "namePl": "Dipy z pochyleniem tułowia z obciążeniem",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.chest_lean",
+        "execution.weighted"
+      ],
+      "equipment": [
+        "dip_bars",
+        "weight_plates",
+        "weight_belt"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major",
+        "triceps_brachii"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "bodyweight_plus",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Dodawaj talerze dopiero wtedy, gdy bez obciążenia potrafisz utrzymać podobny zakres i pochylenie tułowia.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Załóż pas obciążeniowy i zamocuj talerze tak, aby swobodnie zwisały między nogami.",
+        "Chwyć poręcze, wejdź do stabilnego podporu i pochyl tułów umiarkowanie do przodu.",
+        "Opuszczaj ciało powoli, kontrolując położenie talerzy i schodząc tylko do zakresu stabilnego dla barków.",
+        "Wypchnij ciało w górę bez bujania nogami i odbijania z dolnej pozycji.",
+        "Po serii oprzyj stopy stabilnie, zejdź z poręczy i dopiero wtedy zdejmij obciążenie."
+      ],
+      "commonMistakesPl": [
+        "Rozhuśtywanie talerzy podczas ruchu.",
+        "Zbyt głębokie zejście pod wpływem dodatkowej masy.",
+        "Odbijanie z dolnej pozycji i utrata kontroli barków."
+      ],
+      "safetyPl": [
+        "Sprawdź pas, łańcuch i zabezpieczenie talerzy.",
+        "Zapewnij możliwość bezpiecznego zejścia z poręczy bez zeskakiwania."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "dip_chest_assisted_machine",
+      "scope": "system",
+      "familyId": "dip",
+      "namePl": "Dipy na maszynie z asystą",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "execution.chest_lean",
+        "execution.machine_assisted"
+      ],
+      "equipment": [
+        "assisted_dip_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major",
+        "triceps_brachii"
+      ],
+      "secondaryMuscles": [
+        "deltoid_anterior"
+      ],
+      "measurementType": "bodyweight_reps",
+      "loadModel": "assisted",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "Większa asysta ułatwia ruch — dobierz ją tak, aby utrzymać kontrolę nad rozciągnięciem klatki i pochyleniem tułowia.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw poziom asysty i podparcie kolan lub stóp zgodnie z konstrukcją maszyny.",
+        "Chwyć poręcze, przyjmij stabilny podpór i pochyl tułów umiarkowanie do przodu.",
+        "Uginaj łokcie i opuszczaj ciało do zakresu stabilnego dla barków, pozwalając platformie płynnie się poruszać.",
+        "Wypchnij ciało w górę bez odbijania od platformy i bez szarpania uchwytów.",
+        "Po serii wróć do pozycji startowej i zejdź z maszyny zgodnie z jej mechanizmem."
+      ],
+      "commonMistakesPl": [
+        "Odbijanie kolanami od platformy.",
+        "Wymuszanie zbyt głębokiego zejścia.",
+        "Zapadanie barków mimo wsparcia maszyny."
+      ],
+      "safetyPl": [
+        "Sprawdź działanie platformy i blokad maszyny.",
+        "Trzymaj dłonie oraz nogi z dala od ruchomych przegubów."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "chest_press_band_standing",
+      "scope": "system",
+      "familyId": "chest_press_standing",
+      "namePl": "Wyciskanie gumy przed klatkę piersiową w pozycji stojącej",
+      "aliasesPl": [
+        "Wyciskanie gumy stojąc przed klatką"
+      ],
+      "variantAttributes": [
+        "position.standing"
+      ],
+      "equipment": [
+        "resistance_band"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "band_reps",
+      "loadModel": "band",
+      "implements": null,
+      "laterality": "bilateral",
+      "repsCounting": "total",
+      "loadIncrementKg": null,
+      "tipsPl": "W końcowej fazie opór gumy zwykle wzrasta — utrzymuj napięty brzuch, zamiast odchylać się do tyłu.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Zamocuj gumę stabilnie za plecami na wysokości klatki i sprawdź jej stan.",
+        "Stań w stabilnym wykroku, chwyć końce gumy i ustaw dłonie po bokach klatki z łokciami lekko skierowanymi w dół.",
+        "Pozwól dłoniom cofnąć się powoli do zakresu, w którym barki pozostają stabilne.",
+        "Wypchnij dłonie przed klatkę piersiową, prostując ramiona po naturalnym torze bez odchylania tułowia.",
+        "Wróć kontrolowanie do pozycji startowej, nie pozwalając gumie gwałtownie odciągać ramion."
+      ],
+      "commonMistakesPl": [
+        "Przeprost lędźwi podczas wypychania dłoni.",
+        "Niekontrolowane cofanie łokci za tułów.",
+        "Szarpanie gumą zamiast płynnego wyciskania."
+      ],
+      "safetyPl": [
+        "Sprawdź gumę pod kątem przetarć i pewność mocowania.",
+        "Nie ustawiaj zaczepu tak, by zerwana guma mogła uderzyć w twarz."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "chest_press_cable_unilateral",
+      "scope": "system",
+      "familyId": "chest_press_standing",
+      "namePl": "Wyciskanie na wyciągu jednorącz stojąc",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.standing",
+        "laterality.unilateral"
+      ],
+      "equipment": [
+        "cable_machine"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "cable",
+      "implements": null,
+      "laterality": "unilateral",
+      "repsCounting": "per_side",
+      "loadIncrementKg": null,
+      "tipsPl": "Ruch powinien pochodzić z wyciskania ramieniem, nie z obrotu bioder i tułowia w kierunku linki.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw bloczek wyciągu mniej więcej na wysokości klatki i chwyć jeden uchwyt.",
+        "Stań stabilnie w wykroku, tyłem lub lekko skośnie do wyciągu, z napiętym brzuchem i łokciem po boku tułowia.",
+        "Pozwól dłoni cofnąć się pod kontrolą do zakresu stabilnego dla barku.",
+        "Wypchnij uchwyt przed klatkę, nie skręcając bioder ani barków w stronę pracującej ręki.",
+        "Powoli wróć do startu i wykonaj serię drugą ręką przy podobnym ustawieniu."
+      ],
+      "commonMistakesPl": [
+        "Obracanie klatki piersiowej za uchwytem.",
+        "Przechylanie tułowia, aby pokonać opór stosu.",
+        "Gwałtowne cofanie ramienia pod wpływem linki."
+      ],
+      "safetyPl": [
+        "Sprawdź karabińczyk i prowadzenie linki.",
+        "Nie pozwalaj stosowi szarpnąć ramieniem do tyłu."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
+    },
+    {
+      "exerciseId": "floor_press_kettlebell",
+      "scope": "system",
+      "familyId": "bench_press",
+      "namePl": "Wyciskanie kettlebell jednorącz leżąc na podłodze",
+      "aliasesPl": [],
+      "variantAttributes": [
+        "position.floor",
+        "laterality.unilateral"
+      ],
+      "equipment": [
+        "kettlebell",
+        "mat"
+      ],
+      "primaryMuscles": [
+        "pectoralis_major"
+      ],
+      "secondaryMuscles": [
+        "triceps_brachii",
+        "deltoid_anterior"
+      ],
+      "measurementType": "weight_reps",
+      "loadModel": "kettlebell_single",
+      "implements": 1,
+      "laterality": "unilateral",
+      "repsCounting": "per_side",
+      "loadIncrementKg": null,
+      "tipsPl": "Pilnuj ustawienia nadgarstka i stabilnego kontaktu kuli z przedramieniem — nie pozwalaj kettlebell przechylać dłoni.",
+      "videoUrl": null,
+      "status": "active",
+      "archivedReason": null,
+      "successorHint": null,
+      "approvedIn": "NEXTREP-B02-S5-A-2026-10-22",
+      "correction": null,
+      "instructionsPl": [
+        "Ustaw kettlebell przy biodrze i bezpiecznie połóż się na podłodze z ugiętymi kolanami.",
+        "Chwyć uchwyt tak, by kula spoczywała stabilnie przy przedramieniu, a nadgarstek pozostał w jego linii.",
+        "Opuszczaj kettlebell powoli po boku klatki, aż ramię lekko dotknie podłogi; nie uderzaj łokciem.",
+        "Wyciśnij kettlebell nad klatkę, utrzymując nieruchome biodra i barki bez skręcania tułowia.",
+        "Po serii sprowadź kettlebell do bezpiecznej pozycji przy biodrze, a następnie wykonaj serię drugą ręką."
+      ],
+      "commonMistakesPl": [
+        "Odchylanie nadgarstka pod ciężarem kuli.",
+        "Uderzanie łokciem o podłogę.",
+        "Skręcanie tułowia podczas wyciskania."
+      ],
+      "safetyPl": [
+        "Nie prowadź kettlebell nad twarzą podczas odkładania.",
+        "Utrzymuj wolną przestrzeń wokół ramienia i biodra."
+      ],
+      "entryRev": 1,
+      "introducedIn": 5,
+      "changedIn": 5
     }
   ],
   "issuedIds": [
@@ -1216,6 +3546,46 @@
     "lunge_dumbbell_pair_stationary",
     "curl_dumbbell_pair_standing",
     "plank_forearm",
-    "hanging_knee_raise"
+    "hanging_knee_raise",
+    "bench_press_barbell_incline",
+    "bench_press_barbell_decline",
+    "floor_press_barbell",
+    "bench_press_smith_flat",
+    "bench_press_smith_incline",
+    "bench_press_smith_decline",
+    "bench_press_dumbbell_pair_incline",
+    "bench_press_dumbbell_pair_decline",
+    "bench_press_dumbbell_neutral",
+    "bench_press_dumbbell_alternating",
+    "floor_press_dumbbell_pair",
+    "bench_press_dumbbell_single",
+    "squeeze_press_dumbbell_pair",
+    "chest_press_machine_flat",
+    "chest_press_machine_incline",
+    "chest_press_machine_unilateral",
+    "fly_dumbbell_flat",
+    "fly_dumbbell_incline",
+    "fly_dumbbell_decline",
+    "fly_pec_deck",
+    "fly_cable_high_to_low",
+    "fly_cable_mid",
+    "fly_cable_low_to_high",
+    "fly_cable_unilateral",
+    "fly_band_standing",
+    "fly_dumbbell_floor",
+    "pushup_standard",
+    "pushup_wide",
+    "pushup_feet_elevated",
+    "pushup_hands_elevated",
+    "pushup_weighted",
+    "pushup_band_resisted",
+    "pushup_rings",
+    "pushup_explosive",
+    "dip_chest",
+    "dip_chest_weighted",
+    "dip_chest_assisted_machine",
+    "chest_press_band_standing",
+    "chest_press_cable_unilateral",
+    "floor_press_kettlebell"
   ]
 }

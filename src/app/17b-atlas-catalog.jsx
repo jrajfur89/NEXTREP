@@ -17,6 +17,7 @@ const ATLAS_LOAD_MODEL_LABELS = {
   machine_stack: "Maszyna — ciężar ze stosu",
   plate_loaded: "Maszyna na talerze — ciężar całkowity",
   cable: "Wyciąg — ciężar ze stosu",
+  smith_plates_only: "Maszyna Smitha — wpisujesz tylko masę talerzy",
   bodyweight: "Masa ciała",
   bodyweight_plus: "Masa ciała + dodatkowy ciężar — wpisujesz tylko dodane kg",
   assisted: "Z asystą — wpisujesz ciężar asysty",

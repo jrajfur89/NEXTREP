@@ -65,9 +65,16 @@ describe("S2 — smith_plates_only is part of every contract", () => {
     assert.equal(r.ok, true, JSON.stringify(r.issues.filter((i) => i.level === "error")));
     assert.ok(!r.issues.some((i) => i.exerciseId === SMITH_ID && i.level !== "info" && i.code !== "FAMILY_SINGLE_EXERCISE"), JSON.stringify(r.issues.filter((i) => i.exerciseId === SMITH_ID)));
   });
-  test("the repository atlas itself is unchanged by S2 (no Smith record imported)", () => {
-    assert.ok(!ATLAS.exercises.some((x) => x.loadModel === "smith_plates_only"));
-    assert.ok(!ATLAS.dictionaries.equipment.some((e) => (e.loadModels || []).includes("smith_plates_only")));
+  test("the repository atlas: S2 imported nothing; the only Smith records are the three approved in B02-S5", () => {
+    // S2 itself added no atlas content (the test Smith record and equipment live only in memory) …
+    assert.ok(!ATLAS.exercises.some((x) => x.exerciseId === SMITH_ID) && !ATLAS.dictionaries.equipment.some((e) => e.code === "test_smith_machine"));
+    // … and since B02-S5 the atlas holds exactly the three approved Smith exercises on the Smith equipment
+    const smith = ATLAS.exercises.filter((x) => x.loadModel === "smith_plates_only");
+    assert.deepEqual(smith.map((x) => x.exerciseId).sort(), ["bench_press_smith_decline", "bench_press_smith_flat", "bench_press_smith_incline"]);
+    assert.ok(smith.every((x) => x.approvedIn === "NEXTREP-B02-S5-A-2026-10-22" && x.equipment.includes("smith_machine")));
+    assert.deepEqual(ATLAS.dictionaries.equipment.filter((e) => (e.loadModels || []).includes("smith_plates_only")).map((e) => [e.code, e.loadModels]), [["smith_machine", ["smith_plates_only"]]]);
+    // R is a per-person card setting, never an atlas field
+    assert.ok(smith.every((x) => !("startingResistanceKg" in x)));
   });
   test("Smith is not a machine stack/plates choice (B02-D21): its only model is its own", () => {
     const o = loadModelOptions(SMITH, SA);

@@ -10,9 +10,12 @@ import { fileURLToPath } from "node:url";
 import { buildAtlasIndex, ATLAS_FACET_DIMENSIONS } from "../../src/engine/atlas-index.js";
 import { validateAtlas } from "../../src/engine/atlas-validate.js";
 import { ATLAS_RELEASE } from "../../src/engine/atlas-release.js";
+import { batch01Of } from "../fixtures/atlas/batch01.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const BATCH01 = JSON.parse(readFileSync(resolve(ROOT, "src/atlas/atlas.json"), "utf8"));
+// Batch 01 as published (release 1) — since B02-S5 a subset of the repository atlas
+const REPO_ATLAS = JSON.parse(readFileSync(resolve(ROOT, "src/atlas/atlas.json"), "utf8"));
+const BATCH01 = batch01Of(REPO_ATLAS);
 const LETTERS = "abcdefghijklmnopqrstuvwxyz".split("");
 const ARCHIVED_LETTER = "z";
 
@@ -60,9 +63,10 @@ describe("AT3.2a — Batch 01: resolver", () => {
   });
 
   test("the released atlas module and the JSON file give the same index", () => {
+    // the release module and the JSON file describe the WHOLE published atlas (not only Batch 01)
     const fromRelease = buildAtlasIndex(ATLAS_RELEASE);
-    assert.deepEqual(ids(fromRelease.search("")), ids(ix.search("")));
-    assert.equal(fromRelease.atlasVersion, BATCH01.atlasVersion);
+    assert.deepEqual(ids(fromRelease.search("")), ids(buildAtlasIndex(REPO_ATLAS).search("")));
+    assert.equal(fromRelease.atlasVersion, REPO_ATLAS.atlasVersion);
   });
 
   test("results are frozen copies; the atlas passed in is not changed", () => {

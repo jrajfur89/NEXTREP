@@ -1,8 +1,8 @@
 // B02 / S3 — the load model chosen in a plan item (B02-D21) goes into the workout's immutable load
 // snapshot. Real nr1 domain (plan.js, workout.js, workout-from-plan.js), real engine
 // (load-model-options.js, load-snapshot.js v3, load.js) and the real SQL draft in PGlite.
-// The machine exercises are SYNTHETIC test records on top of the real Batch 01 atlas: the 40 B02
-// records are not imported (S5).
+// Since B02-S5 the machine, Smith and cable exercises are the REAL atlas records (release 5); before
+// the import they were synthetic copies with the same ids and parameters.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -27,28 +27,10 @@ const clone = (x) => structuredClone(x);
 const MACHINES = ["chest_press_machine_flat", "chest_press_machine_incline", "chest_press_machine_unilateral"];
 const PRIVATE_ID = "00000000-0000-4000-8000-0000000000f1";
 
-// Real Batch 01 atlas + synthetic test records (never written to the repository atlas).
+// The real repository atlas: Batch 01 + the 40 approved B02 records (B02-S5). The ids below must be
+// there with the parameters this test relies on (checked in "test atlas sanity").
 function testAtlas() {
-  const a = clone(REAL);
-  a.atlasVersion = 2;
-  a.dictionaries.equipment.push(
-    { code: "chest_press_machine", labelPl: "Maszyna do wyciskania (test)", role: "load", loadModels: ["machine_stack", "plate_loaded"], status: "active" },
-    { code: "smith_machine", labelPl: "Maszyna Smitha (test)", role: "load", loadModels: ["smith_plates_only"], status: "active" },
-    { code: "cable_machine", labelPl: "Wyciąg (test)", role: "load", loadModels: ["cable"], status: "active" },
-  );
-  a.dictionaries.variantAttributes.push({ code: "angle.incline", labelPl: "Skos dodatni (test)", dimension: "angle", status: "active" });
-  a.families.push({ familyId: "chest_press_machine", namePl: "Wyciskanie na maszynie (test)", status: "active" }, { familyId: "chest_fly", namePl: "Rozpiętki (test)", status: "active" });
-  const base = a.exercises.find((x) => x.exerciseId === "bench_press_barbell_flat");
-  const mk = (exerciseId, over) => ({ ...clone(base), exerciseId, aliasesPl: [], implements: null, loadIncrementKg: 2.5, ...over });
-  a.exercises.push(
-    mk("chest_press_machine_flat", { familyId: "chest_press_machine", namePl: "Wyciskanie na maszynie (test, płasko)", equipment: ["chest_press_machine"], loadModel: "machine_stack", variantAttributes: ["angle.flat"] }),
-    mk("chest_press_machine_incline", { familyId: "chest_press_machine", namePl: "Wyciskanie na maszynie (test, skos)", equipment: ["chest_press_machine"], loadModel: "machine_stack", variantAttributes: ["angle.incline"] }),
-    mk("chest_press_machine_unilateral", { familyId: "chest_press_machine", namePl: "Wyciskanie na maszynie (test, jednorącz)", equipment: ["chest_press_machine"], loadModel: "machine_stack", laterality: "unilateral", repsCounting: "per_side", variantAttributes: ["angle.flat", "laterality.unilateral"] }),
-    mk("bench_press_smith_flat", { namePl: "Wyciskanie na Smicie (test)", equipment: ["smith_machine", "bench"], loadModel: "smith_plates_only", variantAttributes: ["angle.flat"] }),
-    mk("fly_cable_mid", { familyId: "chest_fly", namePl: "Rozpiętki na wyciągu (test)", equipment: ["cable_machine"], loadModel: "cable", variantAttributes: [] }),
-  );
-  for (const x of a.exercises) if (!a.issuedIds.includes(x.exerciseId)) a.issuedIds.push(x.exerciseId);
-  return a;
+  return clone(REAL);
 }
 const ATLAS = testAtlas();
 const byId = new Map(ATLAS.exercises.map((x) => [x.exerciseId, x]));
@@ -74,9 +56,16 @@ function withSets(w, perExercise, now, g) {
 const totals = (w) => sessionTotals({ exercises: W.workoutView(w) }, (ex) => modelFromSnapshot(ex.loadSnapshot));
 
 describe("S3 — test atlas sanity", () => {
-  test("the synthetic records validate with the real Batch 01 atlas (0 errors)", () => {
+  test("the real atlas (with B02-S5) validates with 0 errors and holds the records this test uses", () => {
     const r = validateAtlas(ATLAS);
     assert.equal(r.ok, true, JSON.stringify(r.issues.filter((i) => i.level === "error")));
+    const model = (id) => { const e = byId.get(id); return e && [e.loadModel, e.laterality, e.repsCounting, ...e.equipment]; };
+    assert.deepEqual(model("chest_press_machine_flat"), ["machine_stack", "bilateral", "total", "chest_press_machine"]);
+    assert.deepEqual(model("chest_press_machine_incline"), ["machine_stack", "bilateral", "total", "chest_press_machine"]);
+    assert.deepEqual(model("chest_press_machine_unilateral"), ["machine_stack", "unilateral", "per_side", "chest_press_machine"]);
+    assert.deepEqual(model("bench_press_smith_flat"), ["smith_plates_only", "bilateral", "total", "smith_machine", "bench"]);
+    assert.deepEqual(model("fly_cable_mid"), ["cable", "bilateral", "total", "cable_machine"]);
+    assert.deepEqual(ATLAS.dictionaries.equipment.find((e) => e.code === "chest_press_machine").loadModels, ["machine_stack", "plate_loaded"]);
   });
 });
 
