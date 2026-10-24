@@ -20,7 +20,7 @@ const ADDED_BY_STAGE = {
   I2: ["BUILT_IN_EXERCISES", "NR_CLEAN_DATA_SPACE", "NR_CLOUD_SYNC_ENABLED", "NR_LOCAL_KEY_PREFIX", "ReadyTemplateSoonBadge"],
   // I3 (24.10.2026): the atlas in the pickers of plans and workouts (src/app/17b-atlas-catalog.jsx)
   I3: [
-    "ATLAS_RECORD_BY_ID", "AtlasExercisePickerModal", "atlasExerciseView", "atlasImportProblems",
+    "ATLAS_RECORD_BY_ID", "AtlasExercisePickerModal", "NR_ATLAS_ONLY_EXERCISES", "atlasExerciseView", "atlasImportProblems",
     "atlasLoadHint", "atlasLoadModelChoice", "atlasLoadSnapshot", "atlasPlanItemFields", "atlasRecord", "atlasRefFields",
     "atlasWorkoutKind", "exerciseKindFor", "exerciseNameFor", "isAtlasExerciseId", "pickedExerciseFields",
   ],

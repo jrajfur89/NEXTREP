@@ -4,8 +4,10 @@
 // pre-filled from THIS exercise's own history/progression suggestion (never from another
 // exercise in the same superset, which was the source of the old weight-carry-over bug).
 function buildWorkoutItem(planItem, exercises, history, nowDate, planId) {
-  const ex = exercises.find((e) => e.id === planItem.exerciseId);
-  const kind = getExerciseKind(ex);
+  // I3: an atlas exercise (catalogExerciseId) is shown from the atlas and gets its load snapshot v3 now
+  const atlasView = planItem.catalogExerciseId ? atlasExerciseView(planItem.catalogExerciseId) : null;
+  const ex = atlasView || exercises.find((e) => e.id === planItem.exerciseId);
+  const kind = atlasView ? atlasView.kind : getExerciseKind(ex);
   const setsDetail = getPlanItemSetsDetail(planItem);
   const matches = findMatchingSessions(history, {
     exerciseId: planItem.exerciseId,
@@ -43,6 +45,7 @@ function buildWorkoutItem(planItem, exercises, history, nowDate, planId) {
     // is run). Every new session.exercises[] entry gets one of these from the moment it's created.
     planItemId: planItem.id,
     exerciseId: planItem.exerciseId,
+    ...(atlasView ? { catalogExerciseId: atlasView.catalogExerciseId, loadSnapshot: atlasLoadSnapshot(atlasView.catalogExerciseId, planItem.loadModel ?? null) } : {}),
     name: ex?.name || "Ćwiczenie",
     videoUrl: ex?.videoUrl || "",
     deviceType: ex?.deviceType || "",
@@ -119,6 +122,7 @@ function buildBlocksFromSession(session, exercises) {
           // fresh uid() only as a defensive fallback for data somehow not yet normalized.
           planItemId: uid(),
           exerciseId: ex.exerciseId,
+          ...atlasRefFields(ex), // I3: the saved snapshot is kept, never rebuilt
           name: ex.name,
           type: ex.type,
           videoUrl: liveEx?.videoUrl || "",
@@ -650,8 +654,8 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
     });
   };
 
-  const addExerciseAdHoc = (exerciseId) => {
-    const syntheticItem = { id: uid(), exerciseId, restSeconds: 90, setsDetail: [{ id: uid() }, { id: uid() }, { id: uid() }] };
+  const addExerciseAdHoc = (exerciseId, loadModel = null) => {
+    const syntheticItem = { id: uid(), ...pickedExerciseFields(exerciseId, loadModel, exercises), restSeconds: 90, setsDetail: [{ id: uid() }, { id: uid() }, { id: uid() }] };
     // matchPlan=false: an ad-hoc, no-plan exercise looks at its own history regardless of plan.
     const built = editingSession
       ? { ...buildWorkoutItem(syntheticItem, exercises, history, nowDate, null), priorSets: [], priorMessage: null, priorStatus: null }
@@ -666,12 +670,12 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   // and order), same position, same series structure / rest; the new exercise gets its own
   // exerciseId, its own (possibly empty) history and analysis — results typed for the old
   // exercise are not carried over. The source plan and all saved history are untouched.
-  const replaceExercise = (bi, ii, newExerciseId) => {
+  const replaceExercise = (bi, ii, newExerciseId, newLoadModel = null) => {
     const oldItem = blocks[bi]?.items[ii];
     if (!oldItem) return;
     const syntheticItem = {
       id: uid(),
-      exerciseId: newExerciseId,
+      ...pickedExerciseFields(newExerciseId, newLoadModel, exercises),
       restSeconds: oldItem.restSeconds,
       setsDetail: (oldItem.setsDetail && oldItem.setsDetail.length ? oldItem.setsDetail : [{ id: uid() }]).map((sd) => ({ ...sd, id: uid() })),
     };
@@ -777,6 +781,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
         exercises: withSets.map((it) => ({
           id: it.id || uid(),
           exerciseId: it.exerciseId,
+          ...atlasRefFields(it), // I3: catalogExerciseId + the load snapshot taken when it entered the workout
           name: it.name,
           type: it.type,
           setsDetail: it.setsDetail,
@@ -802,6 +807,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
       exercises: withSets.map((it) => ({
         id: it.id || uid(),
         exerciseId: it.exerciseId,
+        ...atlasRefFields(it), // I3: catalogExerciseId + the load snapshot taken when it entered the workout
         name: it.name,
         type: it.type,
         setsDetail: it.setsDetail,
@@ -1137,6 +1143,11 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
         {currentEx.type === "bodyweightPlus" && (
           <p className="text-orange-400/80 text-xs mt-3 flex items-center gap-1.5">
             <Layers size={12} /> Ćwiczenie na masie własnej — wpisz dodatkowy ciężar doczepiony do ciała
+          </p>
+        )}
+        {currentEx.loadSnapshot && currentEx.type !== "bodyweightPlus" && atlasLoadHint(currentEx.loadSnapshot) && (
+          <p className="text-neutral-400 text-xs mt-3 flex items-center gap-1.5" data-testid="atlas-load-hint">
+            <Layers size={12} /> {atlasLoadHint(currentEx.loadSnapshot)}
           </p>
         )}
 
@@ -1481,7 +1492,8 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
         <ExercisePickerModal
           title="ZAMIEŃ NA…"
           exercises={exercises.filter((e) => e.id !== blocks[replaceFlow.bi]?.items[replaceFlow.ii]?.exerciseId)}
-          onPick={(exerciseId) => setReplaceFlow({ step: "confirm", bi: replaceFlow.bi, ii: replaceFlow.ii, newExerciseId: exerciseId })}
+          excludeExerciseId={blocks[replaceFlow.bi]?.items[replaceFlow.ii]?.exerciseId}
+          onPick={(exerciseId, loadModel) => setReplaceFlow({ step: "confirm", bi: replaceFlow.bi, ii: replaceFlow.ii, newExerciseId: exerciseId, newLoadModel: loadModel ?? null })}
           onClose={() => setReplaceFlow(null)}
           onCreateExercise={onCreateExercise}
         />
@@ -1513,7 +1525,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
       )}
       {replaceFlow && replaceFlow.step === "confirm" && (() => {
         const oldItem = blocks[replaceFlow.bi]?.items[replaceFlow.ii];
-        const newEx = exercises.find((e) => e.id === replaceFlow.newExerciseId);
+        const newEx = exercises.find((e) => e.id === replaceFlow.newExerciseId) || atlasExerciseView(replaceFlow.newExerciseId);
         if (!oldItem || !newEx) return null;
         const losesData = itemHasEnteredData(oldItem);
         return (
@@ -1533,7 +1545,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
                 <button onClick={() => setReplaceFlow(null)} className="flex-1 py-3 rounded-xl bg-neutral-800 text-neutral-200 font-semibold">
                   Anuluj
                 </button>
-                <button onClick={() => replaceExercise(replaceFlow.bi, replaceFlow.ii, replaceFlow.newExerciseId)} className="flex-1 py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold">
+                <button onClick={() => replaceExercise(replaceFlow.bi, replaceFlow.ii, replaceFlow.newExerciseId, replaceFlow.newLoadModel)} className="flex-1 py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold">
                   Zamień
                 </button>
               </div>

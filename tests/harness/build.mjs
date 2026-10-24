@@ -76,6 +76,8 @@ const code0 = code; // source as read (before the test-only export rewrite)
 const PROFILE_LINES = [
   ["const NR_CLEAN_DATA_SPACE = true;", "const NR_CLEAN_DATA_SPACE = false; // TEST HARNESS: legacy profile"],
   ["const NR_CLOUD_SYNC_ENABLED = false;", "const NR_CLOUD_SYNC_ENABLED = true; // TEST HARNESS: legacy profile"],
+  // I3: the atlas-only exercises of S1 (the legacy tests keep the own-exercise list, the old form and stats)
+  ["const NR_ATLAS_ONLY_EXERCISES = true;", "const NR_ATLAS_ONLY_EXERCISES = false; // TEST HARNESS: legacy profile"],
 ];
 const hasProfile = !ref && PROFILE_LINES.every(([from]) => code.split(from).length === 2);
 if (!ref && !hasProfile) throw new Error("build: the I2 profile lines were not found exactly once in src/app");

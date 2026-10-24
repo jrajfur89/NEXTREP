@@ -19,6 +19,11 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ZGduhY1VqosHfz8iGJgXmw_DOaszUMo
 // The test harness builds the legacy profile (false / true) only to keep testing that dormant code.
 const NR_CLEAN_DATA_SPACE = true;
 const NR_CLOUD_SYNC_ENABLED = false;
+// I3 (approved 24.10.2026): the NEXTREP 1.0 atlas is the ONLY source of exercises in plans and workouts
+// (pickers show the atlas; the old "add exercise" form is off at every entry point; a JSON copy that
+// does not fit the atlas-only model is not imported) and the muscle-group statistics of the OLD
+// muscle grouping are switched off (no transitional map, no partial results).
+const NR_ATLAS_ONLY_EXERCISES = true;
 
 // Dopóki powyższe pola są puste, `supabase` pozostaje `null` i cały ekran konta
 // pokazuje spokojny komunikat zamiast się wywracać — reszta aplikacji (dane lokalne,

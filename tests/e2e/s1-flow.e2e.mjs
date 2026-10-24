@@ -52,6 +52,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     const ex = await bodyText(page);
     for (const name of ["Przysiad ze sztangą", "Wyciskanie sztangi leżąc", "Plank z obciążeniem"]) assert.doesNotMatch(ex, new RegExp(name));
     assert.match(ex, /Atlas ćwiczeń/);
+    assert.equal(await page.getByRole("button", { name: "Dodaj", exact: true }).count(), 0, "I3: the old add-exercise form is off");
     await page.getByText("Start", { exact: true }).click();
     await page.getByText("ROZPOCZNIJ TRENING").click();
     await page.getByText("GOTOWE PLANY TRENINGOWE").click();
@@ -63,26 +64,23 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await page.waitForTimeout(300);
   });
 
-  test("B1 workout without a plan with an own exercise, set 1 = 60 kg × 8", async () => {
+  // I3: the exercise comes from the atlas picker (the old "add" form is off)
+  test("B1 workout without a plan with an atlas exercise, set 1 = 60 kg × 8", async () => {
     await page.getByText("TRENING BEZ PLANU").click();
     await page.waitForTimeout(400);
     await page.getByText("Dodaj ćwiczenie", { exact: true }).first().click();
     await page.waitForTimeout(300);
-    await page.getByRole("button", { name: "Dodaj ćwiczenie" }).last().click();
-    await page.waitForTimeout(300);
     await cov();
-    await page.locator('input[placeholder="np. Przysiad ze sztangą"]').fill("Wyciskanie E2E");
-    await page.getByText("Klatka piersiowa", { exact: true }).nth(1).click(); // the main group (0 = the picker behind)
-    await page.getByText("Sztanga", { exact: true }).last().click();
-    await page.getByText("Masa ciała", { exact: true }).last().click(); // off (the default; one must stay)
-    await page.getByRole("button", { name: "Zapisz", exact: true }).last().click();
-    await page.waitForTimeout(300);
-    await page.getByText("Wyciskanie E2E").first().click();
+    assert.equal(await page.locator('[data-testid="atlas-picker-item"]').count(), 55);
+    assert.equal(await page.getByRole("button", { name: "Dodaj ćwiczenie" }).count(), 1, "only the workout's own button — no add-exercise form");
+    await page.locator('input[placeholder="Szukaj w atlasie..."]').fill("Wyciskanie sztangi leżąc");
+    await page.locator('[data-testid="atlas-picker-item"]').first().click();
     await page.waitForTimeout(600);
     await cov();
     await page.locator('input[placeholder="kg"]').first().fill("60");
     await page.locator('input[placeholder="0"]').first().fill("8");
-    assert.match(await bodyText(page), /WYCISKANIE E2E/);
+    assert.match(await bodyText(page), /WYCISKANIE SZTANGI LEŻĄC NA ŁAWCE POZIOMEJ/);
+    assert.match(await bodyText(page), /Sztanga — wpisujesz ciężar całkowity/);
     assert.equal(await page.locator('input[placeholder="kg"]').first().inputValue(), "60");
   });
 
@@ -144,12 +142,17 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     // I2: after the restart only the own exercise is there — nothing old is seeded back; every key the
     // app wrote is in its clean data space
     const store = await page.evaluate(() => ({ keys: Object.keys(localStorage), ex: JSON.parse(localStorage.getItem("nextrep1_guest_exercises_v1") || "null") }));
-    assert.deepEqual(store.ex.map((e) => e.name), ["Wyciskanie E2E"]);
+    assert.equal(store.ex, null, "I3: no catalog exercise copied into the exercise list");
+    const session = await page.evaluate(() => JSON.parse(localStorage.getItem("nextrep1_guest_history_v1"))[0]);
+    assert.equal(session.exercises[0].catalogExerciseId, "bench_press_barbell_flat");
+    assert.equal(session.exercises[0].loadSnapshot.snapshotVersion, 3);
+    assert.equal(session.exercises[0].loadSnapshot.loadModel, "barbell_total");
+    assert.equal(session.exercises[0].sets[0].weight, 60, "set format unchanged");
     assert.deepEqual(store.keys.filter((k) => !k.startsWith("nextrep1_")), [], store.keys.join(" "));
     assert.deepEqual(saved.map(([k]) => k), ["nextrep1_guest_history_v1"]);
   });
 
-  test("G1 export produces the JSON file (browser only — Android WebView: NR-S1-01, open); G2 import restores it", async () => {
+  test("G1 export produces the JSON file (browser only — Android WebView: NR-S1-01, open); G2 an incompatible copy is refused (I3), the own export is restored", async () => {
     await page.getByText("Więcej", { exact: true }).click();
     await page.getByText("Kopia zapasowa", { exact: true }).click();
     await page.waitForTimeout(500);
@@ -158,6 +161,13 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await page.getByText("Eksportuj dane JSON").click();
     const file = JSON.parse(readFileSync(await (await dl).path(), "utf8"));
     assert.ok(Array.isArray(file.data?.history) && file.data.history.length >= 1);
+    // I3: a copy that does not fit the atlas-only model is refused, nothing changes
+    const old = { ...file, data: { ...file.data, exercises: [{ id: "own-1", name: "Stare ćwiczenie", category: ["Klatka"], equipment: ["Sztanga"] }] } };
+    await page.locator('input[type="file"]').setInputFiles({ name: "stara.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(old)) });
+    await page.waitForTimeout(800);
+    assert.match(await bodyText(page), /nie jest zgodna z atlasem NEXTREP 1\.0/);
+    assert.equal(await page.evaluate(() => localStorage.getItem("nextrep1_guest_exercises_v1")), null);
+    // the app's own export fits and is restored
     await page.locator('input[type="file"]').setInputFiles({ name: "kopia.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(file)) });
     await page.waitForTimeout(3500);
     assert.deepEqual(await historyCounts(), saved);

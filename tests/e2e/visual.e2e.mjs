@@ -38,15 +38,22 @@ const STEPS = [
     await p.locator("button:has(svg.lucide-arrow-left)").first().click({ timeout: 20000 });
     await click(p, "TRENING BEZ PLANU");
   }],
-  ["08-active-workout", async (p) => {
+  // I3: the build under test picks the exercise from the atlas (the old "add" form is off); the reference
+  // build creates its own exercise with the SAME name and kind, so the workout screens stay comparable
+  ["08-active-workout", async (p, underTest) => {
     await click(p, "Dodaj ćwiczenie", { exact: true });
-    await p.getByRole("button", { name: "Dodaj ćwiczenie" }).last().click({ timeout: 20000 });
-    await p.locator('input[placeholder="np. Przysiad ze sztangą"]').fill("Wyciskanie E2E");
-    await p.getByText("Klatka piersiowa", { exact: true }).nth(1).click();
-    await p.getByText("Sztanga", { exact: true }).last().click();
-    await p.getByText("Masa ciała", { exact: true }).last().click();
-    await p.getByRole("button", { name: "Zapisz", exact: true }).last().click();
-    await click(p, "Wyciskanie E2E");
+    if (underTest) {
+      await p.locator('input[placeholder="Szukaj w atlasie..."]').fill("Wyciskanie sztangi leżąc");
+      await p.locator('[data-testid="atlas-picker-item"]').first().click({ timeout: 20000 });
+    } else {
+      await p.getByRole("button", { name: "Dodaj ćwiczenie" }).last().click({ timeout: 20000 });
+      await p.locator('input[placeholder="np. Przysiad ze sztangą"]').fill("Wyciskanie sztangi leżąc na ławce poziomej");
+      await p.getByText("Klatka piersiowa", { exact: true }).nth(1).click();
+      await p.getByText("Sztanga", { exact: true }).last().click();
+      await p.getByText("Masa ciała", { exact: true }).last().click();
+      await p.getByRole("button", { name: "Zapisz", exact: true }).last().click();
+      await click(p, "Wyciskanie sztangi leżąc na ławce poziomej");
+    }
     await p.locator('input[placeholder="kg"]').first().fill("60");
     await p.locator('input[placeholder="0"]').first().fill("8");
     await p.locator("body").click({ position: { x: 5, y: 300 } });
@@ -79,14 +86,20 @@ const STEPS = [
 // under test, and the screen WITH it is saved to e2e/.out/<name>.with-change.png for review.
 const INTENDED = {
   "17-exercises": { stage: "AT2", selector: '[data-testid="atlas-entry"]' }, // tile „Atlas ćwiczeń”
+  // I3: the load-model hint under an atlas exercise (also behind the two dialogs over the workout)
+  "08-active-workout": { stage: "I3", selector: '[data-testid="atlas-load-hint"]' },
+  "09-leave-dialog": { stage: "I3", selector: '[data-testid="atlas-load-hint"]' },
+  "11-finish-confirm": { stage: "I3", selector: '[data-testid="atlas-load-hint"]' },
 };
 // Screens whose CONTENT an approved stage changed on purpose (not only an added element). They are not
 // compared with the reference; both images go to e2e/.out/<name>.ref.png / .cur.png for review. Every
 // other screen must still match pixel by pixel, and this list must be exactly the screens that differ.
 const CHANGED = {
   "06-ready-plans": "I2: every ready-made template is „Wkrótce” (badge, inactive, no chevron)",
+  "12-history-detail": "I3: an atlas exercise has no link to the old exercise screen (no chevron by its name)",
+  "15-backup": "I3 walk: the reference build saves its own exercise first — one more automatic local copy listed",
   "16-account": "I2: accounts and sync temporarily off — the calm „not configured” state",
-  "17-exercises": "I2: no old built-in list — the groups count only the person's own exercise",
+  "17-exercises": "I2: no old built-in list (the groups are empty); I3: no „Dodaj” (the old form is off)",
 };
 
 async function walk(dist, { underTest = false } = {}) {
@@ -98,7 +111,7 @@ async function walk(dist, { underTest = false } = {}) {
     await app.page.goto(url);
     for (const [name, action] of STEPS) {
       try {
-        await action(app.page);
+        await action(app.page, underTest);
       } catch (e) {
         throw new Error(`step ${name}: ${e.message.split("\n")[0]} | screen: ${(await app.page.innerText("body")).replace(/\s+/g, " ").slice(0, 300)}`);
       }
@@ -156,7 +169,7 @@ describe("visual: build under test vs reference build", { concurrency: false }, 
       }
     }
     for (const [name, buf] of cur.withChange) writeFileSync(join(OUT, `${name}.with-change.png`), buf);
-    assert.deepEqual([...cur.withChange.keys()], Object.keys(INTENDED), "every intended change was found");
+    assert.deepEqual([...cur.withChange.keys()].sort(), Object.keys(INTENDED).sort(), "every intended change was found");
     assert.deepEqual(changedFound, Object.keys(CHANGED), "every screen listed as changed really differs");
     t.diagnostic(`${ref.shots.size - changedFound.length} screens compared; intended changes (element hidden for the comparison): ${Object.keys(INTENDED).join(", ")}; changed by a stage (reviewed, not compared): ${changedFound.join(", ")}`);
     assert.equal(ref.shots.size, STEPS.length);

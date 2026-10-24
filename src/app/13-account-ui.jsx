@@ -1558,6 +1558,13 @@ function BackupModal({ onClose }) {
           e.target.value = "";
           return;
         }
+        // I3: in S1 only a copy that fits the atlas-only model is imported (the import code stays)
+        if (NR_ATLAS_ONLY_EXERCISES && atlasImportProblems(data).length > 0) {
+          setMessage("Ta kopia nie jest zgodna z atlasem NEXTREP 1.0 (ćwiczenia lub treningi spoza atlasu). Obecne dane nie zostały zmienione.");
+          setImporting(false);
+          e.target.value = "";
+          return;
+        }
 
         // Safety backup of the current state before touching anything, per the required order:
         // parse → validate → backup current → apply → normalize (on reload) → refresh.

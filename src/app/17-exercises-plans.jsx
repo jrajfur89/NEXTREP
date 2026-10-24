@@ -80,12 +80,14 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail 
       <TopBar
         title="ĆWICZENIA"
         right={
+          NR_ATLAS_ONLY_EXERCISES ? null : ( // I3: the old "add exercise" form is off in S1
           <button
             onClick={() => setEditing("new")}
             className="flex items-center gap-1 bg-orange-500 active:bg-orange-600 text-neutral-950 font-bold text-xs px-3 py-2 rounded-lg flex-shrink-0"
           >
             <Plus size={15} strokeWidth={3} /> Dodaj
           </button>
+          )
         }
       />
       <div className="px-5 pt-3">
@@ -1033,8 +1035,8 @@ function PlanEditor({ plan, exercises, onSave, onCancel }) {
   const [items, setItems] = useState(plan?.exercises ? plan.exercises.map((i) => ({ ...i })) : []);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const addExercise = (exerciseId) => {
-    const kind = getExerciseKind(exercises.find((e) => e.id === exerciseId));
+  const addExercise = (exerciseId, loadModel = null) => {
+    const kind = exerciseKindFor(exerciseId, exercises);
     const detail =
       kind === "cardio"
         ? [{ id: uid() }]
@@ -1049,7 +1051,7 @@ function PlanEditor({ plan, exercises, onSave, onCancel }) {
       ...prev,
       {
         id: uid(),
-        exerciseId,
+        ...pickedExerciseFields(exerciseId, loadModel, exercises), // I3: an atlas exercise by id (+ model), never copied
         restSeconds: 90,
         supersetGroup: null,
         setsDetail: detail,
@@ -1150,8 +1152,8 @@ function PlanEditor({ plan, exercises, onSave, onCancel }) {
     setItems((prev) => prev.map((it) => (it.supersetGroup === groupId ? { ...it, restSeconds: value } : it)));
   };
 
-  const exName = (exId) => exercises.find((e) => e.id === exId)?.name || "Usunięte ćwiczenie";
-  const exType = (exId) => getExerciseKind(exercises.find((e) => e.id === exId));
+  const exName = (exId) => exerciseNameFor(exId, exercises) || "Usunięte ćwiczenie";
+  const exType = (exId) => exerciseKindFor(exId, exercises);
 
   const save = () => {
     if (!name.trim() || items.length === 0) return;
@@ -1455,7 +1457,10 @@ const restSignal = {
 // the SAME ExerciseEditorModal used in the "Ćwiczenia" atlas; the new exercise gets a normal,
 // stable id, is saved to the atlas by the caller, and appears in this list right away (the view
 // jumps to its muscle group, freshly added exercise highlighted) — nothing is added to a plan.
-function ExercisePickerModal({ exercises, onPick, onClose, onCreateExercise, title = "WYBIERZ ĆWICZENIE" }) {
+function ExercisePickerModal({ exercises, onPick, onClose, onCreateExercise, title = "WYBIERZ ĆWICZENIE", excludeExerciseId = null }) {
+  // I3: in S1 the picker of plans and workouts is the atlas (no own-exercise list, no "add" form).
+  // NR_ATLAS_ONLY_EXERCISES is a build constant, so the hooks below always run in the same order.
+  if (NR_ATLAS_ONLY_EXERCISES) return <AtlasExercisePickerModal onPick={onPick} onClose={onClose} title={title} excludeExerciseId={excludeExerciseId} />;
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Wszystkie");
   const [equipmentFilter, setEquipmentFilter] = useState("Wszystkie");

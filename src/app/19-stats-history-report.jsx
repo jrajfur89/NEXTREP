@@ -187,7 +187,13 @@ function StatsScreen({ history, exercises, onNavigate, onOpenExercise }) {
         </div>
 
         <p className="text-neutral-500 text-xs uppercase font-semibold mb-2">Partie mięśniowe</p>
-        {groupsWithData.length === 0 ? (
+        {NR_ATLAS_ONLY_EXERCISES ? (
+          // I3: the muscle-group statistics of the OLD muscle grouping are off until the statistics
+          // stage built on the atlas muscles — no transitional map, no partial results
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4" data-testid="muscle-groups-off">
+            <p className="text-neutral-300 text-sm leading-relaxed">Statystyki partii mięśniowych wrócą po przejściu na hierarchię mięśni z atlasu NEXTREP 1.0.</p>
+          </div>
+        ) : groupsWithData.length === 0 ? (
           <EmptyState icon={TrendingUp} title="Brak danych w tym okresie" subtitle="Wykonaj trening, żeby zobaczyć statystyki." />
         ) : (
           <div className="space-y-2 mb-4">
