@@ -54,6 +54,9 @@ Approximate visual balance:
 - muted: #8E8E8E (captions, de-emphasised hints, empty field values; replaces #777777)
 - disabled: #4A4A4A (disabled controls only; never for information)
 
+### Rest timer
+- rest: #5EC2FF (rest-timer accent from the approved Active Workout master: dock label, icon and progress; dock fill #0E1114, border rgba(94,194,255,.30); 9.59:1 on #0E1114) — decision G02-CLOSEOUT 2026-10-24
+
 ### Status
 - success: #42C98A
 - warning: #FFB547 (icons, text, borders and tints of caution states; replaces #E5A63A)
@@ -167,10 +170,11 @@ Component details are developed iteratively in Claude Design and documented here
 
 ### Primary
 - background: #FF6A00 (default); optional brand gradient #FF9A3D → #FF6A00 → #D94F00 at 135° for selected branded elements
-- radius: 10 px
+- radius: 12 px
 - height: 48–52 px
-- Inter Semi Bold/Bold
+- Barlow Condensed, button style (17–19, weight 500–600; section 3)
 - text: #090909
+- decision G02-CLOSEOUT 2026-10-24: replaces radius 10 px and the Inter label; consistent with sections 3 and 5
 
 ### Primary CTA pill (approved masters: Dashboard, New User, Interrupted Workout, Entry Flow)
 - visible pill 192 × 36 (min-width 192, grows with text), radius 8, touch target 44 px high
@@ -348,7 +352,9 @@ Status: see SCREENS.md (Active workout). Visual approval is not implementation.
 - Below: plan name · "Ćwiczenie x z n", exercise name large (wraps, never clipped), segmented progress bar.
 - Compact header when space is short (mockups: < 280 px working area): row 1 time · progress · ⋮; row 2 exercise name. At 100% and 120% text the photo header is always used.
 - "Zalecenie na dziś" expanded by default for PRO, no status label; Free sees the locked card.
-- Open: compact-header threshold and hysteresis, iOS exit path without back gesture, rest-timer colour, set-comment form.
+- Rest timer: colour as in the master, rest #5EC2FF (section 2) — decision 2026-10-24.
+- Set comment: as in the master, an inline field inside the set card, opened from the comment icon — decision 2026-10-24.
+- Deferred to implementation: compact-header threshold and hysteresis, iOS exit path without back gesture.
 
 ## 20. Bottom navigation B2 — approved (2026-10-14)
 

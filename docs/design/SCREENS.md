@@ -20,7 +20,7 @@
 
 The duplicate “Pomiary” entry is intentionally preserved from the current user-provided list and must be clarified before implementation.
 
-## Approved UX masters (status 2026-10-20)
+## Approved UX masters (status 2026-10-24)
 
 Source of truth for screen status. Status model: DESIGN_STATUS.md. Bottom navigation B2 is a component: COMPONENTS.md, DS-C04.
 
@@ -34,9 +34,9 @@ Source of truth for screen status. Status model: DESIGN_STATUS.md. Bottom naviga
 | Workout completion & summary | Workout / Completion & Summary / Cinematic / Master v1 | APPROVED (2026-10-17) | NOT IMPLEMENTED | NOT TESTED |
 | Exercise details (atlas) | Atlas / Exercise Details / Compact Tabs v3 / Master v1 | APPROVED (2026-10-20) | NOT IMPLEMENTED | NOT TESTED |
 
-Accessibility fix G02 (approved visually 2026-10-21) changes text and field-outline colours in the Active workout, Workout completion & summary and Exercise details (atlas) masters; the corrected version is a working version pending final audit and does not change the approval dates above.
+Accessibility fix G02 (approved visually 2026-10-21) changes text and field-outline colours in the Active workout, Workout completion & summary and Exercise details (atlas) masters; the corrected version (working masters v2) is kept separately, is pending final audit and is not a new baseline; the approval dates above are unchanged.
 
-Master documents and canvas references: claude/ux-master-registry.md (NextRep project). Visual approval is not approval for implementation and does not mean the screen is implemented or tested.
+Master documents and canvas references: claude/ux-master-registry.md (NextRep project). Implementation handoff of these seven masters was approved on 2026-10-24 (G02-CLOSEOUT, DESIGN_STATUS.md). Handoff does not mean the screen is implemented or tested.
 
 ## Screen design process
 
