@@ -347,7 +347,15 @@ describe("sessionTotals", () => {
 
 describe("PE-A safety: no screen uses load.js before A5", () => {
   test("src/engine/index.js does not export load.js and no src/app file imports it", () => {
-    assert.doesNotMatch(readFileSync(resolve(root, "src/engine/index.js"), "utf8"), /load/);
+    const index = readFileSync(resolve(root, "src/engine/index.js"), "utf8");
+    // I3: the only load-related exports are the snapshot validator and the nr1 plan/snapshot contracts —
+    // never load.js itself (normalizeLoad, sessionTotals, … stay out of the app until A5)
+    const loadLines = index.split("\n").filter((l) => /load/.test(l) && !l.startsWith("//"));
+    assert.deepEqual(loadLines, [
+      'export { validateLoadSnapshot } from "./load-snapshot.js";',
+      'export { resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS } from "../nr1/contracts/plan-load-model.js";',
+    ]);
+    assert.doesNotMatch(index, /["']\.\/load\.js["']/);
     for (const f of readdirSync(resolve(root, "src/app"))) {
       if (f.endsWith(".jsx")) assert.doesNotMatch(readFileSync(resolve(root, "src/app", f), "utf8"), /engine\/load|load-legacy-map/, f);
     }

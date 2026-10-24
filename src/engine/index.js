@@ -4,3 +4,9 @@ export * from "./legacy-progression.js";
 export * from "./volume.js";
 // AT2: the approved atlas release (read-only), shown by the catalog „Atlas ćwiczeń”.
 export * from "./atlas-release.js";
+// I3: the atlas in plans and workouts of the app (S1) — the nr1 contracts and the snapshot builder,
+// re-exported so the app uses the SAME modules (no second implementation).
+export { validateLoadSnapshot } from "./load-snapshot.js";
+export { planItemSnapshot } from "../nr1/domain/workout-from-plan.js";
+export { resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS } from "../nr1/contracts/plan-load-model.js";
+export { validateRefMatchesSnapshot } from "../nr1/contracts/exercise-ref.js";

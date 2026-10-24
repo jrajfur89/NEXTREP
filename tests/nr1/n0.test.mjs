@@ -352,19 +352,32 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     const now = JSON.parse(readFileSync(resolve(ROOT, "src/app/ORDER.json"), "utf8"));
     const i = before.indexOf("17-exercises-plans.jsx");
     assert.deepEqual(now, [...before.slice(0, i + 1), "17b-atlas-catalog.jsx", ...before.slice(i + 1)]);
-    // 00-imports.jsx: only the one import of the atlas release is added
+    // 00-imports.jsx: only the one import of the atlas release (AT2) and the one import of the nr1
+    // contracts used by the atlas adapter (I3) are added
     const imports0 = execFileSync("git", ["show", `${AT1_REF}:src/app/00-imports.jsx`], { cwd: ROOT, encoding: "utf8" });
-    const added = '// AT2: the approved atlas release — read ONLY by the catalog adapter (17b-atlas-catalog.jsx)\nimport { ATLAS_RELEASE } from "@nextrep-engine";\n';
+    const added = '// AT2: the approved atlas release — read ONLY by the catalog adapter (17b-atlas-catalog.jsx)\nimport { ATLAS_RELEASE } from "@nextrep-engine";\n' +
+      '// I3: the nr1 contracts and the snapshot builder — used ONLY by the atlas adapter (17b-atlas-catalog.jsx)\n' +
+      'import { validateLoadSnapshot, planItemSnapshot, resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS, validateRefMatchesSnapshot } from "@nextrep-engine";\n';
     const anchor = '  draftVolume,\n} from "@nextrep-engine";\n';
     assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added));
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
     assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx"]);
+    // I3: the nr1 contracts are used only by the atlas adapter
+    const nr1Users = execFileSync("git", ["grep", "--untracked", "-l", "-E", "planItemSnapshot|resolvePlanItemLoadModel|validateLoadSnapshot|validateRefMatchesSnapshot", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
+    assert.deepEqual(nr1Users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx"]);
   });
 
-  test(`src/engine/index.js = ${FREEZE_REF} plus only the AT2 re-export of the atlas release`, () => {
+  test(`src/engine/index.js = ${FREEZE_REF} plus only the AT2 re-export of the atlas release and the I3 named re-exports`, () => {
     const frozen = execFileSync("git", ["show", `${FREEZE_REF}:src/engine/index.js`], { cwd: ROOT, encoding: "utf8" });
-    const expected = frozen + '// AT2: the approved atlas release (read-only), shown by the catalog „Atlas ćwiczeń”.\nexport * from "./atlas-release.js";\n';
+    const expected = frozen + '// AT2: the approved atlas release (read-only), shown by the catalog „Atlas ćwiczeń”.\nexport * from "./atlas-release.js";\n' +
+      // I3: exactly these named re-exports (no load.js, no volume of the new engine — A5 stays closed)
+      "// I3: the atlas in plans and workouts of the app (S1) — the nr1 contracts and the snapshot builder,\n" +
+      "// re-exported so the app uses the SAME modules (no second implementation).\n" +
+      'export { validateLoadSnapshot } from "./load-snapshot.js";\n' +
+      'export { planItemSnapshot } from "../nr1/domain/workout-from-plan.js";\n' +
+      'export { resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS } from "../nr1/contracts/plan-load-model.js";\n' +
+      'export { validateRefMatchesSnapshot } from "../nr1/contracts/exercise-ref.js";\n';
     assert.equal(readFileSync(resolve(ROOT, "src/engine/index.js"), "utf8"), expected);
   });
 

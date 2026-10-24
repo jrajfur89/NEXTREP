@@ -226,8 +226,11 @@ describe("the repository atlas", () => {
     };
     // AT2: atlas.json enters the app through one engine module only (the nr1 build reads it separately)
     assert.deepEqual(grep(["atlas.json", "src/atlas"], ["src/app", "src/engine"]), ["src/engine/atlas-release.js"]);
-    // the app does not use the validator, the snapshot, the hierarchy or the muscle statistics yet (later stages)
-    assert.deepEqual(grep(["atlas-validate", "load-snapshot", "muscle-work", "muscle-stats", "hierarchy", "navigation.json"], ["src/app", "src/engine/index.js"]), []);
+    // the app does not use the validator, the hierarchy or the muscle statistics yet (later stages)
+    assert.deepEqual(grep(["atlas-validate", "muscle-work", "muscle-stats", "hierarchy", "navigation.json"], ["src/app", "src/engine/index.js"]), []);
+    // I3: the snapshot module reaches the app only through the engine entry (validateLoadSnapshot) and
+    // the nr1 builder; no app file names it
+    assert.deepEqual(grep(["load-snapshot"], ["src/app", "src/engine/index.js"]), ["src/engine/index.js"]);
     // the engine entry exposes only the read-only release on top of the old engine
     assert.deepEqual(grep(["atlas-release"], ["src/engine/index.js"]), ["src/engine/index.js"]);
   });

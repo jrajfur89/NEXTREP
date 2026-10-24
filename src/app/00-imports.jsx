@@ -66,6 +66,8 @@ import {
 } from "@nextrep-engine";
 // AT2: the approved atlas release — read ONLY by the catalog adapter (17b-atlas-catalog.jsx)
 import { ATLAS_RELEASE } from "@nextrep-engine";
+// I3: the nr1 contracts and the snapshot builder — used ONLY by the atlas adapter (17b-atlas-catalog.jsx)
+import { validateLoadSnapshot, planItemSnapshot, resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS, validateRefMatchesSnapshot } from "@nextrep-engine";
 
 
 

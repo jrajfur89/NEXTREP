@@ -18,6 +18,12 @@ const ADDED_BY_STAGE = {
   SEC_HF_01: ["activeDraftHasContent", "activeDraftOwnedBy", "clearOwnActiveWorkoutDraft", "saveKeyStrict"],
   // I2 (24.10.2026): S1 profile (clean data space, cloud off), no built-in exercises, „Wkrótce” templates
   I2: ["BUILT_IN_EXERCISES", "NR_CLEAN_DATA_SPACE", "NR_CLOUD_SYNC_ENABLED", "NR_LOCAL_KEY_PREFIX", "ReadyTemplateSoonBadge"],
+  // I3 (24.10.2026): the atlas in the pickers of plans and workouts (src/app/17b-atlas-catalog.jsx)
+  I3: [
+    "ATLAS_RECORD_BY_ID", "AtlasExercisePickerModal", "atlasExerciseView", "atlasImportProblems",
+    "atlasLoadHint", "atlasLoadModelChoice", "atlasLoadSnapshot", "atlasPlanItemFields", "atlasRecord", "atlasRefFields",
+    "atlasWorkoutKind", "exerciseKindFor", "exerciseNameFor", "isAtlasExerciseId", "pickedExerciseFields",
+  ],
 };
 // Baseline names an approved stage removed on purpose (and only these).
 const REMOVED_BY_STAGE = {
