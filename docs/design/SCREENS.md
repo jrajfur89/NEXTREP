@@ -20,9 +20,27 @@
 
 The duplicate “Pomiary” entry is intentionally preserved from the current user-provided list and must be clarified before implementation.
 
+## Approved UX masters (status 2026-10-20)
+
+Source of truth for screen status. Status model: DESIGN_STATUS.md. Bottom navigation B2 is a component: COMPONENTS.md, DS-C04.
+
+| Screen / flow | Master | UX/UI | Implementation | Verification |
+|---|---|---|---|---|
+| Dashboard — returning user | Dashboard / Returning User / Master v1 | APPROVED (2026-10-11) | NOT IMPLEMENTED | NOT TESTED |
+| Dashboard — new user | Dashboard / New User / Master v1 | APPROVED (2026-10-13) | NOT IMPLEMENTED | NOT TESTED |
+| Dashboard — interrupted workout | Dashboard / Interrupted Workout / Master v1 | APPROVED (2026-10-13) | NOT IMPLEMENTED | NOT TESTED |
+| Active workout | Active Workout / Cinematic / Master v1 | APPROVED (2026-10-13) | NOT IMPLEMENTED | NOT TESTED |
+| Training entry flow | Training / Entry Flow / Master v1 | APPROVED (2026-10-14) | NOT IMPLEMENTED | NOT TESTED |
+| Workout completion & summary | Workout / Completion & Summary / Cinematic / Master v1 | APPROVED (2026-10-17) | NOT IMPLEMENTED | NOT TESTED |
+| Exercise details (atlas) | Atlas / Exercise Details / Compact Tabs v3 / Master v1 | APPROVED (2026-10-20) | NOT IMPLEMENTED | NOT TESTED |
+
+Accessibility fix G02 (approved visually 2026-10-21) changes text and field-outline colours in the Active workout, Workout completion & summary and Exercise details (atlas) masters; the corrected version is a working version pending final audit and does not change the approval dates above.
+
+Master documents and canvas references: claude/ux-master-registry.md (NextRep project). Visual approval is not approval for implementation and does not mean the screen is implemented or tested.
+
 ## Screen design process
 
-Each screen should be designed in Stitch using the accepted NEXTREP Design System.
+Each screen is designed in Claude Design using the accepted NEXTREP Design System (Stitch is historical, DESIGN.md §17).
 
 For every accepted screen document:
 - purpose

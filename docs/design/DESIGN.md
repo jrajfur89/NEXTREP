@@ -26,6 +26,7 @@ Approximate visual balance:
 
 ### Brand
 - primary: #FF6A00
+- warm-highlight: #FF851B (approved 2026-10-11; accent of the approved masters: section headings, icons, active navigation, card edge light, focus ring)
 - light: #FF8A2A
 - bright: #FF9A3D
 - dark: #CC4F00
@@ -42,23 +43,57 @@ Approximate visual balance:
 
 ### Border
 - default: #2A2A2A
+- subtle: #1E1E20 (decorative separators only: table rows, section dividers)
+- control: #66666A (default outline of inputs and selects; 3.28:1 against the field fill #121213, 3.44:1 against the card #0B0B0C; the active state keeps 2 px warm-highlight #FF851B) — approved 2026-10-21
 
 ### Text
+- display: #FFFFFF (display typography only: greetings, workout and exercise titles, key metric values)
 - primary: #F5F5F5
 - secondary: #B8B8B8
-- muted: #777777
-- disabled: #4A4A4A
+- tertiary: #9A9A9A (labels, column headers)
+- muted: #8E8E8E (captions, de-emphasised hints, empty field values; replaces #777777)
+- disabled: #4A4A4A (disabled controls only; never for information)
 
 ### Status
 - success: #42C98A
-- warning: #E5A63A
-- danger: #E84B4B
+- warning: #FFB547 (icons, text, borders and tints of caution states; replaces #E5A63A)
+- danger: #F2555A (destructive fills, borders and tints; replaces #E84B4B)
+- danger-text: #FF6B60 (error and destructive text and icons on dark surfaces)
+
+Status usage rules (NEXTREP visual rules):
+- A destructive button filled with danger #F2555A uses a #090909 label.
+- Error and destructive text and icons on dark surfaces use danger-text #FF6B60.
+- danger-text #FF6B60 is not used as a button fill and danger #F2555A is not used as a text colour. These are NEXTREP consistency rules (one red for surfaces, one red for content), not WCAG findings.
+- Status colours are always paired with a word or an icon.
+
+### Contrast assessment
+- Every real text/background pair is assessed separately against WCAG 2.2 SC 1.4.3: 4.5:1 for normal text, 3:1 for large text (at least 24 px, or at least 18.66 px bold).
+- Non-text contrast (SC 1.4.11, 3:1) applies only to graphics needed to understand content and to visual indicators needed to identify a control or its state. Decorative separators and surfaces have no contrast requirement; a control identified by its text label does not need a visible boundary.
+- Text and non-text contrast are reported separately. Measured pairs and their results are kept in the Design System approval package (token register), not restated here.
+
+### Proposed tokens — not in force
+The values below appear in approved masters but their name, role or accessibility assessment is pending. They are not tokens yet: do not reference these names in code until they are approved and moved to the sections above.
+
+| Proposed name | Value | Observed role in masters | Open point |
+|---|---|---|---|
+| card-deep | #0B0B0C | card and list fills; stop of the bottom-navigation gradient | name and role |
+| surface-control | #121213 | input, select and secondary-button fills | name and role (field boundary is provided by border control) |
+| surface-tile | #141415 | metric tiles and tile buttons | name and role |
+| surface-on-sheet | #1A1A1B | rows, icon wells and secondary buttons on #151515 sheets | name and role |
+| border-card | #232325 | table regions, sections, metric tiles | name and role |
 
 ## 3. Typography
 
-Display: Barlow Condensed, bold, uppercase, short athletic headings; H1 32–36 px, H2 24–28 px, H3 18–22 px; tight letter spacing (H1 0 to -0.5%, H2/H3 0).
+Barlow Condensed is the UI typeface of every approved master (2026-10-11 → 2026-10-20): screen titles, headings, body copy, labels, buttons, navigation, dates written as words and all other text.
+- Screen title: 32/36, weight 600, sentence case.
+- Section heading: 15/18, weight 500, UPPERCASE, letter spacing 0.03em (gradient warm text where the master uses it).
+- Card / workout / exercise title: 23–29/26–34, weight 500, sentence case (exercise names never uppercase).
+- Body: 16/20 (16–19 in controls), weight 400; label: 14–15/16–19; caption: 12–13.
+- Buttons: 17–19, weight 500–600.
 
-UI/body: Inter, weights 400/500/600/700; Body Large 17 px, Body 15–16 px, Body Small 13–14 px, Caption 11–12 px. Use Inter for buttons, forms, data, dates, weights, repetitions and RIR. Timer uses tabular numerals.
+Inter is used only for numeric values: weight, repetitions, RIR values in inputs, times, timers, volume and table cells with numbers ("80 kg × 8", "01:12", "4 200 kg"), always with font-variant-numeric: tabular-nums. Inter is not replaced in these places.
+
+The previous rule (Inter for buttons, forms, dates; Barlow Condensed bold uppercase for all headings) is superseded by the approved masters.
 
 ## 4. Spacing
 
@@ -136,6 +171,15 @@ Component details are developed iteratively in Claude Design and documented here
 - height: 48–52 px
 - Inter Semi Bold/Bold
 - text: #090909
+
+### Primary CTA pill (approved masters: Dashboard, New User, Interrupted Workout, Entry Flow)
+- visible pill 192 × 36 (min-width 192, grows with text), radius 8, touch target 44 px high
+- fill: linear-gradient(180deg, #FF851B 0%, #FF6A00 55%, #FF6A00 100%), inner highlight + glow-cta
+- label: Barlow Condensed 600 18/20, #090909, trailing arrow icon
+
+### Destructive
+- full-width 48–52 px, radius 10–12, fill danger #F2555A, label #090909 Barlow Condensed 19 px
+- secondary destructive: transparent, border rgba(242,85,90,.45), label danger-text #FF6B60
 
 ### Secondary
 - transparent or #18181A
@@ -244,7 +288,9 @@ Implementation handoff:
 
 ## 15. Active workout — approved UI direction (2026-10-10)
 
-- Center workout timer in header; top-right overflow menu includes Add exercise / End workout / Abandon workout / Instructions.
+SUPERSEDED (header and menu) by "Active Workout / Cinematic / Master v1 — Approved" (2026-10-13), see section 19. The remaining bullets stay valid unless section 19 says otherwise.
+
+- [superseded] Center workout timer in header; top-right overflow menu includes Add exercise / End workout / Abandon workout / Instructions.
 - Current exercise name is prominent white text; no redundant orange exercise-name pill.
 - Today's recommendations are descriptive and specific to the current exercise. They may suggest increasing load or repetitions but must NOT prescribe a mandatory numeric load.
 - Previous workout performance is a separate section below recommendations, with a prominent “Zobacz poprzednie wykonanie treningu” action and access to full history.
@@ -276,7 +322,7 @@ Both assets are immutable: preserve the supplied artwork, proportions, geometry,
 Placement:
 - Logotype: splash, onboarding, login, Dashboard header, NEXTREP PRO, About, exported reports.
 - Symbol: compact top bar where appropriate, square slots, static loading state and report footers.
-- Neither logo is required in the Active Workout header; the centered training timer takes priority.
+- Neither logo is required in the Active Workout header; the workout time takes priority (position superseded by section 19: small, top-left).
 - Stacked logo variant is not approved pending separate review.
 - Existing production PWA app icon remains unchanged; neither asset automatically replaces it.
 
@@ -292,3 +338,23 @@ Background and glow:
 - Contrast statement of 4.25:1 on #090909 was reported by Claude Design and has not been independently verified here; validate on final rendered screens.
 
 Older opaque-on-black logos from the production app are reference-only within the design project. Any replacement of production brand assets is a separate implementation decision requiring explicit approval.
+
+## 19. Active workout header — approved master (2026-10-13)
+
+Status: see SCREENS.md (Active workout). Visual approval is not implementation.
+
+- Header with workout photography and restrained orange light; workout time small in the top-left corner (secondary information, Inter tabular).
+- ⋮ overflow menu top-right: Dodaj ćwiczenie, Zamień, Film, Zakończ, Przerwij. No back arrow and no visible "Zakończ" button.
+- Below: plan name · "Ćwiczenie x z n", exercise name large (wraps, never clipped), segmented progress bar.
+- Compact header when space is short (mockups: < 280 px working area): row 1 time · progress · ⋮; row 2 exercise name. At 100% and 120% text the photo header is always used.
+- "Zalecenie na dziś" expanded by default for PRO, no status label; Free sees the locked card.
+- Open: compact-header threshold and hysteresis, iOS exit path without back gesture, rest-timer colour, set-comment form.
+
+## 20. Bottom navigation B2 — approved (2026-10-14)
+
+Status: see COMPONENTS.md, DS-C04. Visual approval is not implementation.
+
+- 7 destinations from production, unchanged order and targets: Start · Ćwiczenia · Plany · Trening · Statystyki · Historia · Więcej (Lucide icons).
+- Normal text: 7 icons + 7 labels in one row. Enlarged text: 7 icons in one row without visible labels; names in aria-label, aria-current and visible keyboard focus kept.
+- Detailed values (row 62 px, icon 24 px, label 13/15, gradient #121213 → #0B0B0C → #090909, separator rgba(255,133,27,.45), active #FF851B, inactive #B8B8B8, indicator 28 × 2 px, safe area max(env(safe-area-inset-bottom), 8px), content padding = bar height + 16 px): project document claude/bottom-navigation-b2-master-v1.md.
+- Not adopted: 2-row layout, "Active Label Only".
