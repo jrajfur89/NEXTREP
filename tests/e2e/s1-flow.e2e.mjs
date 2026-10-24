@@ -43,16 +43,46 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     assert.match(await bodyText(page), /ROZPOCZNIJ TRENING/);
   });
 
-  test("B1 ready plan workout, set 1 = 60 kg × 8", async () => {
+  // I2: the old built-in exercises and the ready-plan exercises are gone — the templates are „Wkrótce” and
+  // a workout starts without a plan, with an exercise the person creates.
+  test("B0 I2: no old exercise list; ready-made templates shown as „Wkrótce”, not usable", async () => {
+    await page.getByText("Ćwiczenia", { exact: true }).click();
+    await page.waitForTimeout(400);
+    await cov();
+    const ex = await bodyText(page);
+    for (const name of ["Przysiad ze sztangą", "Wyciskanie sztangi leżąc", "Plank z obciążeniem"]) assert.doesNotMatch(ex, new RegExp(name));
+    assert.match(ex, /Atlas ćwiczeń/);
+    await page.getByText("Start", { exact: true }).click();
     await page.getByText("ROZPOCZNIJ TRENING").click();
     await page.getByText("GOTOWE PLANY TRENINGOWE").click();
-    await page.getByText("FBW (Full Body Workout)").click();
-    await page.getByText("Początkujący").click();
+    await page.waitForTimeout(400);
+    await cov();
+    assert.equal(await page.locator('[data-testid="template-coming-soon"]').count(), 8);
+    assert.equal(await page.getByRole("button", { name: /FBW \(Full Body Workout\)/ }).isDisabled(), true);
+    await page.locator("button:has(svg.lucide-arrow-left)").first().click();
+    await page.waitForTimeout(300);
+  });
+
+  test("B1 workout without a plan with an own exercise, set 1 = 60 kg × 8", async () => {
+    await page.getByText("TRENING BEZ PLANU").click();
+    await page.waitForTimeout(400);
+    await page.getByText("Dodaj ćwiczenie", { exact: true }).first().click();
+    await page.waitForTimeout(300);
+    await page.getByRole("button", { name: "Dodaj ćwiczenie" }).last().click();
+    await page.waitForTimeout(300);
+    await cov();
+    await page.locator('input[placeholder="np. Przysiad ze sztangą"]').fill("Wyciskanie E2E");
+    await page.getByText("Klatka piersiowa", { exact: true }).nth(1).click(); // the main group (0 = the picker behind)
+    await page.getByText("Sztanga", { exact: true }).last().click();
+    await page.getByText("Masa ciała", { exact: true }).last().click(); // off (the default; one must stay)
+    await page.getByRole("button", { name: "Zapisz", exact: true }).last().click();
+    await page.waitForTimeout(300);
+    await page.getByText("Wyciskanie E2E").first().click();
     await page.waitForTimeout(600);
     await cov();
     await page.locator('input[placeholder="kg"]').first().fill("60");
     await page.locator('input[placeholder="0"]').first().fill("8");
-    assert.match(await bodyText(page), /PRZYSIAD ZE SZTANGĄ/);
+    assert.match(await bodyText(page), /WYCISKANIE E2E/);
     assert.equal(await page.locator('input[placeholder="kg"]').first().inputValue(), "60");
   });
 
@@ -111,6 +141,12 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await page.reload();
     await page.waitForTimeout(2500);
     assert.deepEqual(await historyCounts(), saved);
+    // I2: after the restart only the own exercise is there — nothing old is seeded back; every key the
+    // app wrote is in its clean data space
+    const store = await page.evaluate(() => ({ keys: Object.keys(localStorage), ex: JSON.parse(localStorage.getItem("nextrep1_guest_exercises_v1") || "null") }));
+    assert.deepEqual(store.ex.map((e) => e.name), ["Wyciskanie E2E"]);
+    assert.deepEqual(store.keys.filter((k) => !k.startsWith("nextrep1_")), [], store.keys.join(" "));
+    assert.deepEqual(saved.map(([k]) => k), ["nextrep1_guest_history_v1"]);
   });
 
   test("G1 export produces the JSON file (browser only — Android WebView: NR-S1-01, open); G2 import restores it", async () => {
@@ -127,27 +163,19 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     assert.deepEqual(await historyCounts(), saved);
   });
 
-  test("H1 login without network shows the network message, no crash; H2 only the TEST Supabase project is contacted", async () => {
+  // I2: sign-in and sync are temporarily off in S1 — the app says accounts are not configured and never
+  // contacts any Supabase project (nothing sent, nothing deleted in the cloud).
+  test("H1 I2: accounts off — calm message, no crash; H2 no Supabase project is contacted at all", async () => {
     await page.goto(srv.url);
     await page.waitForTimeout(2500);
     await page.getByText("Więcej", { exact: true }).click();
     await page.waitForTimeout(400);
-    await page.getByText(/Zaloguj się lub załóż konto/).first().click();
-    await page.waitForTimeout(800);
-    if (!(await page.locator('input[type="email"]').count())) {
-      await page.getByRole("button", { name: /Zaloguj/ }).first().click();
-      await page.waitForTimeout(600);
-    }
+    await page.getByText("Moje konto", { exact: true }).click();
+    await page.waitForTimeout(600);
     await cov();
-    await page.locator('input[type="email"]').fill("e2e-check@example.invalid");
-    await page.locator('input[type="password"]').fill("not-a-real-password");
-    await page.getByRole("button", { name: "Zaloguj się", exact: true }).click();
-    await page.waitForTimeout(4000);
-    const t = await bodyText(page);
-    assert.match(t, /Nie można połączyć się z serwerem/);
-    assert.doesNotMatch(t, /Failed to fetch/);
-    const supa = [...new Set(app.blocked)].filter((u) => u.includes("supabase.co"));
-    assert.ok(supa.length > 0 && supa.every((u) => u.includes("qnyjrvoudyjxvitazclo.supabase.co")), supa.join(" "));
+    assert.match(await bodyText(page), /Konta nie są jeszcze skonfigurowane w tej wersji aplikacji/);
+    assert.equal(await page.locator('input[type="email"]').count(), 0, "no sign-in form");
+    assert.deepEqual([...new Set(app.blocked)].filter((u) => u.includes("supabase")), []);
   });
 
   test("I1 every class used on the visited screens exists in the CSS; I2 no CDN / third-party request; I3 no JS errors", () => {

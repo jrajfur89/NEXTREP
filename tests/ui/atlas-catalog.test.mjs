@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { React, mount, unmount, byTestId, click, flush, loadApp, $$ } from "../harness/ui.mjs";
 import { resetStorage } from "../harness/load-app.mjs";
 import { ATLAS_RELEASE } from "../../src/engine/index.js";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 const h = React.createElement;
 const repoAtlas = JSON.parse(readFileSync(new URL("../../src/atlas/atlas.json", import.meta.url), "utf8"));
@@ -118,7 +119,7 @@ function spyAll() {
 }
 
 function screenProps() {
-  const exercises = A.DEFAULT_EXERCISES.map((e) => A.normalizeExercise(e));
+  const exercises = LEGACY_DEFAULT_EXERCISES.map((e) => A.normalizeExercise(e));
   const updates = [];
   const navigations = [];
   return {
@@ -201,13 +202,15 @@ describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () =>
     assert.equal(JSON.stringify({ ...globalThis.localStorage }), storageBefore);
   });
 
-  test("the old built-in list of 68 exercises is untouched; id overlaps with the atlas are known and listed", async () => {
-    assert.equal(A.DEFAULT_EXERCISES.length, 68, "the old catalog of 68 exercises is untouched");
+  test("I2: the app has no old built-in list; id overlaps of the old list (test data) with the atlas are known and listed", async () => {
+    assert.equal(A.DEFAULT_EXERCISES, undefined, "I2: the old catalog is gone from the app");
+    assert.equal(A.EXERCISE_ATLAS_META, undefined);
+    assert.equal(LEGACY_DEFAULT_EXERCISES.length, 68, "the old list survives only as test data");
     // The same identifier in the old list and in the atlas is a coincidence, NOT a mapping (K01: no
     // mapping of old ids). Listed here so that a new overlap from a later batch is noticed (risk for AT3).
     const atlasIds = new Set(A.ATLAS_CATALOG.exercises.map((e) => e.exerciseId));
-    assert.deepEqual(A.DEFAULT_EXERCISES.filter((e) => atlasIds.has(e.id)).map((e) => e.id), ["hanging_knee_raise"]);
-    const old = A.DEFAULT_EXERCISES.find((e) => e.id === "hanging_knee_raise");
+    assert.deepEqual(LEGACY_DEFAULT_EXERCISES.filter((e) => atlasIds.has(e.id)).map((e) => e.id), ["hanging_knee_raise"]);
+    const old = LEGACY_DEFAULT_EXERCISES.find((e) => e.id === "hanging_knee_raise");
     assert.deepEqual(old.category, ["Brzuch", "Pośladki"], "the old entry keeps its old data");
   });
 

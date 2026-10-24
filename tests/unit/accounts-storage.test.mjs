@@ -4,6 +4,7 @@ import { test, describe, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { loadApp, resetStorage } from "../harness/load-app.mjs";
 import { quiet } from "../harness/fixtures.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 let A;
 const UA = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
@@ -105,14 +106,21 @@ describe("account init marker and sync gate", () => {
 });
 
 describe("hasLocalAccountData", () => {
-  test("default atlas and technical keys never count as data", () => {
-    ls().setItem(A.getStorageKey("exercises", UA), JSON.stringify(A.DEFAULT_EXERCISES));
+  test("technical keys and an empty exercise list never count as data", () => {
+    ls().setItem(A.getStorageKey("exercises", UA), JSON.stringify([]));
     ls().setItem(A.getStorageKey("sync_queue", UA), JSON.stringify([{ id: 1 }]));
     ls().setItem(A.getStorageKey("device_id", UA), "dev");
     assert.equal(A.hasLocalAccountData(UA).hasData, false);
   });
+  test("I2: no built-in exercises any more — the old built-in list counts as the person's data", () => {
+    assert.deepEqual(A.BUILT_IN_EXERCISES, []);
+    ls().setItem(A.getStorageKey("exercises", UA), JSON.stringify(LEGACY_DEFAULT_EXERCISES));
+    const r = A.hasLocalAccountData(UA);
+    assert.equal(r.hasData, true);
+    assert.equal(r.details.customExercises, 68);
+  });
   test("own exercise / history / name / draft count", () => {
-    ls().setItem(A.getStorageKey("exercises", UA), JSON.stringify([...A.DEFAULT_EXERCISES, { id: "own1" }]));
+    ls().setItem(A.getStorageKey("exercises", UA), JSON.stringify([{ id: "own1" }]));
     const r = A.hasLocalAccountData(UA);
     assert.equal(r.hasData, true);
     assert.equal(r.details.customExercises, 1);
@@ -164,10 +172,14 @@ describe("startAccountEmpty", () => {
 });
 
 describe("checkCloudAccountData (light read, fake Supabase)", () => {
-  test("empty cloud → hasData false; only default atlas exercises → still false", async () => {
+  test("empty cloud → hasData false", async () => {
+    assert.equal((await A.checkCloudAccountData(UA)).hasData, false);
+  });
+  test("I2: a cloud row of an old built-in exercise counts as data (conservative: no built-ins any more)", async () => {
     globalThis.__nrSupabase.tables.nextrep_exercises = [{ user_id: UA, deleted_at: null, legacy_id: "bench_press" }];
     const r = await A.checkCloudAccountData(UA);
-    assert.equal(r.hasData, false);
+    assert.equal(r.hasData, true);
+    assert.equal(r.details.customExercises, true);
   });
   test("a workout of THIS user → hasData; another user's rows don't count", async () => {
     globalThis.__nrSupabase.tables.nextrep_workouts = [{ id: "w", user_id: UB, deleted_at: null }];

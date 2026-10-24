@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { loadApp } from "../harness/load-app.mjs";
 import { W, BW, T, DROP, session, ex } from "../harness/fixtures.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 let A;
 before(async () => {
@@ -23,7 +24,7 @@ describe("MGW-001 dictionary and atlas mapping", () => {
     const keys = Object.keys(A.ATLAS_MUSCLE_GROUPS);
     assert.equal(keys.length, 61);
     for (const k of keys) {
-      assert.ok(A.DEFAULT_EXERCISES.some((e) => e.id === k), `${k} not in DEFAULT_EXERCISES`);
+      assert.ok(LEGACY_DEFAULT_EXERCISES.some((e) => e.id === k), `${k} not in DEFAULT_EXERCISES`);
       const m = A.ATLAS_MUSCLE_GROUPS[k];
       assert.ok(ids.has(m.muscleGroup), `${k}: bad primary`);
       for (const s of m.secondaryMuscleGroups) {
@@ -33,7 +34,7 @@ describe("MGW-001 dictionary and atlas mapping", () => {
     }
   });
   test("every non-cardio atlas exercise is mapped; the 7 unmapped are exactly the cardio ones", () => {
-    const unmapped = A.DEFAULT_EXERCISES.filter((e) => !A.ATLAS_MUSCLE_GROUPS[e.id]);
+    const unmapped = LEGACY_DEFAULT_EXERCISES.filter((e) => !A.ATLAS_MUSCLE_GROUPS[e.id]);
     assert.equal(unmapped.length, 7);
     assert.ok(unmapped.every((e) => e.isCardio));
   });
@@ -213,7 +214,7 @@ describe("MGW-002 filters and badges", () => {
     assert.deepEqual(A.MUSCLE_FILTER_OPTIONS, [...A.MUSCLE_GROUPS.map((g) => g.label), "Cardio"]);
     assert.equal(A.muscleFilterOptionsFor(lib).at(-1), "Partia nieokreślona");
     assert.equal(A.muscleFilterOptionsFor(lib.filter((e) => e.id !== "own_legs")).includes("Partia nieokreślona"), false);
-    assert.equal(A.muscleFilterOptionsFor(A.DEFAULT_EXERCISES).length, 11, "the default atlas needs no fallback filter");
+    assert.equal(A.muscleFilterOptionsFor(LEGACY_DEFAULT_EXERCISES).length, 11, "the default atlas needs no fallback filter");
   });
   test("a group filter matches primary OR secondary", () => {
     const biceps = lib.filter((e) => A.exerciseMatchesMuscleFilter(e, "Biceps", lib)).map((e) => e.id);

@@ -1,4 +1,5 @@
-const BACKUP_LIST_KEY = "nextrep_backup_list_v1";
+// I2: the clean data space has its own backup list — snapshots of the old data are never offered here
+const BACKUP_LIST_KEY = NR_CLEAN_DATA_SPACE ? "nextrep1_backup_list_v1" : "nextrep_backup_list_v1";
 const BACKUP_LIMIT = 10;
 const BACKUP_APP_VERSION = "1/2026";
 let lastAutoBackupAt = 0;

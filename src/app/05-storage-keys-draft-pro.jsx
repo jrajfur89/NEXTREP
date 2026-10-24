@@ -13,7 +13,8 @@ const STORAGE_KEYS = {
   // Stage 4A.2: local PRO state belongs to the account (guest ≠ A ≠ B), not to the device.
   get proStatus() { return getStorageKey("pro_status"); },
   get proHints() { return getStorageKey("pro_hints"); },
-  onboardingCompleted: "trainapp_onboarding_completed_v1", // device-level: the intro walkthrough
+  // device-level: the intro walkthrough (I2: the clean data space starts with its own walkthrough)
+  onboardingCompleted: NR_CLEAN_DATA_SPACE ? "nextrep1_onboarding_completed_v1" : "trainapp_onboarding_completed_v1",
 };
 
 // Active workout draft — written SYNCHRONOUSLY (plain localStorage, not the async saveKey) so the

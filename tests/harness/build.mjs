@@ -69,6 +69,17 @@ const tag = ref ? `ref-${ref}` : "app";
 let code = ref && !refHasSrcApp ? appFromHtml(html) : appFromSrc();
 const code0 = code; // source as read (before the test-only export rewrite)
 
+// I2: src/app ships the S1 profile (clean local data space, cloud sync off — 01-config-utils.jsx).
+// The default test bundle (app) is built with the LEGACY profile so the dormant cloud / legacy-key code
+// keeps being tested exactly as before; app-s1 is built from the source as it ships (no substitution)
+// and is used by the I2 tests (loadApp after useS1Profile()). Test-only — the app source is untouched.
+const PROFILE_LINES = [
+  ["const NR_CLEAN_DATA_SPACE = true;", "const NR_CLEAN_DATA_SPACE = false; // TEST HARNESS: legacy profile"],
+  ["const NR_CLOUD_SYNC_ENABLED = false;", "const NR_CLOUD_SYNC_ENABLED = true; // TEST HARNESS: legacy profile"],
+];
+const hasProfile = !ref && PROFILE_LINES.every(([from]) => code.split(from).length === 2);
+if (!ref && !hasProfile) throw new Error("build: the I2 profile lines were not found exactly once in src/app");
+
 const RENDER_LINE = 'createRoot(document.getElementById("root")).render(<App />);';
 const renderCount = code.split(RENDER_LINE).length - 1;
 if (renderCount !== 1) throw new Error(`build: expected exactly 1 render line, found ${renderCount}`);
@@ -99,11 +110,15 @@ const __testState = {
 };
 `;
 code = code.replace(RENDER_LINE, `${extra}\nexport { ${names.join(", ")}, __testState };`);
-writeFileSync(resolve(outDir, `${tag}.entry.jsx`), code);
+const variants = hasProfile
+  ? [[tag, PROFILE_LINES.reduce((c, [from, to]) => c.replace(from, to), code)], [`${tag}-s1`, code]]
+  : [[tag, code]];
+for (const [vtag, vcode] of variants) {
+writeFileSync(resolve(outDir, `${vtag}.entry.jsx`), vcode);
 
 await build({
-  entryPoints: [resolve(outDir, `${tag}.entry.jsx`)],
-  outfile: resolve(outDir, `${tag}.bundle.mjs`),
+  entryPoints: [resolve(outDir, `${vtag}.entry.jsx`)],
+  outfile: resolve(outDir, `${vtag}.bundle.mjs`),
   bundle: true,
   format: "esm",
   platform: "node",
@@ -121,7 +136,8 @@ await build({
   },
   logLevel: "error",
 });
+}
 
 const md5 = createHash("md5").update(html ?? code0).digest("hex");
 writeFileSync(resolve(outDir, `${tag}.meta.json`), JSON.stringify({ indexMd5: md5, exportedNames: names.length, builtAt: new Date().toISOString() }, null, 2));
-console.log(`[build] ${ref ? ref + (refHasSrcApp ? ":src/app" : ":index.html") : "src/app"} md5=${md5} exported=${names.length} names → harness/.build/${tag}.bundle.mjs`);
+console.log(`[build] ${ref ? ref + (refHasSrcApp ? ":src/app" : ":index.html") : "src/app"} md5=${md5} exported=${names.length} names → harness/.build/${variants.map(([t]) => `${t}.bundle.mjs`).join(" + ")}`);

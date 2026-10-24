@@ -87,12 +87,12 @@ export function checkMetafile(metafile, { entry, entries = [] }) {
 // ---- 2. bundle content rules ------------------------------------------------------------------
 // Ids of the 68 exercises of the old atlas (DEFAULT_EXERCISES). NEXTREP 1.0 does not keep any
 // compatibility with them. Ids that the 1.0 atlas itself issues are not treated as old.
+// I2: the old list is gone from the app; its ids are kept in tools/legacy-exercise-ids.json (taken from
+// 8f9a2a8, checked against git and the test fixture by tests/nr1/n0.test.mjs).
 export function oldExerciseIds(atlas) {
-  const src = readFileSync(resolve(ROOT, "src/app/10-atlas-templates.jsx"), "utf8"); // read only
-  const start = src.indexOf("const DEFAULT_EXERCISES = [");
-  const end = src.indexOf("\n];", start);
-  if (start < 0 || end < 0) throw new Error("check-nr1-boundaries: DEFAULT_EXERCISES not found in the old app");
-  const ids = [...src.slice(start, end).matchAll(/\{ id: "([a-z0-9_]+)"/g)].map((m) => m[1]);
+  const list = JSON.parse(readFileSync(resolve(ROOT, "tools/legacy-exercise-ids.json"), "utf8"));
+  const ids = Array.isArray(list.ids) ? list.ids : [];
+  if (ids.length !== 68 || list.count !== 68) throw new Error("check-nr1-boundaries: tools/legacy-exercise-ids.json must list the 68 old ids");
   const issued = new Set([...(atlas?.issuedIds || []), ...((atlas?.exercises || []).map((e) => e && e.exerciseId))]);
   return ids.filter((id) => !issued.has(id));
 }

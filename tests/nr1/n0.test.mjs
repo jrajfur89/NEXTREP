@@ -248,6 +248,16 @@ describe("N0-C / N0-D: boundaries are enforced on real dependencies and on the b
     assert.equal(oldExerciseIds(a).length, 67);
     assert.deepEqual(checkBundleText(`x("${all[0]}")`, { atlas: a }), []);
   });
+
+  test("I2: the frozen old-id list = the old app at 8f9a2a8 = the legacy test fixture", async () => {
+    const all = oldExerciseIds(null);
+    const src = execFileSync("git", ["show", "8f9a2a8:src/app/10-atlas-templates.jsx"], { cwd: ROOT, encoding: "utf8" });
+    const block = src.slice(src.indexOf("const DEFAULT_EXERCISES = ["), src.indexOf("\n];", src.indexOf("const DEFAULT_EXERCISES = [")));
+    assert.deepEqual(all, [...block.matchAll(/\{ id: "([a-z0-9_]+)"/g)].map((m) => m[1]));
+    const { LEGACY_DEFAULT_EXERCISES } = await import("../fixtures/legacy/default-exercises.mjs");
+    assert.deepEqual(all, LEGACY_DEFAULT_EXERCISES.map((e) => e.id));
+    assert.doesNotMatch(readFileSync(resolve(ROOT, "src/app/10-atlas-templates.jsx"), "utf8"), /DEFAULT_EXERCISES/, "the list is gone from the app");
+  });
 });
 
 // ---- 4. runtime: the new app never reads the old app's data -----------------------------------
@@ -300,6 +310,14 @@ const AT2_APP_FILES = ["src/app/00-imports.jsx", "src/app/17-exercises-plans.jsx
 // SEC-HF-01 (18.10.2026, P0 hotfix, approved by the product owner): workout draft and finish safety —
 // exactly these three files; their content is checked by tests/ui/sec-hf-01-workout-safety.test.mjs.
 const SEC_HF_01_APP_FILES = ["src/app/05-storage-keys-draft-pro.jsx", "src/app/18-active-workout.jsx", "src/app/21-app.jsx"];
+// I2 (24.10.2026, approved by the product owner): the old built-in catalog (68) and its seeding removed,
+// ready-made templates without exercises („Wkrótce”), the S1 profile (clean local data space, cloud sync
+// off). Exactly these files beyond AT2 / SEC-HF-01; their content is checked by
+// tests/ui/i2-s1-clean-start.test.mjs (app as shipped) and the adapted legacy tests.
+const I2_APP_FILES = [
+  "src/app/01-config-utils.jsx", "src/app/03-normalizers-namespaces.jsx", "src/app/04-account-init-migration.jsx",
+  "src/app/09-backups.jsx", "src/app/10-atlas-templates.jsx", "src/app/19-stats-history-report.jsx",
+];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
@@ -322,13 +340,13 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     assert.equal(diff.trim(), "", diff);
   });
 
-  test(`AT2 / SEC-HF-01 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files and the three SEC-HF-01 files`, () => {
+  test(`AT2 / SEC-HF-01 / I2 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files, the three SEC-HF-01 files and the I2 files`, () => {
     const changed = execFileSync("git", ["diff", "--name-only", AT1_REF, "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
-    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f));
-    assert.deepEqual(outside, [], "src/app files changed outside AT2 and SEC-HF-01");
+    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f) && !I2_APP_FILES.includes(f));
+    assert.deepEqual(outside, [], "src/app files changed outside AT2, SEC-HF-01 and I2");
     // ORDER.json: the old order plus exactly one new file after 17-exercises-plans.jsx
     const before = JSON.parse(execFileSync("git", ["show", `${AT1_REF}:src/app/ORDER.json`], { cwd: ROOT, encoding: "utf8" }));
     const now = JSON.parse(readFileSync(resolve(ROOT, "src/app/ORDER.json"), "utf8"));

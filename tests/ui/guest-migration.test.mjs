@@ -9,6 +9,7 @@ import { bootApp, restoreOnline } from "../harness/app-boot.mjs";
 import { loadApp } from "../harness/load-app.mjs";
 import { quiet } from "../harness/fixtures.mjs";
 import { UA, UB, key, historySession, cloudTablesFor, cloudWrites, storageDump } from "../harness/account-fixtures.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 after(unmount);
 afterEach(restoreOnline);
@@ -141,19 +142,18 @@ describe("no offer when the account is not genuinely empty / data bound elsewher
     assert.ok(byTestId("init-cloud"));
     assert.equal(cloudWrites(S).length, 0);
   });
-  test("account whose only data is an edited built-in exercise → explained, no migrate button, no automatic decision; 'Nie teraz' → ready/new", async () => {
+  // I2: no built-in exercises any more — an account holding the old list (edited or not) has local data
+  // of its own, so the 4A.3 choice is shown (like any local data); no offer, nothing decided, nothing sent
+  test("I2: account whose only data is the old built-in list (edited) → the local-data choice; no offer, nothing written", async () => {
     const A0 = await loadApp();
-    const edited = A0.DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "moja technika" } : A0.normalizeExercise(e)));
+    const edited = LEGACY_DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "moja technika" } : A0.normalizeExercise(e)));
     const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(UA, "exercises")]: edited }) });
     await settle();
-    assert.ok(byTestId("init-guest-blocked"), "the user is told why the data cannot be moved");
     assert.ok(!byTestId("init-guest-migrate"));
+    assert.ok(byTestId("init-local"));
     assert.equal(read(key(UA, "account_init")), null, "nothing decided automatically");
-    await press("init-guest-later");
-    assert.ok(appShown());
-    assert.equal(read(key(UA, "account_init")).source, "new");
     assert.equal(read(key(UA, "exercises"))[0].notes, "moja technika");
-    assert.equal(cloudWrites(S).filter((c) => c.table === "nextrep_workouts").length, 0);
+    assert.equal(cloudWrites(S).length, 0);
   });
   // Stage 4A.4 Part 2 (F-4): B is told why (no silent ready/new); "Nie teraz" is B's explicit choice.
   test("guest data bound to A's migration → B (empty) is not offered it: explained, nothing written; 'Nie teraz' → ready/new", async () => {
@@ -198,7 +198,9 @@ describe("interrupted attempt after a restart", () => {
     assert.deepEqual(guestDump(), afterCleanup(guestBefore));
   });
   test("failure before any data row → 'Wróć bez przenoszenia' → account copy removed, guest intact, offer again", async () => {
-    const { S } = await bootApp({ session: sessA, storage: guestStorage() });
+    // I2: nothing is seeded any more — the guest's exercise list (the old list as own data) is given explicitly
+    const A0 = await loadApp();
+    const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(null, "exercises")]: LEGACY_DEFAULT_EXERCISES.map(A0.normalizeExercise) }) });
     await settle();
     const guestBefore = guestDump();
     S.queryHook = (q) => (q.table === "nextrep_exercises" && q.op === "insert" ? { message: "Failed to fetch" } : null);
@@ -214,15 +216,17 @@ describe("interrupted attempt after a restart", () => {
   });
 });
 
-describe("abandon after a partial upload of built-in exercises only", () => {
+describe("abandon after a partial upload of exercises only", () => {
   test("'Wróć bez przenoszenia' → the offer comes back (never an automatic ready/new)", async () => {
-    const { S } = await bootApp({ session: sessA, storage: guestStorage() });
+    // I2: the guest's exercise list is given explicitly (the old list as own data — nothing is seeded)
+    const A0 = await loadApp();
+    const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(null, "exercises")]: LEGACY_DEFAULT_EXERCISES.map(A0.normalizeExercise) }) });
     await settle();
     let n = 0;
     S.queryHook = (q) => (q.table === "nextrep_exercises" && q.op === "insert" && ++n === 3 ? { message: "Failed to fetch" } : null);
     await press("init-guest-migrate");
     S.queryHook = null;
-    assert.equal((S.tables.nextrep_exercises || []).length, 2, "2 built-in rows reached the cloud");
+    assert.equal((S.tables.nextrep_exercises || []).length, 2, "2 exercise rows reached the cloud");
     await press("init-guest-abandon");
     // Stage 4A.4 F-5 (Etap 6): the SERVER counted 2 writes of this attempt → it can't be cancelled (decision 5:
     // only server-confirmed zero writes) — the partial screen explains it; nothing is decided for the user
@@ -239,7 +243,7 @@ describe("abandon after a partial upload that included the guest's EDITED built-
   // Stage 4A.4 Part 2 (F-5): the guest's edited built-in row is data of this attempt in the cloud → partial.
   test("'Wróć bez przenoszenia' → no automatic ready/new: the partial-transfer screen explains it, the user decides", async () => {
     const A0 = await loadApp();
-    const edited = A0.DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "gość zmienił" } : A0.normalizeExercise(e)));
+    const edited = LEGACY_DEFAULT_EXERCISES.map((e, i) => (i === 0 ? { ...A0.normalizeExercise(e), notes: "gość zmienił" } : A0.normalizeExercise(e)));
     const { S } = await bootApp({ session: sessA, storage: guestStorage({ [key(null, "exercises")]: edited }) });
     await settle();
     let n = 0;
@@ -260,7 +264,7 @@ describe("active guest workout: never migrated mid-session", () => {
     const A = await loadApp();
     const plan = { id: "P-G", name: "GUEST-WORKOUT", exercises: [{ id: "pi1", exerciseId: "bench_press", setsDetail: [{ id: "s1", target: "8-10", rir: "" }] }] };
     const nowDate = new Date().toISOString();
-    const blocks = A.buildBlocksFromPlan(plan, A.DEFAULT_EXERCISES, [], nowDate);
+    const blocks = A.buildBlocksFromPlan(plan, LEGACY_DEFAULT_EXERCISES, [], nowDate);
     blocks[0].items[0].sets[0] = { ...blocks[0].items[0].sets[0], weight: "50", reps: "8" };
     return { version: 1, savedAt: new Date(Date.now() - 60000).toISOString(), plan, backfillInfo: null, nowDate, startTime: Date.now() - 600000, blocks, blockIdx: 0, subIdx: 0, manualDuration: 45 };
   }

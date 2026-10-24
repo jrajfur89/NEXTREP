@@ -169,9 +169,10 @@ function App() {
       loadKey(STORAGE_KEYS.proStatus),
       loadKey(STORAGE_KEYS.proHints),
     ]);
-    const normalizedEx = (ex && Array.isArray(ex) && ex.length ? ex : DEFAULT_EXERCISES).map(normalizeExercise);
+    // I2: no built-in exercise list any more — a missing or empty list stays empty (nothing is seeded
+    // or written); exercises come from the NEXTREP 1.0 atlas and from the person's own entries.
+    const normalizedEx = (Array.isArray(ex) ? ex : []).map(normalizeExercise);
     setExercises(normalizedEx);
-    if (!ex) await saveKey(STORAGE_KEYS.exercises, normalizedEx);
     const normalizedPlans = Array.isArray(pl) ? pl.map(normalizePlan).filter(Boolean) : [];
     setPlans(normalizedPlans);
     const normalizedHistory0 = Array.isArray(hi) ? hi.map(normalizeHistorySession).filter(Boolean) : [];

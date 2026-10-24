@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { unmount, byTestId, click, flush, act, $$ } from "../harness/ui.mjs";
 import { bootApp, restoreOnline } from "../harness/app-boot.mjs";
 import { loadApp } from "../harness/load-app.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 after(unmount);
 afterEach(restoreOnline);
@@ -25,7 +26,7 @@ async function realDraft(planName) {
   const A = await loadApp();
   const plan = { id: `P-${planName}`, name: planName, exercises: [{ id: "pi1", exerciseId: "bench_press", setsDetail: [{ id: "s1", target: "8-10", rir: "" }] }] };
   const nowDate = new Date().toISOString();
-  const blocks = A.buildBlocksFromPlan(plan, A.DEFAULT_EXERCISES, [], nowDate);
+  const blocks = A.buildBlocksFromPlan(plan, LEGACY_DEFAULT_EXERCISES, [], nowDate);
   blocks[0].items[0].sets[0] = { ...blocks[0].items[0].sets[0], weight: "50", reps: "8" };
   return { version: 1, savedAt: new Date(Date.now() - 60000).toISOString(), plan, backfillInfo: null, nowDate, startTime: Date.now() - 600000, blocks, blockIdx: 0, subIdx: 0, manualDuration: 45 };
 }

@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { React, mount, unmount, flush, loadApp, buttonByText, click } from "../harness/ui.mjs";
 import { loadRefApp, resetStorage } from "../harness/load-app.mjs";
 import * as VOLUME from "../../src/engine/volume.js";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 const REF = "28e2e70"; // F1.6
 const here = dirname(fileURLToPath(import.meta.url));
@@ -63,7 +64,7 @@ function gen(seed) {
   const history = Array.from({ length: int(1, 9) }, (_, k) => session(k)).reverse(); // newest first, as stored
   return { r, pick, int, history, set };
 }
-const EXERCISES = () => [...NEW.DEFAULT_EXERCISES.map(NEW.normalizeExercise), { ...NEW.normalizeExercise({ id: "own-1", name: "Własne", equipment: ["Hantle"], category: ["Plecy"] }) }];
+const EXERCISES = () => [...LEGACY_DEFAULT_EXERCISES.map(NEW.normalizeExercise), { ...NEW.normalizeExercise({ id: "own-1", name: "Własne", equipment: ["Hantle"], category: ["Plecy"] }) }];
 const same = (name, a, b, ctx) => assert.deepEqual(JSON.parse(JSON.stringify(a ?? null)), JSON.parse(JSON.stringify(b ?? null)), `${name} differs (seed ${ctx})`);
 // identical Math.random sequence for both builds (reports pick texts at random)
 function seeded(fn) {
@@ -175,9 +176,28 @@ describe("A4.5 guards", () => {
   });
   test("finish() and sync are untouched by A4.5 (identical to F1.6)", () => {
     const at = (f) => execFileSync("git", ["show", `${REF}:src/app/${f}`], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    for (const f of ["07-sync-queue-push.jsx", "08-sync-meta-pull-conflicts.jsx", "04-account-init-migration.jsx", "03-normalizers-namespaces.jsx"]) {
+    for (const f of ["07-sync-queue-push.jsx", "08-sync-meta-pull-conflicts.jsx"]) {
       assert.equal(app(f), at(f), `${f} changed`);
     }
+    // I2 (24.10.2026) changed 03 and 04 ONLY by the clean data space and the removed built-in exercise
+    // list; with exactly those hunks undone, both files are F1.6 byte for byte.
+    const undo = (src, pairs) => pairs.reduce((t, [now, before]) => {
+      assert.equal(t.split(now).length, 2, `I2 hunk found once: ${now.slice(0, 60)}`);
+      return t.replace(now, before);
+    }, src);
+    const I2_03 = [
+      ['// I2: the S1 profile keeps every scoped key in its own clean space ("nextrep1_…"); the old\n// "nextrep_…" keys of earlier builds stay on the device, unread (see NR_CLEAN_DATA_SPACE).\nconst NR_LOCAL_KEY_PREFIX = NR_CLEAN_DATA_SPACE ? "nextrep1_" : "nextrep_";\n', ""],
+      ["return `${NR_LOCAL_KEY_PREFIX}${ns}_${name}_v1`;", "return `nextrep_${ns}_${name}_v1`;"],
+      ["// I2: in the clean data space nothing old is copied in — no legacy data, no legacy PRO.\n", ""],
+      ["  if (!NR_CLEAN_DATA_SPACE) {\n    migrateLegacyLocalDataOnce(ns);\n    migrateLegacyProOnce();\n  }\n", "  migrateLegacyLocalDataOnce(ns);\n  migrateLegacyProOnce();\n"],
+    ];
+    assert.equal(undo(app("03-normalizers-namespaces.jsx"), I2_03), at("03-normalizers-namespaces.jsx"), "03 changed beyond I2");
+    const I2_04 = [
+      ['// I2: the app no longer has a built-in exercise list (the old 68 were removed and nothing is seeded),\n// so no exercise is "built-in": every exercise counts as the person\'s own data. For the dormant cloud\n// paths this is the conservative reading — an account still holding old built-in rows is non-empty.\nconst BUILT_IN_EXERCISES = Object.freeze([]);\n\n', ""],
+      ["never count, and neither did the old built-in\n// exercises (BUILT_IN_EXERCISES — empty since I2).", "never count, and neither does the default\n// exercise atlas every new namespace is seeded with (stable ids, see DEFAULT_EXERCISES)."],
+      ["(before I2: the old built-in list; since I2: an empty list)", "(reloadLocalData shows DEFAULT_EXERCISES then)"],
+    ];
+    assert.equal(undo(app("04-account-init-migration.jsx"), I2_04).replaceAll("BUILT_IN_EXERCISES", "DEFAULT_EXERCISES"), at("04-account-init-migration.jsx"), "04 changed beyond I2");
     // SEC-HF-01 (18.10.2026) changed the draft / finish SAFETY of 18-active-workout.jsx and
     // 05-storage-keys-draft-pro.jsx. What A4.5 protects stays byte-identical: the volume and totals
     // formulas of finish() and the storage helpers loadKey / saveKey.

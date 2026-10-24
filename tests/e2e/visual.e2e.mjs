@@ -31,9 +31,22 @@ const STEPS = [
   ["04-dashboard-empty", async (p) => click(p, "ZACZYNAMY TRENING")],
   ["05-start-workout", async (p) => click(p, "ROZPOCZNIJ TRENING")],
   ["06-ready-plans", async (p) => click(p, "GOTOWE PLANY TRENINGOWE")],
-  ["07-fbw-levels", async (p) => click(p, "FBW (Full Body Workout)")],
+  // I2: the ready-made templates carry no exercises any more, so BOTH builds walk the same workout
+  // without a plan, with an exercise created on the way (the picker itself is not compared: the
+  // reference lists the old 68 exercises there)
+  ["07-no-plan-workout", async (p) => {
+    await p.locator("button:has(svg.lucide-arrow-left)").first().click({ timeout: 20000 });
+    await click(p, "TRENING BEZ PLANU");
+  }],
   ["08-active-workout", async (p) => {
-    await click(p, "Początkujący");
+    await click(p, "Dodaj ćwiczenie", { exact: true });
+    await p.getByRole("button", { name: "Dodaj ćwiczenie" }).last().click({ timeout: 20000 });
+    await p.locator('input[placeholder="np. Przysiad ze sztangą"]').fill("Wyciskanie E2E");
+    await p.getByText("Klatka piersiowa", { exact: true }).nth(1).click();
+    await p.getByText("Sztanga", { exact: true }).last().click();
+    await p.getByText("Masa ciała", { exact: true }).last().click();
+    await p.getByRole("button", { name: "Zapisz", exact: true }).last().click();
+    await click(p, "Wyciskanie E2E");
     await p.locator('input[placeholder="kg"]').first().fill("60");
     await p.locator('input[placeholder="0"]').first().fill("8");
     await p.locator("body").click({ position: { x: 5, y: 300 } });
@@ -66,6 +79,14 @@ const STEPS = [
 // under test, and the screen WITH it is saved to e2e/.out/<name>.with-change.png for review.
 const INTENDED = {
   "17-exercises": { stage: "AT2", selector: '[data-testid="atlas-entry"]' }, // tile „Atlas ćwiczeń”
+};
+// Screens whose CONTENT an approved stage changed on purpose (not only an added element). They are not
+// compared with the reference; both images go to e2e/.out/<name>.ref.png / .cur.png for review. Every
+// other screen must still match pixel by pixel, and this list must be exactly the screens that differ.
+const CHANGED = {
+  "06-ready-plans": "I2: every ready-made template is „Wkrótce” (badge, inactive, no chevron)",
+  "16-account": "I2: accounts and sync temporarily off — the calm „not configured” state",
+  "17-exercises": "I2: no old built-in list — the groups count only the person's own exercise",
 };
 
 async function walk(dist, { underTest = false } = {}) {
@@ -112,13 +133,21 @@ describe("visual: build under test vs reference build", { concurrency: false }, 
       mkdirSync(STORED, { recursive: true });
     }
     const diffs = [];
+    const changedFound = [];
     for (const [name, refBuf] of ref.shots) {
       if (process.env.E2E_UPDATE_SCREENSHOTS === "1") writeFileSync(join(STORED, `${name}.png`), refBuf);
       const a = PNG.sync.read(refBuf);
       const b = PNG.sync.read(cur.shots.get(name));
-      if (a.width !== b.width || a.height !== b.height) { diffs.push(`${name}: size ${a.width}x${a.height} vs ${b.width}x${b.height}`); continue; }
-      const out = new PNG({ width: a.width, height: a.height });
-      const n = pixelmatch(a.data, b.data, out.data, a.width, a.height, { threshold: 0.05 });
+      const same = a.width === b.width && a.height === b.height;
+      const out = same ? new PNG({ width: a.width, height: a.height }) : null;
+      const n = same ? pixelmatch(a.data, b.data, out.data, a.width, a.height, { threshold: 0.05 }) : -1;
+      if (CHANGED[name]) {
+        if (n !== 0) changedFound.push(name);
+        writeFileSync(join(OUT, `${name}.ref.png`), refBuf);
+        writeFileSync(join(OUT, `${name}.cur.png`), cur.shots.get(name));
+        continue;
+      }
+      if (!same) { diffs.push(`${name}: size ${a.width}x${a.height} vs ${b.width}x${b.height}`); continue; }
       if (n > 0) {
         diffs.push(`${name}: ${n} px`);
         writeFileSync(join(OUT, `${name}.ref.png`), refBuf);
@@ -128,7 +157,8 @@ describe("visual: build under test vs reference build", { concurrency: false }, 
     }
     for (const [name, buf] of cur.withChange) writeFileSync(join(OUT, `${name}.with-change.png`), buf);
     assert.deepEqual([...cur.withChange.keys()], Object.keys(INTENDED), "every intended change was found");
-    t.diagnostic(`${ref.shots.size} screens compared; intended changes (element hidden for the comparison): ${Object.keys(INTENDED).join(", ")}`);
+    assert.deepEqual(changedFound, Object.keys(CHANGED), "every screen listed as changed really differs");
+    t.diagnostic(`${ref.shots.size - changedFound.length} screens compared; intended changes (element hidden for the comparison): ${Object.keys(INTENDED).join(", ")}; changed by a stage (reviewed, not compared): ${changedFound.join(", ")}`);
     assert.equal(ref.shots.size, STEPS.length);
     assert.deepEqual(diffs, []);
     assert.deepEqual(cur.errors.filter((e) => e.startsWith("pageerror")), []);

@@ -11,9 +11,26 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const bundlePath = resolve(here, ".build/app.bundle.mjs");
 const metaPath = resolve(here, ".build/app.meta.json");
 let appPromise = null;
+// I2: "legacy" (default) = the bundle with the legacy profile (old key space, cloud on — the dormant
+// code); "s1" = the app exactly as it ships (clean data space, cloud off). Chosen once per test file,
+// before the first loadApp().
+let appProfile = "legacy";
+export function useS1Profile() {
+  if (appPromise && appProfile !== "s1") throw new Error("useS1Profile() must run before the first loadApp()");
+  appProfile = "s1";
+}
+export function currentAppProfile() {
+  return appProfile;
+}
+// local key of a scoped entry / the onboarding marker, in the active profile's key space
+export function scopedKey(name, ns = "guest") {
+  return `${appProfile === "s1" ? "nextrep1_" : "nextrep_"}${ns}_${name}_v1`;
+}
+export function onboardingKey() {
+  return appProfile === "s1" ? "nextrep1_onboarding_completed_v1" : "trainapp_onboarding_completed_v1";
+}
 
 export function installDom() {
   if (globalThis.__nrDom) return globalThis.__nrDom;
@@ -46,7 +63,7 @@ export function installDom() {
 
 export async function loadApp() {
   if (!appPromise) {
-    if (!existsSync(bundlePath)) throw new Error("Bundle missing — run `npm run build` (or `npm test`) in tests/ first.");
+    if (!existsSync(resolve(here, ".build/app-s1.bundle.mjs"))) throw new Error("Bundle missing — run `npm run build` (or `npm test`) in tests/ first.");
     // Guard: the bundle must come from the CURRENT app source (src/app/, joined in ORDER.json order).
     const meta = JSON.parse(readFileSync(metaPath, "utf8"));
     const srcDir = resolve(here, "../../src/app");
@@ -54,7 +71,7 @@ export async function loadApp() {
     const md5 = createHash("md5").update(order.map((f) => readFileSync(resolve(srcDir, f), "utf8")).join("")).digest("hex");
     if (meta.indexMd5 !== md5) throw new Error("Bundle is stale (src/app changed) — run `npm run build`.");
     installDom();
-    appPromise = import(pathToFileURL(bundlePath).href);
+    appPromise = import(pathToFileURL(resolve(here, appProfile === "s1" ? ".build/app-s1.bundle.mjs" : ".build/app.bundle.mjs")).href);
   }
   return appPromise;
 }

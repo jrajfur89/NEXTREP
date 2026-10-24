@@ -8,12 +8,13 @@ import { loadApp } from "../harness/load-app.mjs";
 import { exerciseTotals, sessionTotals, normalizeLoad } from "../../src/engine/load.js";
 import { legacyLoadModel, inferLoadModel, loadModelFromKind, makeLegacyResolver, LEGACY_ATLAS_MODELS, legacyEquipmentKey } from "../../src/engine/load-legacy-map.js";
 import { generate, EXCEPTIONS } from "../../tools/gen-legacy-load-map.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 let A;
 let ATLAS;
 before(async () => {
   A = await loadApp();
-  ATLAS = new Map(A.DEFAULT_EXERCISES.map((e) => [e.id, e]));
+  ATLAS = new Map(LEGACY_DEFAULT_EXERCISES.map((e) => [e.id, e]));
 });
 const set = (weight, reps, extra = {}) => ({ weight, reps, rir: "0-1", setType: "normal", ...extra });
 const pick = (m) => [m.loadModel, m.laterality, m.repsCounting, m.confidence, m.source];
@@ -21,15 +22,15 @@ const own = (equipment, extra = {}) => ({ id: "own-" + equipment.join("-"), name
 
 describe("LEGACY_ATLAS_MODELS covers today's atlas exactly", () => {
   test("68 built-in exercises, one entry each, no extra ids", () => {
-    assert.equal(A.DEFAULT_EXERCISES.length, 68);
+    assert.equal(LEGACY_DEFAULT_EXERCISES.length, 68);
     assert.deepEqual(Object.keys(LEGACY_ATLAS_MODELS).sort(), [...ATLAS.keys()].sort());
   });
   test("the committed map is exactly what tools/gen-legacy-load-map.mjs produces", async () => {
     const src = (await import("node:fs")).readFileSync(new URL("../../src/engine/load-legacy-map.js", import.meta.url), "utf8");
-    assert.ok(src.includes(await generate(A.DEFAULT_EXERCISES)));
+    assert.ok(src.includes(await generate(LEGACY_DEFAULT_EXERCISES)));
   });
   test("every built-in exercise gets a definite model with confidence high, none unknown", () => {
-    for (const ex of A.DEFAULT_EXERCISES) {
+    for (const ex of LEGACY_DEFAULT_EXERCISES) {
       const m = legacyLoadModel(ex);
       assert.equal(m.source, "legacy-map", ex.id);
       assert.equal(m.confidence, "high", ex.id);
@@ -165,7 +166,7 @@ describe("history entries and the resolver", () => {
     assert.equal(loadModelFromKind(undefined).confidence, "unknown");
   });
   test("sessionTotals with the resolver: built-in exact, own dumbbell estimated, deleted exercise estimated by kind", () => {
-    const exercises = [...A.DEFAULT_EXERCISES, own(["Hantle"])];
+    const exercises = [...LEGACY_DEFAULT_EXERCISES, own(["Hantle"])];
     const resolve = makeLegacyResolver(exercises);
     const base = [
       { exerciseId: "bench_press", type: "weight", sets: [set("60", "8"), set("60", "8")] },
@@ -191,7 +192,7 @@ describe("differences from today's kinds (documented for A5)", () => {
   // Main unit of today's engine (getExerciseKind → WORKLOAD_UNIT_BY_KIND) vs the transitional model.
   test("only bands, the assisted pull-up and the ab wheel change their main unit (kg → reps)", () => {
     const changed = [];
-    for (const ex of A.DEFAULT_EXERCISES) {
+    for (const ex of LEGACY_DEFAULT_EXERCISES) {
       const kind = A.getExerciseKind(ex);
       const before = A.WORKLOAD_UNIT_BY_KIND[kind];
       if (!before) continue; // sets / cardio have no workload unit today

@@ -813,11 +813,11 @@ function BackfillModal({ plans, exercises, updatePlans, updateExercises, isPro, 
             ) : (
               <div className="space-y-2">
                 {READY_PLAN_TEMPLATES.map((t) => {
-                  const isExpanded = expandedTemplate === t.key;
+                  const isExpanded = !t.comingSoon && expandedTemplate === t.key; // I2: „Wkrótce” never expands
                   const isPremiumTier = t.tier === "premium";
                   return (
                     <div key={t.key} className="bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden">
-                      <button onClick={() => setExpandedTemplate(isExpanded ? null : t.key)} className="w-full p-3 flex items-start gap-3 text-left">
+                      <button onClick={() => !t.comingSoon && setExpandedTemplate(isExpanded ? null : t.key)} disabled={!!t.comingSoon} className={`w-full p-3 flex items-start gap-3 text-left${t.comingSoon ? " opacity-60" : ""}`}>
                         <PlanThumbnail variant="ready" size={44} planKey={t.key} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -829,9 +829,10 @@ function BackfillModal({ plans, exercises, updatePlans, updateExercises, isPro, 
                             >
                               {isPremiumTier ? "PRO" : "FREE"}
                             </span>
+                            {t.comingSoon && <ReadyTemplateSoonBadge />}
                           </div>
                         </div>
-                        <ChevronDown size={16} className={`text-neutral-600 flex-shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                        {!t.comingSoon && <ChevronDown size={16} className={`text-neutral-600 flex-shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />}
                       </button>
                       {isExpanded && (
                         <div className="px-3 pb-3 space-y-1.5">

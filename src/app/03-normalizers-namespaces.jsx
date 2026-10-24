@@ -102,9 +102,12 @@ function getActiveDataNamespace() {
   return _activeDataNamespace || "pending";
 }
 // userId === undefined → the ACTIVE namespace; null/"" → guest; a user id → that user.
+// I2: the S1 profile keeps every scoped key in its own clean space ("nextrep1_…"); the old
+// "nextrep_…" keys of earlier builds stay on the device, unread (see NR_CLEAN_DATA_SPACE).
+const NR_LOCAL_KEY_PREFIX = NR_CLEAN_DATA_SPACE ? "nextrep1_" : "nextrep_";
 function getStorageKey(name, userId) {
   const ns = userId === undefined ? getActiveDataNamespace() : getLocalDataNamespace(userId);
-  return `nextrep_${ns}_${name}_v1`;
+  return `${NR_LOCAL_KEY_PREFIX}${ns}_${name}_v1`;
 }
 function isActiveNamespaceFor(userId) {
   return _activeDataNamespace != null && _activeDataNamespace === getLocalDataNamespace(userId);
@@ -190,10 +193,13 @@ async function currentSessionUserId() {
 }
 // Switches every scoped key to the namespace of `userId` (null → guest). The first activation
 // in this version also performs the one-time legacy copy into that namespace.
+// I2: in the clean data space nothing old is copied in — no legacy data, no legacy PRO.
 function activateDataNamespace(userId) {
   const ns = getLocalDataNamespace(userId);
-  migrateLegacyLocalDataOnce(ns);
-  migrateLegacyProOnce();
+  if (!NR_CLEAN_DATA_SPACE) {
+    migrateLegacyLocalDataOnce(ns);
+    migrateLegacyProOnce();
+  }
   _activeDataNamespace = ns;
   return ns;
 }

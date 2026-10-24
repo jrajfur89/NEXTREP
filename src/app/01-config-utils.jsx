@@ -9,11 +9,22 @@
 const SUPABASE_URL = "https://pyhhvbqcjhpulrmqiguz.supabase.co";               // <-- WKLEJ TUTAJ: SUPABASE_URL
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ZGduhY1VqosHfz8iGJgXmw_DOaszUMo";   // <-- WKLEJ TUTAJ: SUPABASE_PUBLISHABLE_KEY
 
+// I2 (NEXTREP 1.0, S1 profile — approved by the product owner 24.10.2026):
+// - NR_CLEAN_DATA_SPACE: the app keeps its data under its own, clean local key space
+//   ("nextrep1_…"). The old keys ("nextrep_…", "trainapp_…") stay on the device untouched — never
+//   read, copied, migrated or removed. No old history is carried over.
+// - NR_CLOUD_SYNC_ENABLED: sign-in and sync with Supabase are TEMPORARILY off (`supabase` = null, the
+//   same calm "no cloud" state the app already has without configuration). Nothing is sent to or
+//   deleted from any cloud project; the sync code itself stays in place for a later stage.
+// The test harness builds the legacy profile (false / true) only to keep testing that dormant code.
+const NR_CLEAN_DATA_SPACE = true;
+const NR_CLOUD_SYNC_ENABLED = false;
+
 // Dopóki powyższe pola są puste, `supabase` pozostaje `null` i cały ekran konta
 // pokazuje spokojny komunikat zamiast się wywracać — reszta aplikacji (dane lokalne,
 // plany, historia, backupy) działa dokładnie tak samo jak wcześniej, bez zmian.
 const supabase =
-  SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : null;
+  NR_CLOUD_SYNC_ENABLED && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : null;
 
 // Where Supabase sends people back after the e-mail link (sign-up confirmation, password reset):
 // the app root of the CURRENT deployment — never a hard-coded host. Normalised to the directory

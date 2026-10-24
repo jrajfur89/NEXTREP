@@ -16,6 +16,7 @@ import { React, mount, unmount, flush, loadApp, $$, buttonByText, click } from "
 import { resetStorage } from "../harness/load-app.mjs";
 import { sessionTotals, exerciseTotals } from "../../src/engine/load.js";
 import { makeLegacyResolver, legacyLoadModel } from "../../src/engine/load-legacy-map.js";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 const h = React.createElement;
 let A;
@@ -48,7 +49,7 @@ const kgText = (text, label) => {
 before(async () => {
   A = await loadApp();
   resetStorage();
-  EXERCISES = A.DEFAULT_EXERCISES.map(A.normalizeExercise);
+  EXERCISES = LEGACY_DEFAULT_EXERCISES.map(A.normalizeExercise);
   RESOLVE = makeLegacyResolver(EXERCISES);
 });
 after(unmount);

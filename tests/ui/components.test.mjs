@@ -6,6 +6,7 @@ import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { React, mount, unmount, byTestId, buttonByText, click, type, blur, flush, loadApp, $ } from "../harness/ui.mjs";
 import { resetStorage } from "../harness/load-app.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 let A;
 const h = React.createElement;
@@ -96,7 +97,7 @@ describe("ExerciseEditorModal — primary/secondary muscle groups (MGW-002)", ()
     assert.deepEqual(saved[0].category, ["Triceps"]);
   });
   test("atlas exercise: groups are read-only and its stored category is not rewritten", async () => {
-    const bench = A.DEFAULT_EXERCISES.find((e) => e.id === "barbell_row");
+    const bench = LEGACY_DEFAULT_EXERCISES.find((e) => e.id === "barbell_row");
     const saved = await openEditor(bench);
     const box = byTestId("atlas-muscle-groups");
     assert.ok(box);

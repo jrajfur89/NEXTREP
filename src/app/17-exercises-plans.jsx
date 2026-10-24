@@ -861,11 +861,11 @@ function PlansScreen({ plans, exercises, updatePlans, updateExercises, onNavigat
         {viewMode === "gotowe" && (
           <div className="space-y-2">
             {READY_PLAN_TEMPLATES.map((t) => {
-              const isExpanded = expandedTemplate === t.key;
+              const isExpanded = !t.comingSoon && expandedTemplate === t.key; // I2: „Wkrótce” never expands
               const isPremiumTier = t.tier === "premium";
               return (
                 <div key={t.key} className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-                  <button onClick={() => setExpandedTemplate(isExpanded ? null : t.key)} className="w-full p-3 flex items-start gap-3 text-left">
+                  <button onClick={() => !t.comingSoon && setExpandedTemplate(isExpanded ? null : t.key)} disabled={!!t.comingSoon} className={`w-full p-3 flex items-start gap-3 text-left${t.comingSoon ? " opacity-60" : ""}`}>
                     <PlanThumbnail variant="ready" size={56} planKey={t.key} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -877,10 +877,11 @@ function PlansScreen({ plans, exercises, updatePlans, updateExercises, onNavigat
                         >
                           {isPremiumTier ? "PRO" : "FREE"}
                         </span>
+                        {t.comingSoon && <ReadyTemplateSoonBadge />}
                       </div>
                       <p className="text-neutral-500 text-xs mt-1 leading-relaxed">{t.description}</p>
                     </div>
-                    <ChevronDown size={16} className={`text-neutral-600 flex-shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                    {!t.comingSoon && <ChevronDown size={16} className={`text-neutral-600 flex-shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />}
                   </button>
                   {isExpanded && (
                     <div className="px-3 pb-3 space-y-1.5">
@@ -1669,11 +1670,11 @@ function StartWorkoutScreen({ plans, exercises, updatePlans, updateExercises, on
       {mode === "ready" && (
         <div className="px-5 pt-4 space-y-2">
           {READY_PLAN_TEMPLATES.map((t) => {
-            const isExpanded = expandedTemplate === t.key;
+            const isExpanded = !t.comingSoon && expandedTemplate === t.key; // I2: „Wkrótce” never expands
             const isPremiumTier = t.tier === "premium";
             return (
               <div key={t.key} className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-                <button onClick={() => setExpandedTemplate(isExpanded ? null : t.key)} className="w-full p-3 flex items-start gap-3 text-left">
+                <button onClick={() => !t.comingSoon && setExpandedTemplate(isExpanded ? null : t.key)} disabled={!!t.comingSoon} className={`w-full p-3 flex items-start gap-3 text-left${t.comingSoon ? " opacity-60" : ""}`}>
                   <PlanThumbnail variant="ready" size={56} planKey={t.key} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -1685,10 +1686,11 @@ function StartWorkoutScreen({ plans, exercises, updatePlans, updateExercises, on
                       >
                         {isPremiumTier ? "PRO" : "FREE"}
                       </span>
+                      {t.comingSoon && <ReadyTemplateSoonBadge />}
                     </div>
                     <p className="text-neutral-500 text-xs mt-1 leading-relaxed">{t.description}</p>
                   </div>
-                  <ChevronDown size={16} className={`text-neutral-600 flex-shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                  {!t.comingSoon && <ChevronDown size={16} className={`text-neutral-600 flex-shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />}
                 </button>
                 {isExpanded && (
                   <div className="px-3 pb-3 space-y-1.5">

@@ -4,6 +4,7 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import { unmount, byTestId, click, flush, $$ } from "../harness/ui.mjs";
 import { bootGuestApp } from "../harness/app-boot.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 after(unmount);
 
@@ -47,7 +48,7 @@ describe("Dashboard unfinished workout card", () => {
     const A = await A0;
     const nowDate = new Date().toISOString();
     const plan = { id: "P", name: "Push Day", exercises: [{ id: "pi1", exerciseId: "bench_press", setsDetail: [{ id: "s1", target: "8-10", rir: "" }, { id: "s2", target: "8-10", rir: "" }] }] };
-    const blocks = A.buildBlocksFromPlan(plan, A.DEFAULT_EXERCISES, [], nowDate);
+    const blocks = A.buildBlocksFromPlan(plan, LEGACY_DEFAULT_EXERCISES, [], nowDate);
     blocks[0].items[0].sets[0] = { ...blocks[0].items[0].sets[0], weight: "100", reps: "8" };
     return { version: 1, savedAt: new Date(Date.now() - 60 * 1000).toISOString(), plan, backfillInfo: null, nowDate, startTime: Date.now() - 10 * 60 * 1000, blocks, blockIdx: 0, subIdx: 0, manualDuration: 45 };
   };

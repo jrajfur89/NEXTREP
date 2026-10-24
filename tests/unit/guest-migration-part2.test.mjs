@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { loadApp, resetStorage } from "../harness/load-app.mjs";
 import { quiet } from "../harness/fixtures.mjs";
 import { UA, UB, key, cloudWrites } from "../harness/account-fixtures.mjs";
+import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 let A;
 let S;
@@ -45,7 +46,7 @@ export const GUEST = {
   user_name: "Gosia",
 };
 function seedGuest({ draft = true, pro = true, raw = {} } = {}) {
-  const exercises = [...A.DEFAULT_EXERCISES.map(A.normalizeExercise), { id: "custom-ex-1", name: "Moje", category: ["Klatka"], equipment: ["Sztanga"] }];
+  const exercises = [...LEGACY_DEFAULT_EXERCISES.map(A.normalizeExercise), { id: "custom-ex-1", name: "Moje", category: ["Klatka"], equipment: ["Sztanga"] }];
   for (const [name, v] of Object.entries({ ...GUEST, exercises })) localStorage.setItem(key(null, name), JSON.stringify(v));
   for (const [name, v] of Object.entries(raw)) localStorage.setItem(key(null, name), v); // raw strings (may be broken)
   if (draft) localStorage.setItem(key(null, "active_workout_draft"), JSON.stringify({ version: 1, blocks: [], plan: { name: "DRAFT-G" } }));
@@ -332,7 +333,7 @@ describe("F-3 — a soft-deleted cloud row never verifies a live local record", 
     localStorage.setItem(key(UA, "plans"), JSON.stringify(PLAN));
     localStorage.setItem(key(UA, "measurements"), JSON.stringify([{ id: "m1", date: "2026-10-01", weight: 80 }]));
     localStorage.setItem(key(UA, "custom_fields"), JSON.stringify([{ key: "biceps", label: "Biceps", unit: "cm" }]));
-    localStorage.setItem(key(UA, "exercises"), JSON.stringify([...A.DEFAULT_EXERCISES.map(A.normalizeExercise), { id: "c1", name: "Moje" }]));
+    localStorage.setItem(key(UA, "exercises"), JSON.stringify([...LEGACY_DEFAULT_EXERCISES.map(A.normalizeExercise), { id: "c1", name: "Moje" }]));
     const r = await quiet(() => A.runMigrationV1());
     assert.equal(r.success, true, r.error);
     return {
@@ -340,7 +341,7 @@ describe("F-3 — a soft-deleted cloud row never verifies a live local record", 
       plans: PLAN,
       measurements: [{ id: "m1" }],
       customFields: [{ key: "biceps" }],
-      exercises: [...A.DEFAULT_EXERCISES, { id: "c1" }],
+      exercises: [...LEGACY_DEFAULT_EXERCISES, { id: "c1" }],
     };
   }
   const del = (table, match) => {
@@ -387,7 +388,7 @@ describe("F-3 — a soft-deleted cloud row never verifies a live local record", 
   });
   test("guest flow: a built-in exercise DELETED in the account's cloud makes it non-empty (no stuck migration)", async () => {
     seedGuest();
-    const n = A.normalizeExercise(A.DEFAULT_EXERCISES[0]);
+    const n = A.normalizeExercise(LEGACY_DEFAULT_EXERCISES[0]);
     S.tables.nextrep_exercises = [{ id: "r", user_id: UA, legacy_id: String(n.id), name: n.name, category: n.category, equipment: n.equipment, device_id: "other", version: 2, deleted_at: "2026-10-01T00:00:00.000Z" }];
     S.calls = [];
     const r = await migrate();
@@ -586,7 +587,7 @@ describe("phase audit — deterministic behaviour of every persistent state", ()
 describe("soft-deleted cloud row with the same identity → refused BEFORE the first cloud write", () => {
   test("4A.3 device → 'empty' cloud whose only row is a deleted built-in exercise → refused, zero writes, no marker, local unchanged", async () => {
     localStorage.setItem(key(UA, "history"), JSON.stringify([GUEST.history[0]]));
-    localStorage.setItem(key(UA, "exercises"), JSON.stringify(A.DEFAULT_EXERCISES.map(A.normalizeExercise)));
+    localStorage.setItem(key(UA, "exercises"), JSON.stringify(LEGACY_DEFAULT_EXERCISES.map(A.normalizeExercise)));
     S.tables.nextrep_exercises = [{ id: "d1", user_id: UA, legacy_id: "bench_press", name: "x", device_id: "phone", version: 3, deleted_at: "2026-10-01T00:00:00.000Z" }];
     const raw = localStorage.getItem(key(UA, "history"));
     S.calls = [];
@@ -633,7 +634,7 @@ describe("review P3 follow-ups", () => {
     localStorage.removeItem(key(null, "history"));
     localStorage.setItem(key(null, "history"), JSON.stringify([{ ...GUEST.history[0], exercises: [{ ...GUEST.history[0].exercises[0], exerciseId: "bench_press" }] }]));
     S.tables.nextrep_exercises = [{ id: "d", user_id: UA, legacy_id: "bench_press", device_id: "phone", version: 2, deleted_at: "2026-10-01T00:00:00.000Z" }];
-    const collisions = await quiet(() => A.v1DeletedRowCollisions(UA, { exercises: A.DEFAULT_EXERCISES.map(A.normalizeExercise) }));
+    const collisions = await quiet(() => A.v1DeletedRowCollisions(UA, { exercises: LEGACY_DEFAULT_EXERCISES.map(A.normalizeExercise) }));
     assert.ok(collisions.some((c) => c.table === "exercises"));
     S.calls = [];
     const r = await migrate();

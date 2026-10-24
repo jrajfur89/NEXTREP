@@ -414,9 +414,14 @@ async function ownAttemptCompletedOnServer(userId, attemptId, deviceId) {
 // the verified upload already happened — nothing is uploaded again
 const isOwnCompletedAttempt = (acq, deviceId) => !!(acq && acq.reason === "closed" && acq.row && acq.row.status === "completed" && acq.row.device_id === deviceId);
 
+// I2: the app no longer has a built-in exercise list (the old 68 were removed and nothing is seeded),
+// so no exercise is "built-in": every exercise counts as the person's own data. For the dormant cloud
+// paths this is the conservative reading — an account still holding old built-in rows is non-empty.
+const BUILT_IN_EXERCISES = Object.freeze([]);
+
 // "Has data" = something the user actually created. Technical keys (sync queue/meta/conflicts,
-// migration statuses, device id, the init marker) never count, and neither does the default
-// exercise atlas every new namespace is seeded with (stable ids, see DEFAULT_EXERCISES).
+// migration statuses, device id, the init marker) never count, and neither did the old built-in
+// exercises (BUILT_IN_EXERCISES — empty since I2).
 const ACCOUNT_DATA_NAMES = ["exercises", "plans", "history", "measurements", "custom_fields", "user_name", "active_workout_draft", "pro_status", "pro_hints"];
 const ACCOUNT_SYNC_TECH_NAMES = ["sync_queue", "sync_meta", "sync_conflicts"];
 function hasLocalAccountData(userId) {
@@ -429,7 +434,7 @@ function hasLocalAccountData(userId) {
     }
   };
   const count = (v) => (Array.isArray(v) ? v.length : 0);
-  const defaults = new Set(DEFAULT_EXERCISES.map((e) => String(e.id)));
+  const defaults = new Set(BUILT_IN_EXERCISES.map((e) => String(e.id)));
   const exercises = read("exercises");
   const un = read("user_name");
   const details = {
@@ -486,9 +491,9 @@ async function checkCloudAccountData(userId, { ignoreDeviceId = null, localUserN
   const plans = await one("nextrep_plans");
   const measurements = await one("nextrep_measurements");
   const customFields = await one("nextrep_custom_fields");
-  const defaults = new Set(DEFAULT_EXERCISES.map((e) => String(e.id)));
+  const defaults = new Set(BUILT_IN_EXERCISES.map((e) => String(e.id)));
   let customExercises = false;
-  const defaultsById = new Map(DEFAULT_EXERCISES.map((e) => [String(e.id), normalizeExercise(e)]));
+  const defaultsById = new Map(BUILT_IN_EXERCISES.map((e) => [String(e.id), normalizeExercise(e)]));
   const exCols = editedBuiltIns ? "legacy_id, name, category, equipment, is_time_based, is_sets_only, is_cardio, device_type, video_url, notes" : "legacy_id";
   for (const q of variants(() => supabase.from("nextrep_exercises").select(exCols).eq("user_id", userId).is("deleted_at", null))) {
     const { data: exRows, error: exErr } = await q;
@@ -1307,7 +1312,7 @@ function releaseGuestMigrationBinding(userId) {
 // default atlas). A name, an unfinished workout (draft), PRO or technical keys alone never count.
 function guestHasMigratableData() {
   const ds = readMigratableDataset(null);
-  const defaults = new Set(DEFAULT_EXERCISES.map((e) => String(e.id)));
+  const defaults = new Set(BUILT_IN_EXERCISES.map((e) => String(e.id)));
   const details = {
     history: ds.history.length,
     plans: ds.plans.length,
@@ -1379,9 +1384,9 @@ function guestMigrationEntries(prepared, { includeUserName }) {
   const p = prepared.present || {};
   const entries = [];
   // the exercise list the guest app actually showed: a missing or empty list means the default atlas
-  // (reloadLocalData shows DEFAULT_EXERCISES then) — without it the uploaded history would lose its
+  // (before I2: the old built-in list; since I2: an empty list) — without it the uploaded history would lose its
   // exercise links (exercise_id = null)
-  entries.push(["exercises", p.exercises && Array.isArray(d.exercises) && d.exercises.length ? d.exercises : DEFAULT_EXERCISES.map(normalizeExercise)]);
+  entries.push(["exercises", p.exercises && Array.isArray(d.exercises) && d.exercises.length ? d.exercises : BUILT_IN_EXERCISES.map(normalizeExercise)]);
   if (p.plans) entries.push(["plans", d.plans]);
   if (p.history) entries.push(["history", d.history]);
   if (p.measurements) entries.push(["measurements", d.measurements]);
@@ -1412,7 +1417,7 @@ function accountLocalBlocksGuestMigration(userId) {
   const exercises = readNamespaceJson("exercises", userId);
   if (exercises != null && !Array.isArray(exercises)) return true;
   if (Array.isArray(exercises)) {
-    const defaults = new Map(DEFAULT_EXERCISES.map((e) => [String(e.id), JSON.stringify(normalizeExercise(e))]));
+    const defaults = new Map(BUILT_IN_EXERCISES.map((e) => [String(e.id), JSON.stringify(normalizeExercise(e))]));
     for (const e of exercises) {
       if (!e || typeof e !== "object") return true;
       const d = defaults.get(String(e.id));
@@ -1666,7 +1671,7 @@ async function migrateGuestToEmptyAccount(userId, currentRefUserId) {
         let collisions;
         try {
           // the exercise list V1 will really upload (the default atlas when the guest has none — guestMigrationEntries)
-          const ex = prepared.present && prepared.present.exercises && prepared.dataset.exercises.length ? prepared.dataset.exercises : DEFAULT_EXERCISES.map(normalizeExercise);
+          const ex = prepared.present && prepared.present.exercises && prepared.dataset.exercises.length ? prepared.dataset.exercises : BUILT_IN_EXERCISES.map(normalizeExercise);
           collisions = await v1DeletedRowCollisions(userId, { ...prepared.dataset, exercises: ex }, { migrationToken: token });
         } catch (e) {
           return { ok: false, error: authErrorText(e) };
