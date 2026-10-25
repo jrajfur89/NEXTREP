@@ -335,7 +335,8 @@ const I5_APP_FILES = ["src/app/17c-atlas-browse.jsx"];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
-      "index.html", "tools/build-web.mjs", "android", "capacitor.config.json", "vercel.json",
+      // index.html: checked below — the only approved change is V5 / A11Y-01 (maximum-scale=1 removed)
+      ":(exclude)index.html", "tools/build-web.mjs", "android", "capacitor.config.json", "vercel.json",
       ".github/workflows/android-s1-apk.yml", "src/engine/load-legacy-map.js",
       "src/engine/volume.js", "db", "docs/sql",
       // AT3.2b (AT3-D18): the snapshot SQL DRAFT follows its contract — it is generated from
@@ -352,6 +353,13 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       assert.fail(`git diff against ${FREEZE_REF} failed (shallow clone?): ${e.message}`);
     }
     assert.equal(diff.trim(), "", diff);
+  });
+
+  test(`index.html = ${FREEZE_REF} except the approved V5 / A11Y-01 hotfix: maximum-scale=1 removed from the viewport, nothing else`, () => {
+    const frozen = execFileSync("git", ["show", `${FREEZE_REF}:index.html`], { cwd: ROOT, encoding: "utf8" });
+    const fix = ", viewport-fit=cover, maximum-scale=1\"";
+    assert.ok(frozen.includes(fix), "the frozen viewport is the one the hotfix starts from");
+    assert.equal(readFileSync(resolve(ROOT, "index.html"), "utf8"), frozen.replace(fix, ", viewport-fit=cover\""));
   });
 
   test(`AT2 / SEC-HF-01 / I2 / I3 / I4 / I5 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files, the three SEC-HF-01 files and the I2 / I3 / I4 / I5 files`, () => {

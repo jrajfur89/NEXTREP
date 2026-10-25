@@ -2,9 +2,8 @@
 // ATLAS-UX-01 screens on the BUILT app at 360 × 780 and 390 × 844: E01, E02, E03, E04 (sheet), E05,
 // E07 (no results, filters without results), the card Compact Tabs v3 (E06, reported only — not changed
 // in I5) and Compact B2 on Start. Manual TalkBack checks stay for V5.
-// Known global finding outside I5: `meta-viewport` — index.html sets maximum-scale=1 (pinch zoom
-// limited, WCAG 1.4.4). index.html is a frozen file (n0), so the rule is checked on its own below and
-// left out of the per-screen runs; the change needs a separate decision.
+// V5 / A11Y-01: the viewport no longer blocks zooming (maximum-scale=1 removed from index.html); the
+// meta-viewport rule is part of every run again and has its own regression test below.
 import { describe, test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -24,7 +23,7 @@ async function axe(include = null) {
   if (!(await page.evaluate(() => Boolean(window.axe)))) await page.addScriptTag({ path: AXE });
   return page.evaluate(
     async ({ tags, include }) => {
-      const r = await window.axe.run(include ? { include: [include] } : document, { runOnly: { type: "tag", values: tags }, rules: { "meta-viewport": { enabled: false } }, resultTypes: ["violations"] });
+      const r = await window.axe.run(include ? { include: [include] } : document, { runOnly: { type: "tag", values: tags }, resultTypes: ["violations"] });
       return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => n.target.join(" ")).slice(0, 5), count: v.nodes.length }));
     },
     { tags: TAGS, include }
@@ -97,11 +96,12 @@ describe("I5.7 accessibility (axe) of the atlas module and Compact B2", { concur
     });
   }
 
-  test("known global finding (outside I5, frozen index.html): meta-viewport maximum-scale=1 — reported for a separate decision", async (t) => {
-    const r = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "rule", values: ["meta-viewport"] } })).violations.map((v) => v.id));
+  test("V5 / A11Y-01 regression: the built app's viewport does not block zooming (axe meta-viewport, WCAG 1.4.4)", async (t) => {
+    const r = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "rule", values: ["meta-viewport", "meta-viewport-large"] } })).violations.map((v) => v.id));
     const meta = await page.evaluate(() => document.querySelector('meta[name="viewport"]').getAttribute("content"));
-    t.diagnostic(`viewport: ${meta}; axe: ${r.join(", ") || "none"}`);
-    assert.ok(/maximum-scale=1/.test(meta) ? r.includes("meta-viewport") : r.length === 0);
+    t.diagnostic(`viewport of the built app: ${meta}`);
+    assert.doesNotMatch(meta, /maximum-scale|user-scalable\s*=\s*(no|0)/i);
+    assert.deepEqual(r, []);
   });
 
   test("no page errors", async () => {
