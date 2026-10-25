@@ -170,7 +170,7 @@ describe("I2: clean start on a device with old data", () => {
   test("Rozpocznij trening → Gotowe plany: 8 × „Wkrótce”, no level can be picked, no workout starts", async () => {
     await click(buttonByText("Start"));
     await flush(10, 3);
-    await click(buttonByText("ROZPOCZNIJ TRENING"));
+    await click(buttonByText("Rozpocznij trening"));
     await flush(10, 3);
     await click(buttonByText("GOTOWE PLANY TRENINGOWE"));
     await flush(10, 3);

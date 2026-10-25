@@ -26,7 +26,12 @@ const ADDED_BY_STAGE = {
   ],
   // I4 (25.10.2026): approved UI masters (canvas v81) — B2 navigation, Dashboard, Training Entry Flow,
   // Active Workout, Completion & Summary, Atlas Compact Tabs v3
-  I4: ["NAV_B2_ITEMS"],
+  I4: [
+    "NAV_B2_ITEMS", "NR", "NrFadeBorder", "NrHeaderPhoto", "NrHeroCard", "NrPillCta", "NrScreen", "NrSectionHead", "NrSheet",
+    "NrSheetButton", "fmtThousands", "nrHeadText",
+    "DASH_HOW_STEPS_NO_PLAN", "DASH_HOW_STEPS_WITH_PLAN", "DashCardLink", "DashCardTop", "DashExploreTile", "DashGreeting",
+    "DashLastWorkoutCard", "DashProgressCard", "DashStat", "dashLastSession",
+  ],
 };
 // Baseline names an approved stage removed on purpose (and only these).
 const REMOVED_BY_STAGE = {

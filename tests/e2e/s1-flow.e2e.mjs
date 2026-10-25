@@ -40,21 +40,21 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await page.getByText("ZACZYNAMY TRENING").click();
     await page.waitForTimeout(500);
     await cov();
-    assert.match(await bodyText(page), /ROZPOCZNIJ TRENING/);
+    assert.match(await bodyText(page), /Rozpocznij trening/); // I4.2 New User master
   });
 
   // I2: the old built-in exercises and the ready-plan exercises are gone — the templates are „Wkrótce” and
   // a workout starts without a plan, with an exercise the person creates.
   test("B0 I2: no old exercise list; ready-made templates shown as „Wkrótce”, not usable", async () => {
-    await page.getByText("Ćwiczenia", { exact: true }).click();
+    await page.getByTestId("nav-exercises").click(); // B2 tab
     await page.waitForTimeout(400);
     await cov();
     const ex = await bodyText(page);
     for (const name of ["Przysiad ze sztangą", "Wyciskanie sztangi leżąc", "Plank z obciążeniem"]) assert.doesNotMatch(ex, new RegExp(name));
     assert.match(ex, /Atlas ćwiczeń/);
     assert.equal(await page.getByRole("button", { name: "Dodaj", exact: true }).count(), 0, "I3: the old add-exercise form is off");
-    await page.getByText("Start", { exact: true }).click();
-    await page.getByText("ROZPOCZNIJ TRENING").click();
+    await page.getByTestId("nav-dashboard").click();
+    await page.getByText("Rozpocznij trening", { exact: true }).click();
     await page.getByText("GOTOWE PLANY TRENINGOWE").click();
     await page.waitForTimeout(400);
     await cov();
@@ -66,7 +66,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
 
   // I3: the exercise comes from the atlas picker (the old "add" form is off)
   test("B1 workout without a plan with an atlas exercise, set 1 = 60 kg × 8", async () => {
-    await page.getByText("TRENING BEZ PLANU").click();
+    await page.getByText("TRENING BEZ PLANU", { exact: true }).click();
     await page.waitForTimeout(400);
     await page.getByText("Dodaj ćwiczenie", { exact: true }).first().click();
     await page.waitForTimeout(300);
@@ -114,9 +114,9 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await page.reload();
     await page.waitForTimeout(2500);
     const t = await bodyText(page);
-    assert.match(t, /KONTYNUUJ TRENING/);
-    assert.match(t, /480 KG/);
-    await page.getByText("WRÓĆ DO TRENINGU").first().click();
+    assert.match(t, /NIEDOKOŃCZONY TRENING/); // I4.2 Interrupted master
+    assert.match(t, /480 kg/);
+    await page.getByText("Wznów trening", { exact: true }).first().click(); // I4.2 Interrupted master
     await page.waitForTimeout(800);
     assert.equal(await page.locator('input[placeholder="kg"]').first().inputValue(), "60");
   });
@@ -153,7 +153,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
   });
 
   test("G1 export produces the JSON file (browser only — Android WebView: NR-S1-01, open); G2 an incompatible copy is refused (I3), the own export is restored", async () => {
-    await page.getByText("Więcej", { exact: true }).click();
+    await page.getByTestId("nav-more").click();
     await page.getByText("Kopia zapasowa", { exact: true }).click();
     await page.waitForTimeout(500);
     await cov();
@@ -178,7 +178,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
   test("H1 I2: accounts off — calm message, no crash; H2 no Supabase project is contacted at all", async () => {
     await page.goto(srv.url);
     await page.waitForTimeout(2500);
-    await page.getByText("Więcej", { exact: true }).click();
+    await page.getByTestId("nav-more").click();
     await page.waitForTimeout(400);
     await page.getByText("Moje konto", { exact: true }).click();
     await page.waitForTimeout(600);

@@ -700,3 +700,262 @@ function MoreMenu({ onNavigate, isPro, onOpenUnlock, authUser, isAdmin = false }
 // re-read for every signed-in user id and dropped the moment the session ends or changes.
 const ADMIN_HASH = "#/admin";
 
+
+/* ---------------------------------------------------------------------- */
+/* I4 — building blocks of the approved UI masters (canvas v81)             */
+/* Values copied from the master boards (Dashboard, New User, Interrupted,  */
+/* Training Entry Flow, Active Workout, Completion & Summary). Colours are  */
+/* the DESIGN.md §2 tokens incl. the G02 fixes (text-muted #8E8E8E,          */
+/* border-control #66666A).                                                  */
+/* ---------------------------------------------------------------------- */
+const NR = {
+  bg: "#090909",
+  card: "#0B0B0C",
+  textDisplay: "#FFFFFF",
+  textPrimary: "#F5F5F5",
+  textSecondary: "#B8B8B8",
+  textMuted: "#8E8E8E",
+  warm: "#FF851B",
+  brand: "#FF6A00",
+  success: "#42C98A",
+  danger: "#F2555A",
+  dangerText: "#FF6B60",
+  hairline: "#2A2A2A",
+  control: "#66666A",
+  font: "'Barlow Condensed', Inter, sans-serif",
+  cardSurface:
+    "radial-gradient(90% 70% at 0% 0%, rgba(255,133,27,.07) 0%, rgba(255,133,27,0) 60%), linear-gradient(180deg, #151515 0%, #0F0F10 55%, #090909 100%)",
+  cardShadow: "inset 0 1px 0 rgba(255,255,255,.05), 0 10px 22px -6px rgba(0,0,0,.9)",
+  heroBorder:
+    "linear-gradient(#0B0B0C, #0B0B0C) padding-box, linear-gradient(160deg, #FF9A3D 0%, rgba(255,133,27,.9) 18%, rgba(255,106,0,.55) 50%, rgba(255,106,0,.32) 100%) border-box",
+  ctaFill: "linear-gradient(180deg, #FF851B 0%, #FF6A00 55%, #FF6A00 100%)",
+  ctaShadow: "inset 0 1px 0 rgba(255,214,170,.45), 0 4px 18px 0 rgba(255,106,0,.35)",
+};
+// 3 120 / 12 450 — thousands separated by a non-breaking space from 1 000 on (pl-PL groups only
+// from 10 000), as on the masters
+function fmtThousands(n) {
+  const v = Math.round(Number(n) || 0);
+  const s = String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return v < 0 ? `−${s}` : s;
+}
+const nrHeadText = {
+  fontWeight: 500,
+  fontSize: "15px",
+  lineHeight: "18px",
+  letterSpacing: ".03em",
+  textTransform: "uppercase",
+  background: "linear-gradient(180deg,#FF9A3D 0%,#FF6A00 100%)",
+  WebkitBackgroundClip: "text",
+  backgroundClip: "text",
+  color: "transparent",
+};
+function NrSectionHead({ icon: Icon, children, as = "span", id }) {
+  const Tag = as;
+  return (
+    <Tag id={id} style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+      {Icon && <Icon aria-hidden="true" size={18} color={NR.warm} strokeWidth={2.25} style={{ flexShrink: 0 }} />}
+      <span style={nrHeadText}>{children}</span>
+    </Tag>
+  );
+}
+// Primary pill CTA (Dashboard / New User / Interrupted): 192 × 36 pill in a 44 px touch target.
+function NrPillCta({ children, onClick, testId, ariaLabel }) {
+  return (
+    <button
+      type="button"
+      data-cta="primary"
+      data-testid={testId}
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]"
+      style={{ alignSelf: "flex-start", minHeight: "44px", padding: "4px 0", border: 0, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center" }}
+    >
+      <span
+        style={{
+          minWidth: "192px",
+          minHeight: "36px",
+          boxSizing: "border-box",
+          padding: "6px 18px",
+          borderRadius: "8px",
+          background: NR.ctaFill,
+          boxShadow: NR.ctaShadow,
+          color: NR.bg,
+          fontFamily: NR.font,
+          fontWeight: 600,
+          fontSize: "18px",
+          lineHeight: "20px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "10px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {children}
+        <ArrowRight aria-hidden="true" size={17} strokeWidth={2.5} color={NR.bg} style={{ flexShrink: 0 }} />
+      </span>
+    </button>
+  );
+}
+// Decorative warm border of a card (top + sides, no bottom; the sides run 12 px below and fade).
+function NrFadeBorder({ alpha = 0.5 }) {
+  const mask = "linear-gradient(180deg, #000 0%, #000 calc(100% - 30px), rgba(0,0,0,0) 100%)";
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: "-12px",
+        border: `1px solid rgba(255,133,27,${alpha})`,
+        borderBottom: 0,
+        borderRadius: "16px 16px 0 0",
+        pointerEvents: "none",
+        WebkitMaskImage: mask,
+        maskImage: mask,
+      }}
+    />
+  );
+}
+// Hero card with the gradient border, photo on the right and warm light in the top-left corner.
+// The photo is TEMPORARY (masters: "zdjęcia tymczasowe"): the app's own existing image.
+function NrHeroCard({ children, labelledBy, testId, photo = WELCOME_BG_IMAGE, photoPos = "50% 28%", bottomShade = "linear-gradient(0deg, rgba(9,9,9,.6) 0%, rgba(9,9,9,0) 30%)" }) {
+  return (
+    <section
+      aria-labelledby={labelledBy}
+      data-testid={testId}
+      style={{ position: "relative", borderRadius: "16px", overflow: "hidden", border: "1px solid transparent", background: NR.heroBorder, boxShadow: "0 12px 28px -8px rgba(0,0,0,.85)" }}
+    >
+      <img src={photo} alt="" data-photo="temporary" style={{ position: "absolute", top: 0, right: 0, width: "220px", height: "100%", objectFit: "cover", objectPosition: photoPos }} />
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "radial-gradient(55% 80% at 82% 32%, rgba(255,133,27,.24) 0%, rgba(255,133,27,0) 70%)", mixBlendMode: "screen" }} />
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, #0B0B0C 0%, #0B0B0C 34%, rgba(11,11,12,.7) 48%, rgba(11,11,12,0) 64%)" }} />
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: "15px", overflow: "hidden", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(130px 100px at 0 0, rgba(255,154,61,.42) 0%, rgba(255,106,0,.16) 45%, rgba(255,106,0,0) 100%)" }} />
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "20px", background: "linear-gradient(90deg, rgba(255,133,27,.40) 0%, rgba(255,106,0,.14) 40%, rgba(255,106,0,0) 72%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, rgba(0,0,0,0) 100%)", maskImage: "linear-gradient(180deg, #000 0%, rgba(0,0,0,0) 100%)" }} />
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "20px", background: "linear-gradient(180deg, rgba(255,133,27,.40) 0%, rgba(255,106,0,.14) 40%, rgba(255,106,0,0) 78%)", WebkitMaskImage: "linear-gradient(90deg, #000 0%, rgba(0,0,0,0) 100%)", maskImage: "linear-gradient(90deg, #000 0%, rgba(0,0,0,0) 100%)" }} />
+      </div>
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: bottomShade }} />
+      {children}
+    </section>
+  );
+}
+// Decorative photo in the top-right of the Dashboard screens (temporary photo, faded to #090909).
+function NrHeaderPhoto() {
+  return (
+    <div aria-hidden="true" style={{ position: "absolute", top: "80px", right: 0, width: "204px", height: "140px", overflow: "hidden", pointerEvents: "none" }}>
+      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(60% 70% at 72% 40%, rgba(255,133,27,.24) 0%, rgba(255,133,27,0) 70%)" }} />
+      <img src={WELCOME_BG_IMAGE} alt="" data-photo="temporary" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 30%" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, #090909 0%, rgba(9,9,9,.35) 12%, rgba(9,9,9,0) 26%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(0deg, #090909 0%, rgba(9,9,9,0) 22%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, #090909 0%, rgba(9,9,9,0) 12%)" }} />
+    </div>
+  );
+}
+// Screen frame of the Dashboard-family masters: #090909, Barlow, 12 px gutters, 12 px gaps, content
+// ending 16 px above the B2 bar (--nr-nav-h).
+function NrScreen({ children, testId, screen }) {
+  return (
+    <div
+      data-testid={testId}
+      data-screen={screen}
+      style={{
+        minHeight: "100vh",
+        boxSizing: "border-box",
+        position: "relative",
+        overflow: "hidden",
+        background: NR.bg,
+        color: NR.textPrimary,
+        fontFamily: NR.font,
+        padding: "max(env(safe-area-inset-top, 0px), 12px) 12px calc(var(--nr-nav-h, 71px) + 16px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+// Bottom sheet dialog of the masters (IWM options, TEFM confirmations): dark gradient, warm top
+// edge, grab handle, role=dialog + aria-modal, Escape closes, focus moves into the sheet and back.
+function NrSheet({ children, onClose, labelledBy, testId }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const prev = typeof document !== "undefined" ? document.activeElement : null;
+    const first = ref.current && ref.current.querySelector("button, [href], input, select, textarea");
+    if (first && first.focus) first.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape" && onClose) onClose();
+      if (e.key === "Tab" && ref.current) {
+        const els = [...ref.current.querySelectorAll("button, [href], input, select, textarea")].filter((el) => !el.disabled);
+        if (!els.length) return;
+        const a = els[0];
+        const z = els[els.length - 1];
+        if (e.shiftKey && document.activeElement === a) {
+          e.preventDefault();
+          z.focus();
+        } else if (!e.shiftKey && document.activeElement === z) {
+          e.preventDefault();
+          a.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      try {
+        if (prev && prev.focus) prev.focus();
+      } catch {}
+    };
+  }, []);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+      <div aria-hidden="true" onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.7)" }} />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        data-testid={testId}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          boxSizing: "border-box",
+          padding: "10px 16px max(env(safe-area-inset-bottom, 0px), 8px)",
+          borderRadius: "20px 20px 0 0",
+          background: "linear-gradient(180deg, #151515 0%, #0F0F10 100%)",
+          borderTop: "1px solid rgba(255,133,27,.35)",
+          fontFamily: NR.font,
+          maxHeight: "88vh",
+          overflowY: "auto",
+        }}
+      >
+        <div aria-hidden="true" style={{ width: "40px", height: "4px", borderRadius: "2px", background: "#3A3A3A", margin: "0 auto 16px" }} />
+        <div style={{ paddingBottom: "16px" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+// Buttons of the sheets: primary (orange gradient), neutral, danger text, danger fill.
+function NrSheetButton({ variant = "neutral", children, onClick, testId, disabled }) {
+  const base = { minHeight: "48px", width: "100%", border: 0, borderRadius: "10px", fontFamily: NR.font, fontSize: "19px", fontWeight: 600, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1 };
+  const v =
+    variant === "primary"
+      ? { background: NR.ctaFill, boxShadow: NR.ctaShadow, color: NR.bg }
+      : variant === "dangerFill"
+      ? { background: NR.danger, color: NR.bg }
+      : variant === "dangerText"
+      ? { background: "#1A1A1B", color: NR.dangerText, fontWeight: 500 }
+      : variant === "dangerOutline"
+      ? { background: "transparent", color: NR.dangerText, border: `1px solid ${NR.danger}`, fontWeight: 500 }
+      : { background: "#1A1A1B", color: NR.textPrimary, fontWeight: 500 };
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} data-testid={testId} className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]" style={{ ...base, ...v }}>
+      {children}
+    </button>
+  );
+}

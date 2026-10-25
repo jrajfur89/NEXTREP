@@ -29,14 +29,15 @@ const STEPS = [
   ["02-onboarding-name", async (p) => click(p, "ZACZYNAMY", { exact: true })],
   ["03-onboarding-info", async (p) => click(p, "Pomiń", { exact: true })],
   ["04-dashboard-empty", async (p) => click(p, "ZACZYNAMY TRENING")],
-  ["05-start-workout", async (p) => click(p, "ROZPOCZNIJ TRENING")],
+  // I4.2: the Dashboard CTA reads „Rozpocznij trening” / „Wznów trening” (New User / Interrupted masters)
+  ["05-start-workout", async (p, underTest) => click(p, underTest ? "Rozpocznij trening" : "ROZPOCZNIJ TRENING", { exact: true })],
   ["06-ready-plans", async (p) => click(p, "GOTOWE PLANY TRENINGOWE")],
   // I2: the ready-made templates carry no exercises any more, so BOTH builds walk the same workout
   // without a plan, with an exercise created on the way (the picker itself is not compared: the
   // reference lists the old 68 exercises there)
   ["07-no-plan-workout", async (p) => {
     await p.locator("button:has(svg.lucide-arrow-left)").first().click({ timeout: 20000 });
-    await click(p, "TRENING BEZ PLANU");
+    await click(p, "TRENING BEZ PLANU", { exact: true });
   }],
   // I3: the build under test picks the exercise from the atlas (the old "add" form is off); the reference
   // build creates its own exercise with the SAME name and kind, so the workout screens stay comparable
@@ -59,9 +60,9 @@ const STEPS = [
     await p.locator("body").click({ position: { x: 5, y: 300 } });
   }],
   ["09-leave-dialog", async (p) => { await p.evaluate(() => history.back()); }],
-  ["10-dashboard-resume", async (p) => { await click(p, "Wróć do treningu"); await p.reload(); await p.getByText("WRÓĆ DO TRENINGU").waitFor(); }],
-  ["11-finish-confirm", async (p) => {
-    await click(p, "WRÓĆ DO TRENINGU");
+  ["10-dashboard-resume", async (p, underTest) => { await click(p, "Wróć do treningu"); await p.reload(); await p.getByText(underTest ? "Wznów trening" : "WRÓĆ DO TRENINGU", { exact: true }).first().waitFor(); }],
+  ["11-finish-confirm", async (p, underTest) => {
+    await click(p, underTest ? "Wznów trening" : "WRÓĆ DO TRENINGU", { exact: true });
     await p.locator("button:has(svg.lucide-ellipsis-vertical)").first().click();
     await click(p, "Zakończ trening", { exact: true });
   }],
@@ -71,13 +72,13 @@ const STEPS = [
     await b.nth(labels.findIndex((l) => /Zakończ/.test(l))).click();
   }],
   ["13-history-list", async (p) => { await p.evaluate(() => history.back()); await p.getByText("Historia", { exact: true }).first().waitFor({ timeout: 5000 }).catch(() => {}); }],
-  ["14-more-menu", async (p) => click(p, "Więcej", { exact: true })],
+  ["14-more-menu", async (p, underTest) => (underTest ? p.getByTestId("nav-more").click({ timeout: 20000 }) : click(p, "Więcej", { exact: true }))],
   ["15-backup", async (p) => click(p, "Kopia zapasowa", { exact: true })],
   ["16-account", async (p) => { await click(p, "Zamknij", { exact: true }); await click(p, "Moje konto", { exact: true }); }],
-  ["17-exercises", async (p) => click(p, "Ćwiczenia", { exact: true })],
-  ["18-plans", async (p) => click(p, "Plany", { exact: true })],
-  ["19-stats", async (p) => click(p, "Statystyki", { exact: true })],
-  ["20-dashboard-after", async (p) => click(p, "Start", { exact: true })],
+  ["17-exercises", async (p, underTest) => (underTest ? p.getByTestId("nav-exercises").click({ timeout: 20000 }) : click(p, "Ćwiczenia", { exact: true }))],
+  ["18-plans", async (p, underTest) => (underTest ? p.getByTestId("nav-plans").click({ timeout: 20000 }) : click(p, "Plany", { exact: true }))],
+  ["19-stats", async (p, underTest) => (underTest ? p.getByTestId("nav-stats").click({ timeout: 20000 }) : click(p, "Statystyki", { exact: true }))],
+  ["20-dashboard-after", async (p, underTest) => (underTest ? p.getByTestId("nav-dashboard").click({ timeout: 20000 }) : click(p, "Start", { exact: true }))],
 ];
 
 // Intended changes approved stage by stage (K01-4). On these screens the element added by the stage is
@@ -95,12 +96,15 @@ const INTENDED = {
 // compared with the reference; both images go to e2e/.out/<name>.ref.png / .cur.png for review. Every
 // other screen must still match pixel by pixel, and this list must be exactly the screens that differ.
 const CHANGED = {
+  "04-dashboard-empty": "I4.2: Dashboard — New User master (no plan, no workout)",
   "06-ready-plans": "I2: every ready-made template is „Wkrótce” (badge, inactive, no chevron)",
+  "10-dashboard-resume": "I4.2: Dashboard — Interrupted Workout master",
   "11-finish-confirm": "I4.1: the RIR select glyph under the dialog sits 1 px higher (22 px); the screen is replaced by the AW / WCS masters later in I4",
   "12-history-detail": "I3: an atlas exercise has no link to the old exercise screen (no chevron by its name)",
   "15-backup": "I3 walk: the reference build saves its own exercise first — one more automatic local copy listed",
   "16-account": "I2: accounts and sync temporarily off — the calm „not configured” state",
   "17-exercises": "I2: no old built-in list (the groups are empty); I3: no „Dodaj” (the old form is off)",
+  "20-dashboard-after": "I4.2: Dashboard — Returning User master",
 };
 
 const NAV_B2 = 'nav[aria-label="Nawigacja główna"]';

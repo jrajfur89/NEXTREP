@@ -33,9 +33,13 @@ describe("guest boot", () => {
 describe("Dashboard rolling 30 days (anchored on the last workout)", () => {
   test("last workout months ago → summary still shows that 30-day window", async () => {
     await bootGuestApp({ history: [benchSession("2026-06-01T10:00:00", 8), benchSession("2026-06-20T10:00:00", 9), benchSession("2026-01-01T10:00:00", 8)] });
-    assert.equal(statValue("Treningów"), "2");
-    assert.equal(statValue("Ćwiczeń"), "2");
-    assert.equal(statValue("Progres"), "50%");
+    // I4.2 (DASH-RU master): the card „Twój ogólny progres” shows the number of workouts of that
+    // window; volume change and regularity have no approved calculation → marked „Wkrótce”
+    const card = byTestId("dashboard-progress");
+    assert.match(card.textContent, /Treningi2/);
+    assert.equal(card.querySelectorAll('[data-state="temporary"]').length, 2);
+    assert.equal((card.textContent.match(/Wkrótce/g) || []).length, 2);
+    assert.match(card.textContent, /Ostatnie 30 dni/);
   });
 });
 
@@ -53,11 +57,12 @@ describe("Dashboard unfinished workout card", () => {
     return { version: 1, savedAt: new Date(Date.now() - 60 * 1000).toISOString(), plan, backfillInfo: null, nowDate, startTime: Date.now() - 10 * 60 * 1000, blocks, blockIdx: 0, subIdx: 0, manualDuration: 45 };
   };
 
-  test("draft present → 'Kontynuuj trening' card with the plan name", async () => {
+  test("draft present → 'Niedokończony trening' card (DASH-IW) with the plan name", async () => {
     await bootGuestApp({ active_workout_draft: await draft() });
     const card = byTestId("dashboard-active-workout");
     assert.ok(card);
-    assert.match(card.textContent, /Kontynuuj trening/);
+    assert.match(card.textContent, /Niedokończony trening/);
+    assert.match(card.textContent, /Wznów trening/);
     assert.match(card.textContent, /Push Day/);
     assert.ok(byTestId("dashboard-resume"));
   });

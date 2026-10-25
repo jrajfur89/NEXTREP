@@ -189,186 +189,354 @@ function computeDashboardSummary(history) {
   };
 }
 
-function Dashboard({ history, exercises, onNavigate, onGoStart, onOpenSession, onOpenReport, userName, onSaveName, isPro, onOpenUnlock, proHint, onHintShown, activeDraft = null, onResumeDraft, onDiscardDraft, nextPlan = null, onStartPlan }) {
+// I4.2 — Dashboard after the approved masters (canvas v81):
+//   Returning User (DASH-RU, 11.10) — history, no unfinished workout;
+//   New User (DASH-NU, 13.10) — no finished workout: A without a plan, B with a plan;
+//   Interrupted Workout (DASH-IW, 13.10) — an unfinished workout (draft with exercises) has priority.
+// Values: only the existing app logic. Progress values not approved by the masters (volume change,
+// regularity) are shown as an explicitly marked temporary state ("Wkrótce"), never as numbers.
+// Photos are temporary (the app's own image). B2 navigation is the bottom bar.
+function dashLastSession(history) {
+  let last = null;
+  (Array.isArray(history) ? history : []).forEach((s) => {
+    const t = s && s.date ? Date.parse(s.date) : NaN;
+    if (!Number.isNaN(t) && (!last || t > Date.parse(last.date))) last = s;
+  });
+  return last;
+}
+function DashGreeting({ title, subtitle, onEditName }) {
+  return (
+    <section style={{ position: "relative", minHeight: "84px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "6px", margin: "14px 0 8px 9px", maxWidth: "184px" }}>
+      <h1 style={{ margin: 0, fontWeight: 600, fontSize: "32px", lineHeight: "36px", color: NR.textDisplay }}>
+        <button type="button" onClick={onEditName} aria-label={`${title} Zmień imię`} data-testid="dashboard-greeting" style={{ all: "inherit", cursor: "pointer" }}>
+          {title}
+        </button>
+      </h1>
+      <p style={{ margin: 0, fontSize: "16px", lineHeight: "20px", fontWeight: 400, color: NR.textPrimary }}>{subtitle}</p>
+    </section>
+  );
+}
+function DashCardLink({ children, onClick, ariaLabel, testId, minHeight, alpha }) {
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={ariaLabel}
+        data-testid={testId}
+        className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]"
+        style={{ position: "relative", width: "100%", textAlign: "left", minHeight, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "10px", padding: "14px 14px 15px", borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow, color: "inherit", border: 0, fontFamily: NR.font, cursor: "pointer" }}
+      >
+        {children}
+      </button>
+      <NrFadeBorder alpha={alpha} />
+    </div>
+  );
+}
+function DashCardTop({ icon, title, right }) {
+  return (
+    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", minHeight: "20px", width: "100%" }}>
+      <NrSectionHead icon={icon}>{title}</NrSectionHead>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "2px", fontSize: "15px", fontWeight: 400, color: NR.textSecondary, whiteSpace: "nowrap", flexShrink: 0 }}>
+        {right}
+        <ChevronRight aria-hidden="true" size={16} strokeWidth={2} color={NR.warm} />
+      </span>
+    </span>
+  );
+}
+function DashLastWorkoutCard({ session, onOpen }) {
+  const name = session.planName || "Trening bez planu";
+  const count = Array.isArray(session.exercises) ? session.exercises.length : 0;
+  const minutes = Number.isFinite(Number(session.durationSec)) && Number(session.durationSec) > 0 ? Math.round(Number(session.durationSec) / 60) : null;
+  const vol = Number(sessionVolume(session)) || 0;
+  const date = fmtDate(session.date);
+  return (
+    <DashCardLink onClick={onOpen} ariaLabel={`Ostatni trening: ${name}, ${date}. Otwórz szczegóły i raport`} testId="dashboard-last-workout" minHeight="140px" alpha={0.6}>
+      <DashCardTop icon={HistoryIcon} title="Ostatni trening" right={date} />
+      <span style={{ display: "flex", gap: "16px", alignItems: "center", width: "100%" }}>
+        <img src={WELCOME_BG_IMAGE} alt="" data-photo="temporary" style={{ width: "93px", height: "80px", flexShrink: 0, borderRadius: "10px", border: `1px solid ${NR.hairline}`, objectFit: "cover", objectPosition: "50% 40%" }} />
+        <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+          <span style={{ fontWeight: 500, fontSize: "23px", lineHeight: "26px", color: NR.textDisplay, overflowWrap: "anywhere" }}>{name}</span>
+          <span style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", fontSize: "16px", lineHeight: "20px", fontWeight: 400, color: NR.textSecondary }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <Dumbbell aria-hidden="true" size={17} strokeWidth={2} color={NR.warm} style={{ flexShrink: 0 }} />
+              {count} {plWord(count, "ćwiczenie", "ćwiczenia", "ćwiczeń")}
+            </span>
+            {minutes != null && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <Clock aria-hidden="true" size={17} strokeWidth={2} color={NR.warm} style={{ flexShrink: 0 }} />
+                {minutes} min
+              </span>
+            )}
+          </span>
+          {vol > 0 && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "16px", lineHeight: "20px", fontWeight: 400, color: NR.textSecondary }}>
+              <Layers aria-hidden="true" size={17} strokeWidth={2} color={NR.textSecondary} style={{ flexShrink: 0 }} />
+              Objętość: {fmtThousands(vol)} kg
+            </span>
+          )}
+        </span>
+      </span>
+    </DashCardLink>
+  );
+}
+// "Twój ogólny progres": the number of workouts comes from the existing 30-day rule (window ending at
+// the last finished workout); volume change and regularity have no approved calculation yet → marked
+// temporary state "Wkrótce" (master: values and calculations NOT approved).
+function DashProgressCard({ summary, onOpen }) {
+  const col = (first) => ({ flex: "1 1 0", minWidth: "max-content", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "6px", padding: first ? "0 10px 0 0" : "0 10px", borderLeft: first ? 0 : `1px solid ${NR.hairline}` });
+  const label = { fontSize: "15px", lineHeight: "18px", fontWeight: 400, color: NR.textSecondary };
+  const value = { fontWeight: 500, fontSize: "25px", lineHeight: "28px", color: NR.textDisplay, whiteSpace: "nowrap" };
+  const soon = { fontWeight: 500, fontSize: "18px", lineHeight: "28px", color: NR.textMuted, whiteSpace: "nowrap" };
+  return (
+    <DashCardLink onClick={onOpen} ariaLabel="Twój ogólny progres, ostatnie 30 dni. Otwórz statystyki" testId="dashboard-progress" minHeight="110px" alpha={0.5}>
+      <DashCardTop icon={TrendingUp} title="Twój ogólny progres" right="Ostatnie 30 dni" />
+      <span style={{ display: "flex", flexWrap: "wrap", rowGap: "10px", width: "100%" }}>
+        <span style={col(true)}>
+          <span style={label}>Treningi</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <Calendar aria-hidden="true" size={20} strokeWidth={2} color={NR.warm} style={{ flexShrink: 0 }} />
+            <span style={value}>{summary.workoutsCount}</span>
+          </span>
+        </span>
+        <span style={col(false)} data-state="temporary">
+          <span style={label}>Objętość</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <Layers aria-hidden="true" size={20} strokeWidth={2} color={NR.textMuted} style={{ flexShrink: 0 }} />
+            <span style={soon}>Wkrótce</span>
+          </span>
+        </span>
+        <span style={col(false)} data-state="temporary">
+          <span style={label}>Regularność</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <CalendarCheck aria-hidden="true" size={20} strokeWidth={2} color={NR.textMuted} style={{ flexShrink: 0 }} />
+            <span style={soon}>Wkrótce</span>
+          </span>
+        </span>
+      </span>
+    </DashCardLink>
+  );
+}
+function DashStat({ label, value }) {
+  return (
+    <div style={{ flex: "1 1 0", minWidth: "max-content", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "2px", padding: "8px 10px", borderRadius: "10px", background: "rgba(9,9,9,.66)", border: "1px solid rgba(255,255,255,.10)" }}>
+      <span style={{ fontSize: "15px", lineHeight: "18px", fontWeight: 400, color: NR.textSecondary }}>{label}</span>
+      <span style={{ fontSize: "23px", lineHeight: "26px", fontWeight: 500, color: NR.textDisplay, whiteSpace: "nowrap" }}>{value}</span>
+    </div>
+  );
+}
+function DashExploreTile({ icon: Icon, title, subtitle, onClick, ariaLabel, testId }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      data-testid={testId}
+      className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]"
+      style={{ position: "relative", minHeight: "84px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "6px", padding: "12px 12px 12px 14px", borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow, border: "1px solid rgba(255,255,255,.07)", color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "pointer" }}
+    >
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", width: "100%" }}>
+        <Icon aria-hidden="true" size={20} strokeWidth={2} color={NR.warm} />
+        <ChevronRight aria-hidden="true" size={16} strokeWidth={2} color={NR.warm} />
+      </span>
+      <span style={{ fontSize: "18px", lineHeight: "22px", fontWeight: 500, color: NR.textDisplay }}>{title}</span>
+      <span style={{ fontSize: "15px", lineHeight: "19px", fontWeight: 400, color: NR.textSecondary }}>{subtitle}</span>
+    </button>
+  );
+}
+const DASH_HOW_STEPS_NO_PLAN = [
+  ["Wybierz plan", "Własny plan, np. A, B, C, albo trening bez planu."],
+  ["Zapisuj serie", "Ciężar i powtórzenia wpisujesz w trakcie treningu."],
+  ["Śledź progres", "Po treningu zobaczysz porównanie z poprzednią sesją."],
+];
+const DASH_HOW_STEPS_WITH_PLAN = [
+  ["Rozpocznij plan", "Twój plan jest gotowy — zacznij od pierwszego treningu."],
+  DASH_HOW_STEPS_NO_PLAN[1],
+  DASH_HOW_STEPS_NO_PLAN[2],
+];
+
+function Dashboard({ history, exercises, onNavigate, onGoStart, onOpenSession, onOpenReport, userName, onSaveName, isPro, onOpenUnlock, proHint, onHintShown, activeDraft = null, onResumeDraft, onDiscardDraft, nextPlan = null, onStartPlan, plans = [] }) {
   const [draftMenu, setDraftMenu] = useState(null); // null | "menu" | "confirmDiscard"
-  // An unfinished workout's card is informational: only its "Wróć do treningu" button opens the
-  // workout (the other card states stay one big tap target, as before).
-  const CardTag = activeDraft ? "div" : "button"
   const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [progressInfoOpen, setProgressInfoOpen] = useState(false);
-  // Picked once when the dashboard mounts (i.e. when the person arrives at it) and held stable
-  // for as long as they're on it — Dashboard fully unmounts on navigation, so the next visit
-  // mounts fresh and rerolls both; a re-render while still here never changes them.
-  const [welcomeIdx] = useState(() => Math.floor(Math.random() * DASHBOARD_WELCOME_PHRASES.length));
-  const [cardPhraseIdx] = useState(() => Math.floor(Math.random() * DASHBOARD_CARD_PHRASES.length));
-  const cardPhrase = DASHBOARD_CARD_PHRASES[cardPhraseIdx];
   const summary = useMemo(() => computeDashboardSummary(history), [history]);
+  const last = useMemo(() => dashLastSession(history), [history]);
+  const firstPlan = (Array.isArray(plans) ? plans : []).find((p) => p && Array.isArray(p.exercises) && p.exercises.length > 0) || null;
+  const state = activeDraft ? "interrupted" : last ? "returning" : "new";
+  const nameOr = (hello) => (userName ? `${hello}, ${userName}!` : `${hello}!`);
 
   useEffect(() => {
     if (!isPro && proHint) onHintShown(proHint.key);
   }, [proHint?.key]);
 
+  const lastCards = last && (
+    <>
+      <DashLastWorkoutCard session={last} onOpen={() => onOpenSession(last)} />
+      <DashProgressCard summary={summary} onOpen={() => onNavigate("stats")} />
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-app-depth font-body flex flex-col">
-      <FontStyles />
-      {/* 1. Poziome logo NEXTREP — bez poświaty, bez zmiany istniejącego komponentu/ikony. */}
-      <div className="px-5 pt-5 flex-shrink-0 flex items-center justify-between">
-        <NextRepLogo height={30} />
-        <button
-          onClick={onOpenUnlock}
-          className={`px-2.5 py-1 rounded-full text-xs font-bold ${isPro ? "bg-gradient-to-br from-orange-500 via-orange-500 to-orange-400 text-neutral-950 shadow-brand-glow" : "bg-neutral-900 border border-neutral-800 text-neutral-500"}`}
-        >
-          PRO
-        </button>
-      </div>
+    <>
+      <NrScreen testId="dashboard" screen={state === "new" ? (firstPlan ? "new-user-withplan" : "new-user-noplan") : state}>
+        <NrHeaderPhoto />
+        <header style={{ position: "relative", display: "flex", alignItems: "center", height: "48px", marginLeft: "-1px" }}>
+          <span style={{ marginInline: "3px" }}>
+            <NextRepLogo height={60} />
+          </span>
+        </header>
 
-      {/* 2. Powitanie użytkownika + 3. losowe hasło powitalne (stabilne przez całą sesję na
-          dashboardzie — patrz komentarz przy welcomeIdx powyżej). Kliknięcie nadal otwiera
-          NameModal — funkcja ustawiania imienia zostaje, tylko bez osobnej „nudge” wersji. */}
-      <div className="px-5 pt-4 flex-shrink-0">
-        <button onClick={() => setNameModalOpen(true)} className="flex items-center gap-1.5 text-left active:opacity-70">
-          <p className="font-display text-3xl text-neutral-50 tracking-wide leading-none break-words">
-            {userName ? `Cześć, ${userName}!` : "Cześć!"}
-          </p>
-          <Pencil size={13} className="text-neutral-600 flex-shrink-0" />
-        </button>
-        <p className="text-neutral-400 text-sm font-medium mt-1.5">{DASHBOARD_WELCOME_PHRASES[welcomeIdx]}</p>
-      </div>
-
-      <div className="px-5 mt-5 pb-24 flex-1 flex flex-col">
-        {/* 4/5/8. Duża karta treningowa ze zdjęciem — zastępuje starą kartę „Ostatni trening”
-            jako główny element dashboardu. Reużywa istniejący, już offline'owy asset zdjęciowy
-            (WELCOME_BG_IMAGE, ten sam co na ekranie powitalnym) — brak nowych/zewnętrznych URL-i. */}
-        <div className="relative flex-shrink-0">
-        <CardTag
-          onClick={activeDraft ? undefined : nextPlan ? () => onStartPlan(nextPlan) : onGoStart}
-          data-testid={activeDraft ? "dashboard-active-workout" : nextPlan ? "dashboard-next-plan" : "dashboard-start-card"}
-          className="relative w-full rounded-2xl overflow-hidden flex-shrink-0 text-left"
-          style={{ aspectRatio: "4 / 5" }}
-        >
-          <img src={WELCOME_BG_IMAGE} alt="" className="absolute inset-0 w-full h-full object-cover grayscale" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
-          <div className="absolute inset-0 bg-orange-500/10" />
-          {activeDraft ? (
-            <div className="relative h-full flex flex-col justify-end p-5">
-              <p className="text-orange-400 text-xs font-bold tracking-wide uppercase mb-1.5">Kontynuuj trening</p>
-              <p className="font-display text-2xl leading-[1.15] tracking-wide break-words text-neutral-50">{activeDraft.name}</p>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <div className="bg-black/45 border border-white/10 rounded-xl py-2 px-1 flex flex-col items-center justify-center min-w-0">
-                  <span className="font-display text-xl text-neutral-50 tracking-wide leading-none tabular-nums text-center break-words">{activeDraft.doneExercises} / {activeDraft.totalExercises}</span>
-                  <span className="text-neutral-400 text-[11px] font-semibold mt-1 text-center">Ćwiczenia</span>
+        {state === "interrupted" && (
+          <>
+            <DashGreeting title={nameOr("Cześć")} subtitle="Dokończ trening, który już zacząłeś." onEditName={() => setNameModalOpen(true)} />
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <NrHeroCard labelledBy="dash-draft-h" testId="dashboard-active-workout" photoPos="50% 22%" bottomShade="linear-gradient(0deg, rgba(11,11,12,.92) 0%, rgba(11,11,12,.55) 38%, rgba(11,11,12,0) 62%)">
+                <div style={{ position: "relative", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "12px", padding: "6px 8px 14px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", minHeight: "44px" }}>
+                    <NrSectionHead icon={PauseCircle}>Niedokończony trening</NrSectionHead>
+                    <button
+                      type="button"
+                      aria-label="Opcje niedokończonego treningu"
+                      data-testid="dashboard-draft-options"
+                      onClick={() => setDraftMenu("menu")}
+                      className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]"
+                      style={{ flexShrink: 0, minHeight: "44px", minWidth: "44px", padding: 0, border: 0, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "flex-end" }}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", minHeight: "32px", boxSizing: "border-box", padding: "0 12px", borderRadius: "16px", background: "rgba(9,9,9,.62)", border: "1px solid rgba(255,255,255,.16)", color: NR.textPrimary, fontFamily: NR.font, fontSize: "15px", fontWeight: 500, whiteSpace: "nowrap" }}>
+                        <MoreHorizontal aria-hidden="true" size={16} strokeWidth={2} />
+                        Opcje
+                      </span>
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "-8px", paddingRight: "8px" }}>
+                    <h2 id="dash-draft-h" style={{ margin: 0, fontWeight: 500, fontSize: "29px", lineHeight: "34px", color: NR.textDisplay, overflowWrap: "anywhere" }}>{activeDraft.name}</h2>
+                    <p style={{ margin: 0, fontSize: "16px", lineHeight: "20px", fontWeight: 400, color: NR.textPrimary, maxWidth: "200px" }}>Trening nie został zakończony.</p>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "34px", paddingRight: "8px" }}>
+                    <DashStat label="Ćwiczenia" value={`${activeDraft.doneExercises} / ${activeDraft.totalExercises}`} />
+                    <DashStat label="Czas" value={activeDraft.elapsedSec != null ? fmtClock(activeDraft.elapsedSec) : "—"} />
+                    <DashStat label="Objętość" value={`${fmtThousands(activeDraft.volume)} kg`} />
+                  </div>
+                  <NrPillCta onClick={onResumeDraft} testId="dashboard-resume">Wznów trening</NrPillCta>
                 </div>
-                <div className="bg-black/45 border border-white/10 rounded-xl py-2 px-1 flex flex-col items-center justify-center min-w-0">
-                  <span className="font-display text-xl text-neutral-50 tracking-wide leading-none tabular-nums text-center break-words">{activeDraft.elapsedSec != null ? fmtClock(activeDraft.elapsedSec) : "—"}</span>
-                  <span className="text-neutral-400 text-[11px] font-semibold mt-1 text-center">Czas</span>
-                </div>
-                <div className="bg-black/45 border border-white/10 rounded-xl py-2 px-1 flex flex-col items-center justify-center min-w-0">
-                  <span className="font-display text-xl text-neutral-50 tracking-wide leading-none tabular-nums text-center break-words">{fmtVolume(activeDraft.volume, "weight")}</span>
-                  <span className="text-neutral-400 text-[11px] font-semibold mt-1 text-center">Objętość</span>
-                </div>
-              </div>
-              <button type="button" onClick={onResumeDraft} data-testid="dashboard-resume" className="mt-4 w-full bg-gradient-to-br from-[#FF5A00] via-orange-500 to-orange-400 active:brightness-90 text-neutral-950 font-bold text-base py-3 rounded-2xl flex items-center justify-center gap-2">
-                <PlayCircle size={19} strokeWidth={2.5} /> WRÓĆ DO TRENINGU
-              </button>
+              </NrHeroCard>
             </div>
-          ) : nextPlan ? (
-            <div className="relative h-full flex flex-col justify-end p-5">
-              <p className="text-orange-400 text-xs font-bold tracking-wide uppercase mb-1.5">Następny trening</p>
-              <p className="font-display text-2xl leading-[1.15] tracking-wide break-words text-neutral-50">{nextPlan.name}</p>
-              <p className="text-neutral-300 text-sm font-medium mt-1">
-                {nextPlan.exercises.length} {plWord(nextPlan.exercises.length, "ćwiczenie", "ćwiczenia", "ćwiczeń")}
-              </p>
-              <div className="mt-4 bg-gradient-to-br from-[#FF5A00] via-orange-500 to-orange-400 active:brightness-90 text-neutral-950 font-bold text-base py-3 rounded-2xl flex items-center justify-center gap-2">
-                <Flame size={19} strokeWidth={2.5} /> ROZPOCZNIJ TRENING
-              </div>
-            </div>
-          ) : (
-          <div className="relative h-full flex flex-col justify-end p-5">
-            <p className="font-display text-2xl leading-[1.15] tracking-wide break-words text-left">
-              <span className="text-neutral-50">{cardPhrase.w} </span>
-              <span className="text-orange-500">{cardPhrase.o}</span>
+            <p style={{ position: "relative", margin: "-2px 4px 4px", display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "15px", lineHeight: "19px", fontWeight: 400, color: NR.textSecondary }}>
+              <Info aria-hidden="true" size={17} strokeWidth={2} color={NR.textSecondary} style={{ flexShrink: 0 }} />
+              <span>Trening trafi do historii dopiero po jego zakończeniu.</span>
             </p>
-            <div className="mt-4 bg-gradient-to-br from-[#FF5A00] via-orange-500 to-orange-400 active:brightness-90 text-neutral-950 font-bold text-base py-2.5 rounded-2xl flex items-center justify-center gap-2 shadow-brand-glow">
-              <Flame size={19} strokeWidth={2.5} /> ROZPOCZNIJ TRENING
-            </div>
-          </div>
-          )}
-        </CardTag>
-        {activeDraft && (
-          <button
-            onClick={() => setDraftMenu("menu")}
-            data-testid="dashboard-draft-options"
-            className="absolute top-3 right-3 px-3 py-2 min-h-[40px] rounded-full bg-black/55 border border-white/15 text-neutral-100 text-xs font-semibold flex items-center gap-1.5"
-          >
-            <MoreHorizontal size={15} /> Opcje
-          </button>
-        )}
-        </div>
-        {activeDraft && draftMenu && (
-          <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center px-4 pb-6" onClick={() => setDraftMenu(null)}>
-            <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()} data-testid="dashboard-draft-menu">
-              {draftMenu === "menu" ? (
-                <>
-                  <p className="font-display text-xl text-neutral-50 tracking-wide mb-1 break-words">{activeDraft.name}</p>
-                  <p className="text-neutral-500 text-xs mb-4">Niedokończony trening</p>
-                  <div className="flex flex-col gap-2">
-                    <button onClick={() => { setDraftMenu(null); onResumeDraft(); }} className="w-full py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold">
-                      Wróć do treningu
-                    </button>
-                    <button onClick={() => setDraftMenu("confirmDiscard")} className="w-full py-3 rounded-xl bg-neutral-800 text-red-400 font-semibold">
-                      Przerwij bez zapisywania
-                    </button>
-                    <button onClick={() => setDraftMenu(null)} className="w-full py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
-                      Anuluj
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="font-display text-xl text-neutral-50 tracking-wide mb-2">PRZERWAĆ BEZ ZAPISYWANIA?</p>
-                  <p className="text-neutral-400 text-sm mb-5">Niedokończony trening i jego postęp zostaną usunięte. Tej operacji nie można cofnąć.</p>
-                  <div className="flex gap-3">
-                    <button onClick={() => setDraftMenu("menu")} className="flex-1 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
-                      Wróć
-                    </button>
-                    <button onClick={() => { setDraftMenu(null); onDiscardDraft(); }} className="flex-1 py-3 rounded-xl bg-red-500 text-neutral-950 font-bold">
-                      Usuń trening
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+            {lastCards}
+          </>
         )}
 
-        {/* 6/9-13. Podsumowanie — Treningów (ukończone w ostatnich 30 dniach do ostatniego treningu) /
-            Ćwiczeń (wystąpienia w tym okresie) / Progres (% analizowanych wystąpień ze statusem "green" z istniejącego
-            silnika progresji — patrz computeDashboardSummary powyżej). */}
-        <div className="mt-6">
-          <p className="text-neutral-500 text-xs font-bold tracking-wide uppercase mb-2">Podsumowanie · Ostatnie 30 dni</p>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 flex flex-col items-center justify-center min-w-0">
-              <span className="font-display text-2xl text-neutral-50 tracking-wide leading-none">{summary.workoutsCount}</span>
-              <span className="text-neutral-500 text-[10px] uppercase font-semibold mt-1 text-center">Treningów</span>
+        {state === "returning" && (
+          <>
+            <DashGreeting title={nameOr("Cześć")} subtitle="Twój następny rep zaczyna się od ostatniego." onEditName={() => setNameModalOpen(true)} />
+            {lastCards}
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <NrHeroCard labelledBy="dash-next-h" testId={nextPlan ? "dashboard-next-plan" : "dashboard-start-card"}>
+                <div style={{ position: "relative", minHeight: "192px", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "14px 16px 10px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", minHeight: "22px" }}>
+                      <NrSectionHead icon={Target}>Następny trening</NrSectionHead>
+                    </span>
+                    <h2 id="dash-next-h" style={{ margin: "2px 0", fontWeight: 500, fontSize: "29px", lineHeight: "34px", color: NR.textDisplay, maxWidth: "220px", overflowWrap: "anywhere" }}>
+                      {nextPlan ? nextPlan.name : "Wybierz trening"}
+                    </h2>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "16px", lineHeight: "20px", fontWeight: 400, color: NR.textPrimary }}>
+                      {nextPlan ? (
+                        <>
+                          <Dumbbell aria-hidden="true" size={17} strokeWidth={2} color={NR.warm} style={{ flexShrink: 0 }} />
+                          {nextPlan.exercises.length} {plWord(nextPlan.exercises.length, "ćwiczenie", "ćwiczenia", "ćwiczeń")}
+                        </>
+                      ) : (
+                        <span style={{ maxWidth: "200px" }}>Własny plan albo trening bez planu.</span>
+                      )}
+                    </span>
+                  </div>
+                  <NrPillCta onClick={nextPlan ? () => onStartPlan(nextPlan) : onGoStart} testId="dashboard-start">Rozpocznij trening</NrPillCta>
+                </div>
+              </NrHeroCard>
             </div>
-            <div className="bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 flex flex-col items-center justify-center min-w-0">
-              <span className="font-display text-2xl text-neutral-50 tracking-wide leading-none">{summary.exercisesCount}</span>
-              <span className="text-neutral-500 text-[10px] uppercase font-semibold mt-1 text-center">Ćwiczeń</span>
+          </>
+        )}
+
+        {state === "new" && (
+          <>
+            <DashGreeting title={nameOr("Witaj")} subtitle="Twój pierwszy rep zaczyna się dziś." onEditName={() => setNameModalOpen(true)} />
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <NrHeroCard labelledBy="dash-first-h" testId={firstPlan ? "dashboard-next-plan" : "dashboard-start-card"} photoPos="62% 45%">
+                <div style={{ position: "relative", boxSizing: "border-box", minHeight: "220px", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "10px", padding: "14px 16px 10px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <NrSectionHead icon={Flag}>{firstPlan ? "Pierwszy trening z planu" : "Pierwszy krok"}</NrSectionHead>
+                    <h2 id="dash-first-h" style={{ margin: "2px 0 0", fontWeight: 500, fontSize: "29px", lineHeight: "32px", color: NR.textDisplay, maxWidth: "176px", overflowWrap: "anywhere" }}>
+                      {firstPlan ? firstPlan.name : "Twój pierwszy trening"}
+                    </h2>
+                    {firstPlan ? (
+                      <p style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "16px", lineHeight: "20px", color: NR.textPrimary }}>
+                        <Dumbbell aria-hidden="true" size={17} strokeWidth={2} color={NR.warm} style={{ flexShrink: 0 }} />
+                        {firstPlan.exercises.length} {plWord(firstPlan.exercises.length, "ćwiczenie", "ćwiczenia", "ćwiczeń")}
+                      </p>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: "16px", lineHeight: "20px", fontWeight: 400, color: NR.textPrimary, maxWidth: "196px" }}>Stwórz własny plan albo zacznij trening bez planu.</p>
+                    )}
+                  </div>
+                  <NrPillCta onClick={firstPlan ? () => onStartPlan(firstPlan) : onGoStart} testId="dashboard-start">Rozpocznij trening</NrPillCta>
+                </div>
+              </NrHeroCard>
             </div>
-            <button
-              onClick={() => setProgressInfoOpen(true)}
-              className="bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 flex flex-col items-center justify-center min-w-0 active:bg-neutral-800"
-            >
-              <span className={`font-display text-2xl tracking-wide leading-none ${summary.progressPct != null ? "text-green-400" : "text-neutral-50"}`}>
-                {summary.progressPct != null ? `${summary.progressPct}%` : "—"}
-              </span>
-              <span className="text-neutral-500 text-[10px] uppercase font-semibold mt-1 text-center">Progres</span>
-            </button>
-          </div>
-        </div>
-      </div>
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <section aria-labelledby="dash-how-h" style={{ position: "relative", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "12px", padding: "14px 14px 16px", borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow }}>
+                <h2 style={{ margin: 0, display: "flex" }}>
+                  <NrSectionHead icon={ListOrdered} id="dash-how-h">Jak to działa</NrSectionHead>
+                </h2>
+                <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {(firstPlan ? DASH_HOW_STEPS_WITH_PLAN : DASH_HOW_STEPS_NO_PLAN).map(([t, d], i) => (
+                    <li key={t} style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                      <span aria-hidden="true" style={{ flexShrink: 0, width: "26px", height: "26px", boxSizing: "border-box", borderRadius: "13px", border: "1px solid rgba(255,133,27,.6)", color: NR.warm, fontSize: "15px", lineHeight: "24px", fontWeight: 500, textAlign: "center" }}>{i + 1}</span>
+                      <span style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+                        <span style={{ fontSize: "18px", lineHeight: "22px", fontWeight: 500, color: NR.textDisplay }}>{t}</span>
+                        <span style={{ fontSize: "15px", lineHeight: "19px", fontWeight: 400, color: NR.textSecondary }}>{d}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+              <NrFadeBorder alpha={0.5} />
+            </div>
+            <section aria-labelledby="dash-explore-h" style={{ position: "relative", display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+              <h2 id="dash-explore-h" style={{ margin: "0 0 0 2px", fontSize: "16px", lineHeight: "20px", fontWeight: 400, color: NR.textSecondary }}>Wolisz najpierw się rozejrzeć?</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
+                <DashExploreTile icon={ClipboardList} title="Gotowe plany" subtitle="FBW, Split, 5×5 i inne · wkrótce" ariaLabel="Gotowe plany treningowe, wkrótce. Otwórz Plany" testId="dashboard-tile-plans" onClick={() => onNavigate("plans")} />
+                <DashExploreTile icon={Dumbbell} title="Ćwiczenia" subtitle="Przeglądaj bazę ćwiczeń" ariaLabel="Ćwiczenia. Przeglądaj bazę ćwiczeń" testId="dashboard-tile-exercises" onClick={() => onNavigate("exercises")} />
+              </div>
+            </section>
+          </>
+        )}
+      </NrScreen>
 
       <BottomNav screen="dashboard" onNavigate={onNavigate} />
+
+      {activeDraft && draftMenu === "menu" && (
+        <NrSheet onClose={() => setDraftMenu(null)} labelledBy="dash-sheet-h" testId="dashboard-draft-menu">
+          <p id="dash-sheet-h" style={{ margin: 0, fontSize: "25px", lineHeight: "28px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "anywhere" }}>{activeDraft.name}</p>
+          <p style={{ margin: "2px 0 16px", fontSize: "15px", lineHeight: "18px", color: NR.textSecondary }}>Niedokończony trening</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <NrSheetButton variant="primary" onClick={() => { setDraftMenu(null); onResumeDraft(); }}>Wznów trening</NrSheetButton>
+            <NrSheetButton variant="dangerText" onClick={() => setDraftMenu("confirmDiscard")}>Przerwij bez zapisywania</NrSheetButton>
+            <NrSheetButton onClick={() => setDraftMenu(null)}>Anuluj</NrSheetButton>
+          </div>
+        </NrSheet>
+      )}
+      {activeDraft && draftMenu === "confirmDiscard" && (
+        <NrSheet onClose={() => setDraftMenu("menu")} labelledBy="dash-confirm-h" testId="dashboard-draft-menu">
+          <p id="dash-confirm-h" style={{ margin: "0 0 8px", fontSize: "25px", lineHeight: "28px", fontWeight: 600, color: NR.textDisplay }}>Przerwać bez zapisywania?</p>
+          <p style={{ margin: "0 0 18px", fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>Niedokończony trening i jego postęp zostaną usunięte. Tej operacji nie można cofnąć.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <NrSheetButton onClick={() => setDraftMenu("menu")}>Wróć</NrSheetButton>
+            <NrSheetButton variant="dangerFill" onClick={() => { setDraftMenu(null); onDiscardDraft(); }}>Usuń trening</NrSheetButton>
+          </div>
+        </NrSheet>
+      )}
 
       {nameModalOpen && (
         <NameModal
@@ -380,24 +548,6 @@ function Dashboard({ history, exercises, onNavigate, onGoStart, onOpenSession, o
           onClose={() => setNameModalOpen(false)}
         />
       )}
-
-      {progressInfoOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-6" onClick={() => setProgressInfoOpen(false)}>
-          <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-            <p className="font-display text-2xl text-neutral-50 tracking-wide mb-3">CZYM JEST PROGRES?</p>
-            <p className="text-neutral-300 text-sm leading-relaxed mb-3">
-              To procent przeanalizowanych wystąpień ćwiczeń z ostatnich 30 dni (licząc do ostatniego treningu), które silnik progresji uznał za realną poprawę — więcej powtórzeń, lepszy zapas (RIR) lub większa objętość niż przy poprzednim wykonaniu tego samego ćwiczenia na tym samym ciężarze.
-            </p>
-            <p className="text-neutral-400 text-xs leading-relaxed mb-5">
-              Liczą się tylko ćwiczenia, dla których jest wcześniejsze wykonanie do porównania — pierwszy raz danego ćwiczenia nigdy nie liczy się automatycznie jako progres. Za mało danych w tym miesiącu? Zobaczysz „—" zamiast mylącego 0% lub 100%.
-            </p>
-            <button onClick={() => setProgressInfoOpen(false)} className="w-full py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold">
-              Rozumiem
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
-

@@ -327,7 +327,7 @@ const I3_APP_FILES = ["src/app/13-account-ui.jsx"];
 // Dashboard (Returning / New User / Interrupted), Training Entry Flow, Active Workout, Completion &
 // Summary, Atlas Compact Tabs v3. Beyond the files already listed above exactly these; checked by
 // tests/ui/i4-*.test.mjs and the visual walk.
-const I4_APP_FILES = ["src/app/11-ui-shared.jsx"];
+const I4_APP_FILES = ["src/app/11-ui-shared.jsx", "src/app/16-dashboard.jsx"];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
@@ -369,7 +369,10 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       '// I3: the nr1 contracts and the snapshot builder — used ONLY by the atlas adapter (17b-atlas-catalog.jsx)\n' +
       'import { validateLoadSnapshot, planItemSnapshot, resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS, validateRefMatchesSnapshot } from "@nextrep-engine";\n';
     const anchor = '  draftVolume,\n} from "@nextrep-engine";\n';
-    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added));
+    // I4: one more import line at the end — icons of the approved masters, from lucide-react only
+    const i4Icons = "// I4: icons used by the approved UI masters (canvas v81) and not imported above\n" +
+      'import { Flag, ListOrdered, PauseCircle, Info, Calendar, CalendarCheck, ArrowRight, CloudOff, Trophy, ListChecks, Hourglass, Sigma } from "lucide-react";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
     assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx"]);

@@ -1491,6 +1491,7 @@ function App() {
             setDraftTick((n) => n + 1);
           }}
           nextPlan={getNextPlan(plans, history)}
+          plans={plans}
           onStartPlan={(p) => {
             // the existing start path ("Trening" → plan)
             requestStartWorkout({ plan: p });

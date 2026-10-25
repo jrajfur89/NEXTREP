@@ -97,3 +97,5 @@ import {
   BarChart3, LineChart, CheckCircle2
 } from "lucide-react";
 
+// I4: icons used by the approved UI masters (canvas v81) and not imported above
+import { Flag, ListOrdered, PauseCircle, Info, Calendar, CalendarCheck, ArrowRight, CloudOff, Trophy, ListChecks, Hourglass, Sigma } from "lucide-react";
