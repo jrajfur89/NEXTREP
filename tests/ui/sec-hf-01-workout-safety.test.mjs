@@ -85,28 +85,18 @@ async function finishWorkout() {
 }
 
 describe("P0-1 — a new workout never replaces an unfinished one silently", () => {
-  test("plan start (Trening → Własne plany → plan) with a draft: choice dialog, the draft untouched", async () => {
+  // I4.3: since the Training Entry Flow master the protection is the decision screen of the Trening tab
+  // (it replaced the SEC-HF-01 choice dialog); every start path leads there while a draft exists.
+  test("Trening with a draft: the protection screen first — no selection, no workout, the draft untouched", async () => {
     await bootGuestApp({ active_workout_draft: await realDraft(), plans: [PLAN_B] });
     await openTrening();
-    await click(btn(/WŁASNE PLANY TRENINGOWE/));
-    await flush(10, 3);
-    await click(btn(/Leg Day/));
-    await flush(10, 4);
-    assert.ok(byTestId("start-conflict"), "dialog shown");
+    assert.ok(byTestId("tef-decision"), "decision screen");
+    assert.ok(!byTestId("tef-select"), "the start paths are not offered");
     assert.ok(!workoutOpen(), "no workout started");
     assert.ok(draftHasPushDay(), "the unfinished workout is untouched");
   });
 
-  test("no-plan start with a draft: choice dialog, the draft untouched", async () => {
-    await bootGuestApp({ active_workout_draft: await realDraft() });
-    await openTrening();
-    await click(btn(/TRENING BEZ PLANU/));
-    await flush(10, 4);
-    assert.ok(byTestId("start-conflict"));
-    assert.ok(draftHasPushDay());
-  });
-
-  test("back-filled start (Historia → Dodaj zaległy trening) with a draft: choice dialog, the draft untouched", async () => {
+  test("back-filled start (Historia → Dodaj zaległy trening) with a draft: the protection screen, the draft untouched", async () => {
     await bootGuestApp({ active_workout_draft: await realDraft() });
     await click(btn(/^Historia$/));
     await flush(10, 3);
@@ -114,55 +104,92 @@ describe("P0-1 — a new workout never replaces an unfinished one silently", () 
     await flush(10, 3);
     await click(btn(/^Rozpocznij wpisywanie$/));
     await flush(10, 4);
-    assert.ok(byTestId("start-conflict"));
+    assert.ok(byTestId("tef-decision"));
     assert.ok(!workoutOpen());
     assert.ok(draftHasPushDay());
   });
 
-  test("Kontynuuj trening: the unfinished workout opens as it was left", async () => {
+  test("Wznów trening: the unfinished workout opens as it was left", async () => {
     await bootGuestApp({ active_workout_draft: await realDraft() });
     await openTrening();
-    await click(btn(/TRENING BEZ PLANU/));
-    await flush(10, 3);
-    await click(byTestId("start-conflict-resume"));
+    await click(byTestId("tef-resume"));
     await flush(10, 4);
     assert.ok(workoutOpen());
     assert.ok($$("input").some((i) => i.value === "100"), "the 100 kg set is restored");
     assert.ok(draftHasPushDay());
   });
 
-  test("Anuluj: dialog closed, the screen and the draft unchanged", async () => {
+  test("Anuluj in the confirmation: sheet closed, still the protection screen, the draft unchanged", async () => {
     await bootGuestApp({ active_workout_draft: await realDraft() });
     await openTrening();
-    await click(btn(/TRENING BEZ PLANU/));
+    await click(byTestId("tef-delete"));
     await flush(10, 3);
-    await click(byTestId("start-conflict-cancel"));
+    const sheet = byTestId("tef-confirm");
+    assert.equal(sheet.getAttribute("role"), "alertdialog");
+    assert.match(sheet.textContent, /Usunąć niedokończony trening\?/);
+    assert.match(sheet.textContent, /Push Day · 0 \/ 1 ćwiczeń · 9:00 · 800 kg/);
+    await click(byTestId("tef-confirm-cancel"));
     await flush(10, 3);
-    assert.ok(!byTestId("start-conflict"));
-    assert.ok(btn(/TRENING BEZ PLANU/), "still on the Trening screen");
+    assert.ok(!byTestId("tef-confirm"));
+    assert.ok(byTestId("tef-decision"));
     assert.ok(draftHasPushDay());
   });
 
-  test("Odrzuć i zacznij nowy: only after the explicit confirmation", async () => {
+  test("delete only after the explicit confirmation → selection with a message, no automatic start", async () => {
     await bootGuestApp({ active_workout_draft: await realDraft() });
     await openTrening();
-    await click(btn(/TRENING BEZ PLANU/));
-    await flush(10, 3);
-    await click(byTestId("start-conflict-discard"));
+    await click(byTestId("tef-delete"));
     await flush(10, 3);
     assert.ok(draftHasPushDay(), "the first tap only asks");
-    assert.ok(byTestId("start-conflict-discard-confirm"));
-    await click(byTestId("start-conflict-back"));
-    await flush(10, 2);
-    assert.ok(byTestId("start-conflict-resume"), "Wróć returns to the choice");
-    await click(byTestId("start-conflict-discard"));
-    await flush(10, 2);
-    await click(byTestId("start-conflict-discard-confirm"));
+    await click(byTestId("tef-confirm-confirm"));
     await flush(10, 5);
-    assert.ok(!byTestId("start-conflict"));
-    assert.ok(!draftHasPushDay(), "the old draft is gone only now");
+    assert.equal(localStorage.getItem(GUEST("active_workout_draft")), null, "the old draft is gone only now");
+    assert.ok(byTestId("tef-select"), "back to the selection");
+    assert.match(byTestId("tef-status").textContent, /Usunięto niedokończony trening „Push Day”\./);
+    assert.equal(byTestId("tef-status").getAttribute("role"), "status");
+    assert.ok(!workoutOpen(), "no automatic start");
+    await click(byTestId("tef-no-plan"));
+    await flush(10, 4);
     const d = read(GUEST("active_workout_draft"));
-    assert.ok(d && d.workoutInstanceId, "the new workout has its own draft");
+    assert.ok(d && d.workoutInstanceId, "a new workout starts only on the person's choice");
+  });
+
+  test("delete not confirmed by the storage → persistent alert (role=alert), the workout intact, retry", async () => {
+    await bootGuestApp({ active_workout_draft: await realDraft() });
+    await openTrening();
+    const undo = failRemove((k) => k === GUEST("active_workout_draft"));
+    await click(byTestId("tef-delete"));
+    await flush(10, 3);
+    await click(byTestId("tef-confirm-confirm"));
+    await flush(10, 4);
+    const alert = byTestId("tef-delete-error");
+    assert.equal(alert.getAttribute("role"), "alert");
+    assert.match(alert.textContent, /Nie udało się usunąć treningu/);
+    assert.ok(byTestId("tef-decision") && draftHasPushDay(), "nothing lost");
+    undo();
+    await click(byTestId("tef-delete-error-retry"));
+    await flush(10, 4);
+    assert.equal(localStorage.getItem(GUEST("active_workout_draft")), null);
+    assert.ok(byTestId("tef-select"));
+  });
+
+  test("an unreadable record blocks every start: own screen, re-read, delete only after its confirmation", async () => {
+    const { A } = await bootGuestApp();
+    localStorage.setItem(GUEST("active_workout_draft"), "{broken");
+    await openTrening();
+    assert.ok(byTestId("tef-unreadable"));
+    assert.equal(A.readActiveWorkoutDraftState().status, "unreadable");
+    await click(byTestId("tef-reread"));
+    await flush(5, 2);
+    assert.ok(byTestId("tef-unreadable"), "still unreadable");
+    assert.equal(localStorage.getItem(GUEST("active_workout_draft")), "{broken", "never overwritten");
+    await click(byTestId("tef-delete"));
+    await flush(5, 2);
+    assert.match(byTestId("tef-confirm").textContent, /Usunąć nieczytelny zapis treningu\?/);
+    await click(byTestId("tef-confirm-confirm"));
+    await flush(10, 3);
+    assert.equal(localStorage.getItem(GUEST("active_workout_draft")), null);
+    assert.ok(byTestId("tef-select"));
   });
 
   test("the storage layer refuses to overwrite a draft of another workoutInstanceId", async () => {
@@ -182,9 +209,9 @@ describe("P0-1 — a new workout never replaces an unfinished one silently", () 
   test("start without an unfinished workout: no dialog, the workout opens", async () => {
     await bootGuestApp();
     await openTrening();
-    await click(btn(/TRENING BEZ PLANU/));
+    await click(byTestId("tef-no-plan"));
     await flush(10, 4);
-    assert.ok(!byTestId("start-conflict"));
+    assert.ok(!byTestId("tef-decision"));
     assert.ok(btn(/Dodaj ćwiczenie/), "the (empty) workout is open");
   });
 
@@ -354,7 +381,7 @@ describe("P1-A — a failed draft write is visible", () => {
     await bootGuestApp();
     failWrites((k) => k === GUEST("active_workout_draft"));
     await openTrening();
-    await click(btn(/TRENING BEZ PLANU/));
+    await click(byTestId("tef-no-plan"));
     await flush(10, 4);
     assert.ok(byTestId("draft-save-warning"));
   });

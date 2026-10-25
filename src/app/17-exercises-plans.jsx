@@ -1590,8 +1590,187 @@ function ExercisePickerModal({ exercises, onPick, onClose, onCreateExercise, tit
 /* Start Workout Screen                                                    */
 /* ---------------------------------------------------------------------- */
 
-function StartWorkoutScreen({ plans, exercises, updatePlans, updateExercises, onNavigate, onSelectPlan, onNoPlan, isPro, onOpenUnlock }) {
+// I4.3 — Training Entry Flow (master TEFM v1, 14.10.2026; canvas v81). The Trening tab:
+//   selection (3 paths) · own plans empty state · unfinished-workout protection (decision screen,
+//   delete confirmation, cancelled, deleted ≈4 s message, delete error) · unreadable draft (+ its
+//   delete confirmation). Global rule: no start path overwrites an unfinished or unreadable workout.
+const tefCardLink = {
+  position: "relative", width: "100%", minHeight: "96px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: "14px",
+  padding: "14px 12px 14px 14px", borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow, color: "inherit", border: 0,
+  textAlign: "left", fontFamily: NR.font, cursor: "pointer",
+};
+const tefWideButton = (danger) => ({
+  width: "100%", minHeight: "52px", boxSizing: "border-box", padding: "10px 16px", borderRadius: "12px",
+  border: danger ? "1px solid rgba(242,85,90,.45)" : `1px solid ${NR.hairline}`, background: danger ? "transparent" : "#121213",
+  color: danger ? NR.dangerText : NR.textPrimary, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 500,
+  display: "flex", alignItems: "center", gap: "12px", textAlign: "left", cursor: "pointer",
+});
+const TEF_FOCUS = "focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]";
+function TefHeader({ title, subtitle, onBack }) {
+  return (
+    <header style={{ position: "relative", display: "flex", flexDirection: "column", gap: "6px", margin: "4px 0 8px 9px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+        {onBack && (
+          <button type="button" aria-label="Wróć" onClick={onBack} className={TEF_FOCUS} style={{ flexShrink: 0, width: "44px", height: "44px", marginLeft: "-10px", border: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NR.textPrimary }}>
+            <ChevronLeft aria-hidden="true" size={24} strokeWidth={2} />
+          </button>
+        )}
+        <h1 style={{ margin: 0, fontWeight: 600, fontSize: "32px", lineHeight: "36px", color: NR.textDisplay }}>{title}</h1>
+      </div>
+      {subtitle && <p style={{ margin: 0, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>{subtitle}</p>}
+    </header>
+  );
+}
+function TefChoice({ icon: Icon, title, text, onClick, testId, border }) {
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button type="button" onClick={onClick} data-testid={testId} className={TEF_FOCUS} style={tefCardLink}>
+        <span aria-hidden="true" style={{ flexShrink: 0, width: "44px", height: "44px", borderRadius: "12px", background: "rgba(255,133,27,.10)", border: "1px solid rgba(255,133,27,.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon size={22} strokeWidth={2} color={NR.warm} />
+        </span>
+        <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span style={{ fontSize: "23px", lineHeight: "26px", fontWeight: 500, color: NR.textDisplay }}>{title}</span>
+          <span style={{ fontSize: "15px", lineHeight: "19px", color: NR.textSecondary }}>{text}</span>
+        </span>
+        <ChevronRight aria-hidden="true" size={18} strokeWidth={2} color={NR.warm} style={{ flexShrink: 0 }} />
+      </button>
+      {border && <NrFadeBorder alpha={0.5} />}
+    </div>
+  );
+}
+function TefInfo({ children }) {
+  return (
+    <p style={{ margin: "2px 4px 0", display: "flex", gap: "8px", fontSize: "15px", lineHeight: "19px", color: NR.textSecondary, fontFamily: NR.font }}>
+      <Info aria-hidden="true" size={17} strokeWidth={2} color={NR.textSecondary} style={{ flexShrink: 0 }} />
+      <span>{children}</span>
+    </p>
+  );
+}
+function TefBullets({ items }) {
+  return (
+    <ul style={{ margin: "0 0 18px", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "6px" }}>
+      {items.map((t) => (
+        <li key={t} style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "16px", lineHeight: "20px", color: "#D0D0D0" }}>
+          <span aria-hidden="true" style={{ flexShrink: 0, width: "6px", height: "6px", borderRadius: "3px", background: NR.danger, marginTop: "7px" }} />
+          <span>{t}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+// Confirmation sheet of a destructive step (role=alertdialog, red top edge).
+function TefConfirmSheet({ title, summary, bullets, confirmLabel, onConfirm, onCancel, testId }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const prev = document.activeElement;
+    const btns = ref.current ? ref.current.querySelectorAll("button") : [];
+    if (btns[btns.length - 1]) btns[btns.length - 1].focus(); // the safe choice first
+    const onKey = (e) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      try {
+        if (prev && prev.focus) prev.focus();
+      } catch {}
+    };
+  }, []);
+  const btn = { minHeight: "52px", width: "100%", border: 0, borderRadius: "12px", fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 600, cursor: "pointer", padding: "8px 14px" };
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+      <div aria-hidden="true" onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.7)" }} />
+      <div ref={ref} role="alertdialog" aria-modal="true" aria-labelledby="tef-confirm-h" data-testid={testId} style={{ position: "absolute", left: 0, right: 0, bottom: 0, boxSizing: "border-box", padding: "10px 16px max(env(safe-area-inset-bottom, 0px), 8px)", borderRadius: "20px 20px 0 0", background: "linear-gradient(180deg, #151515 0%, #0F0F10 100%)", borderTop: "1px solid rgba(242,85,90,.45)", fontFamily: NR.font }}>
+        <div aria-hidden="true" style={{ width: "40px", height: "4px", borderRadius: "2px", background: "#3A3A3A", margin: "0 auto 16px" }} />
+        <div style={{ paddingBottom: "16px" }}>
+          <p id="tef-confirm-h" style={{ margin: "0 0 8px", fontSize: "25px", lineHeight: "28px", fontWeight: 600, color: NR.textDisplay }}>{title}</p>
+          {summary && <p style={{ margin: "0 0 10px", fontSize: "17px", lineHeight: "21px", fontWeight: 500, color: NR.textPrimary, overflowWrap: "anywhere" }}>{summary}</p>}
+          <TefBullets items={bullets} />
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <button type="button" onClick={onConfirm} data-testid={`${testId}-confirm`} className={TEF_FOCUS} style={{ ...btn, background: NR.danger, color: NR.bg }}>{confirmLabel}</button>
+            <button type="button" onClick={onCancel} data-testid={`${testId}-cancel`} className={TEF_FOCUS} style={{ ...btn, background: "#1A1A1B", color: NR.textPrimary, fontWeight: 500 }}>Anuluj</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function TefDraftCard({ summary, onResume }) {
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <NrHeroCard labelledBy="tef-dec-h" testId="tef-draft-card" photoPos="50% 22%" bottomShade="linear-gradient(0deg, rgba(11,11,12,.92) 0%, rgba(11,11,12,.55) 38%, rgba(11,11,12,0) 62%)">
+        <div style={{ position: "relative", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "12px", padding: "14px 8px 14px 16px" }}>
+          <NrSectionHead icon={PauseCircle}>Niedokończony trening</NrSectionHead>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingRight: "8px" }}>
+            <h2 id="tef-dec-h" style={{ margin: 0, fontWeight: 500, fontSize: "29px", lineHeight: "34px", color: NR.textDisplay, overflowWrap: "anywhere" }}>{summary.name}</h2>
+            <p style={{ margin: 0, fontSize: "16px", lineHeight: "20px", color: NR.textPrimary }}>Trening nie został zakończony.</p>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "26px", paddingRight: "8px" }}>
+            <DashStat label="Ćwiczenia" value={`${summary.doneExercises} / ${summary.totalExercises}`} />
+            <DashStat label="Czas" value={summary.elapsedSec != null ? fmtClock(summary.elapsedSec) : "—"} />
+            <DashStat label="Objętość" value={`${fmtThousands(summary.volume)} kg`} />
+          </div>
+          <NrPillCta onClick={onResume} testId="tef-resume">Wznów trening</NrPillCta>
+        </div>
+      </NrHeroCard>
+    </div>
+  );
+}
+function TefAlert({ title, text, onRetry, retryLabel = "Spróbuj ponownie", testId }) {
+  return (
+    <div role="alert" data-testid={testId} style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "12px 12px 12px 14px", borderRadius: "14px", background: "rgba(242,85,90,.10)", border: "1px solid rgba(242,85,90,.45)" }}>
+      <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+        <AlertTriangle aria-hidden="true" size={20} strokeWidth={2} color={NR.dangerText} style={{ flexShrink: 0 }} />
+        <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "18px", lineHeight: "21px", fontWeight: 600, color: NR.textDisplay }}>{title}</span>
+          <span style={{ fontSize: "16px", lineHeight: "20px", color: "#D0D0D0" }}>{text}</span>
+        </span>
+      </div>
+      {onRetry && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" onClick={onRetry} data-testid={`${testId}-retry`} className={TEF_FOCUS} style={{ minHeight: "44px", padding: "0 14px", borderRadius: "10px", border: "1px solid #3A3A3C", background: "#151516", color: NR.textPrimary, fontFamily: NR.font, fontSize: "17px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+            <RefreshCw aria-hidden="true" size={17} strokeWidth={2} />
+            {retryLabel}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+// The ≈4 s result message (role=status) above the B2 bar.
+function TefStatus({ text }) {
+  return (
+    <div role="status" aria-live="polite" data-testid="tef-status" style={{ position: "fixed", left: "12px", right: "12px", bottom: "calc(var(--nr-nav-h, 71px) + 12px)", zIndex: 40, display: "flex", alignItems: "center", gap: "10px", minHeight: "52px", boxSizing: "border-box", padding: "10px 14px", borderRadius: "14px", background: "linear-gradient(180deg, #1A1A1B, #121213)", border: "1px solid rgba(66,201,138,.45)", boxShadow: "0 12px 28px -8px rgba(0,0,0,.9)", fontFamily: NR.font }}>
+      <Check aria-hidden="true" size={20} strokeWidth={2.5} color={NR.success} style={{ flexShrink: 0 }} />
+      <span style={{ fontSize: "17px", lineHeight: "21px", color: NR.textPrimary, overflowWrap: "anywhere" }}>{text}</span>
+    </div>
+  );
+}
+
+function StartWorkoutScreen({ plans, exercises, updatePlans, updateExercises, onNavigate, onSelectPlan, onNoPlan, isPro, onOpenUnlock, draftState = null, onResumeDraft, onDeleteDraft, onRereadDraft }) {
   const [mode, setMode] = useState(null); // null | 'plans' | 'ready'
+  const [confirm, setConfirm] = useState(null); // null | 'draft' | 'unreadable'
+  const [deleteError, setDeleteError] = useState(false);
+  const [notice, setNotice] = useState(null);
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+  const draftSummary = draftState && draftState.status === "ok" ? summarizeActiveWorkoutDraft(draftState.draft) : null;
+  const guard = draftState && draftState.status === "unreadable" ? "unreadable" : draftSummary ? "draft" : null;
+  const runDelete = (kind) => {
+    const name = draftSummary ? draftSummary.name : null;
+    const result = onDeleteDraft ? onDeleteDraft() : "failed";
+    setConfirm(null);
+    if (result === "deleted") {
+      setDeleteError(false);
+      setMode(null);
+      setNotice(kind === "draft" ? `Usunięto niedokończony trening „${name}”.` : "Usunięto nieczytelny zapis treningu.");
+    } else {
+      setDeleteError(true);
+    }
+  };
   const [expandedTemplate, setExpandedTemplate] = useState(null);
   // Multi-day ready plan: which level's days are being shown, so the person picks the day.
   const [dayPick, setDayPick] = useState(null); // null | { templateKey, levelId, baseName, days, newExercises }
@@ -1615,47 +1794,152 @@ function StartWorkoutScreen({ plans, exercises, updatePlans, updateExercises, on
     setDayPick({ templateKey: template.key, levelId: level.id, ...ready });
   };
 
+  const nav = <BottomNav screen="startWorkout" onNavigate={onNavigate} />;
+  const status = notice && <TefStatus text={notice} />;
+
+  if (guard === "draft") {
+    return (
+      <>
+        <NrScreen testId="tef-decision" screen="trening-decision">
+          <TefHeader title="Masz niedokończony trening" subtitle="Zanim zaczniesz nowy, zdecyduj, co zrobić z rozpoczętym treningiem." />
+          {deleteError && (
+            <TefAlert
+              testId="tef-delete-error"
+              title="Nie udało się usunąć treningu"
+              text="Usunięcie nie zostało potwierdzone (pamięć urządzenia lub synchronizacja). Niedokończony trening jest zachowany bez zmian."
+              onRetry={() => runDelete("draft")}
+            />
+          )}
+          <TefDraftCard summary={draftSummary} onResume={onResumeDraft} />
+          <section aria-label="Inne możliwości" style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+            <button type="button" onClick={() => onNavigate("dashboard")} data-testid="tef-back-dashboard" className={TEF_FOCUS} style={tefWideButton(false)}>
+              <Home aria-hidden="true" size={20} strokeWidth={2} />
+              <span>Wróć do Dashboardu</span>
+            </button>
+            <button type="button" onClick={() => setConfirm("draft")} data-testid="tef-delete" className={TEF_FOCUS} style={tefWideButton(true)}>
+              <Trash2 aria-hidden="true" size={20} strokeWidth={2} />
+              <span>Usuń i wybierz nowy trening</span>
+            </button>
+            <TefInfo>Nowy trening nie zastąpi rozpoczętego bez Twojego potwierdzenia.</TefInfo>
+          </section>
+        </NrScreen>
+        {nav}
+        {confirm === "draft" && (
+          <TefConfirmSheet
+            testId="tef-confirm"
+            title="Usunąć niedokończony trening?"
+            summary={`${draftSummary.name} · ${draftSummary.doneExercises} / ${draftSummary.totalExercises} ćwiczeń · ${draftSummary.elapsedSec != null ? fmtClock(draftSummary.elapsedSec) : "—"} · ${fmtThousands(draftSummary.volume)} kg`}
+            bullets={["Trening zostanie trwale usunięty.", "Nie pojawi się w historii.", "Nie będzie można go odzyskać."]}
+            confirmLabel="Usuń i wybierz nowy trening"
+            onConfirm={() => runDelete("draft")}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (guard === "unreadable") {
+    return (
+      <>
+        <NrScreen testId="tef-unreadable" screen="trening-corrupt">
+          <TefHeader title="Nie można odczytać treningu" subtitle="Znaleźliśmy zapis niedokończonego treningu, ale nie da się go teraz odczytać." />
+          {deleteError && (
+            <TefAlert
+              testId="tef-delete-error"
+              title="Nie udało się usunąć zapisu"
+              text="Usunięcie nie zostało potwierdzone (pamięć urządzenia lub synchronizacja). Zapis jest zachowany bez zmian."
+              onRetry={() => runDelete("unreadable")}
+            />
+          )}
+          <section role="alert" style={{ position: "relative", display: "flex", flexDirection: "column", gap: "12px", padding: "16px 14px", borderRadius: "16px", border: "1px solid rgba(255,181,71,.45)", background: "linear-gradient(180deg, #17130C, #0E0C09)" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+              <AlertTriangle aria-hidden="true" size={22} strokeWidth={2} color="#FFB547" style={{ flexShrink: 0 }} />
+              <span style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ fontSize: "20px", lineHeight: "23px", fontWeight: 600, color: NR.textDisplay }}>Zapis jest uszkodzony lub nieczytelny</span>
+                <span style={{ fontSize: "16px", lineHeight: "20px", color: "#D0D0D0" }}>Nic nie zostało usunięte ani nadpisane. Nowy trening nie zastąpi tego zapisu bez Twojej decyzji.</span>
+              </span>
+            </div>
+          </section>
+          <section aria-label="Możliwości" style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+            <div style={{ display: "flex" }}>
+              <NrPillCta onClick={onRereadDraft} testId="tef-reread">Spróbuj ponownie odczytać</NrPillCta>
+            </div>
+            <button type="button" onClick={() => onNavigate("dashboard")} data-testid="tef-back-dashboard" className={TEF_FOCUS} style={{ ...tefWideButton(false), justifyContent: "center" }}>
+              <Home aria-hidden="true" size={20} strokeWidth={2} />
+              <span>Wróć do Dashboardu</span>
+            </button>
+            <button type="button" onClick={() => setConfirm("unreadable")} data-testid="tef-delete" className={TEF_FOCUS} style={{ ...tefWideButton(true), justifyContent: "center" }}>
+              <Trash2 aria-hidden="true" size={20} strokeWidth={2} />
+              <span>Usuń zapis i wybierz nowy trening</span>
+            </button>
+            <TefInfo>Usunięcie wymaga osobnego potwierdzenia.</TefInfo>
+          </section>
+        </NrScreen>
+        {nav}
+        {confirm === "unreadable" && (
+          <TefConfirmSheet
+            testId="tef-confirm"
+            title="Usunąć nieczytelny zapis treningu?"
+            bullets={["Zapis zostanie trwale usunięty.", "Nie pojawi się w historii.", "Nie będzie można go odzyskać."]}
+            confirmLabel="Usuń zapis i wybierz nowy trening"
+            onConfirm={() => runDelete("unreadable")}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (!mode) {
+    return (
+      <>
+        <NrScreen testId="tef-select" screen="trening">
+          <TefHeader title="Rozpocznij trening" subtitle="Wybierz, jak chcesz dziś trenować." />
+          <TefChoice icon={ClipboardList} title="Własne plany treningowe" text="Wybierz jeden ze swoich zapisanych planów (np. A, B, C)." onClick={() => setMode("plans")} testId="tef-own" border />
+          <TefChoice icon={ListOrdered} title="Gotowe plany treningowe" text="FBW, Split, 5×5 i inne gotowe szablony — wkrótce." onClick={() => setMode("ready")} testId="tef-ready" />
+          <TefChoice icon={PlayCircle} title="Trening bez planu" text="Zacznij od razu i dodawaj ćwiczenia w trakcie." onClick={onNoPlan} testId="tef-no-plan" />
+        </NrScreen>
+        {nav}
+        {status}
+      </>
+    );
+  }
+
+  if (mode === "plans" && plans.length === 0) {
+    return (
+      <>
+        <NrScreen testId="tef-own-empty" screen="trening">
+          <TefHeader title="Własne plany" onBack={() => setMode(null)} />
+          <section aria-labelledby="tef-empty-h" style={{ position: "relative", marginTop: "8px", boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "10px", padding: "28px 18px 22px", borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow }}>
+            <span aria-hidden="true" style={{ width: "64px", height: "64px", borderRadius: "32px", background: "radial-gradient(circle at 50% 30%, rgba(255,133,27,.22), rgba(255,133,27,.04) 70%)", border: "1px solid rgba(255,133,27,.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <ClipboardList size={30} strokeWidth={1.75} color={NR.warm} />
+            </span>
+            <h2 id="tef-empty-h" style={{ margin: "6px 0 0", fontSize: "25px", lineHeight: "28px", fontWeight: 500, color: NR.textDisplay }}>Nie masz jeszcze własnych planów</h2>
+            <p style={{ margin: "0 0 6px", maxWidth: "280px", fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>Stwórz plan, np. A, B lub C — potem wybierzesz go tutaj przed treningiem.</p>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <NrPillCta onClick={() => onNavigate("plans")} testId="tef-create-plan">Stwórz własny plan treningowy</NrPillCta>
+            </div>
+            <div style={{ width: "100%", marginTop: "4px" }}>
+              <button type="button" onClick={() => setMode("ready")} data-testid="tef-see-ready" className={TEF_FOCUS} style={{ ...tefWideButton(false), justifyContent: "center", gap: "10px" }}>
+                <ListOrdered aria-hidden="true" size={20} strokeWidth={2} />
+                <span>Zobacz gotowe plany</span>
+              </button>
+            </div>
+          </section>
+        </NrScreen>
+        {nav}
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-app-depth font-body pb-28">
       <FontStyles />
       <TopBar title="ROZPOCZNIJ TRENING" onBack={mode ? () => setMode(null) : undefined} />
 
-      {!mode && (
-        <div className="px-5 pt-4 space-y-3">
-          <button
-            onClick={() => setMode("plans")}
-            className="w-full text-left bg-neutral-900 border border-neutral-800 rounded-2xl p-5 active:border-orange-500"
-          >
-            <ClipboardList className="text-orange-500 mb-2" size={24} />
-            <p className="font-display text-xl tracking-wide text-neutral-50">WŁASNE PLANY TRENINGOWE</p>
-            <p className="text-neutral-500 text-sm mt-1">Wybierz jeden ze swoich zapisanych planów (np. A, B, C).</p>
-          </button>
-
-          <button
-            onClick={() => setMode("ready")}
-            className="w-full text-left bg-neutral-900 border border-neutral-800 rounded-2xl p-5 active:border-orange-500"
-          >
-            <Activity className="text-sky-400 mb-2" size={24} />
-            <p className="font-display text-xl tracking-wide text-neutral-50">GOTOWE PLANY TRENINGOWE</p>
-            <p className="text-neutral-500 text-sm mt-1">FBW, Split, 5×5 i inne gotowe szablony dopasowane do poziomu.</p>
-          </button>
-
-          <button
-            onClick={onNoPlan}
-            className="w-full text-left bg-neutral-900 border border-neutral-800 rounded-2xl p-5 active:border-orange-500"
-          >
-            <PlayCircle className="text-lime-400 mb-2" size={24} />
-            <p className="font-display text-xl tracking-wide text-neutral-50">TRENING BEZ PLANU</p>
-            <p className="text-neutral-500 text-sm mt-1">Zacznij od razu i dodawaj ćwiczenia w trakcie.</p>
-          </button>
-        </div>
-      )}
-
       {mode === "plans" && (
         <div className="px-5 pt-4 space-y-2">
-          {plans.length === 0 && (
-            <EmptyState icon={ClipboardList} title="Nie masz jeszcze planów" subtitle="Stwórz plan w zakładce „Plany treningowe”, żeby móc go tu wybrać." />
-          )}
           {plans.map((p) => (
             <button
               key={p.id}

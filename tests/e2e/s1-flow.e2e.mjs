@@ -55,7 +55,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     assert.equal(await page.getByRole("button", { name: "Dodaj", exact: true }).count(), 0, "I3: the old add-exercise form is off");
     await page.getByTestId("nav-dashboard").click();
     await page.getByText("Rozpocznij trening", { exact: true }).click();
-    await page.getByText("GOTOWE PLANY TRENINGOWE").click();
+    await page.getByTestId("tef-ready").click(); // I4.3 TEF selection
     await page.waitForTimeout(400);
     await cov();
     assert.equal(await page.locator('[data-testid="template-coming-soon"]').count(), 8);
@@ -66,7 +66,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
 
   // I3: the exercise comes from the atlas picker (the old "add" form is off)
   test("B1 workout without a plan with an atlas exercise, set 1 = 60 kg × 8", async () => {
-    await page.getByText("TRENING BEZ PLANU", { exact: true }).click();
+    await page.getByTestId("tef-no-plan").click();
     await page.waitForTimeout(400);
     await page.getByText("Dodaj ćwiczenie", { exact: true }).first().click();
     await page.waitForTimeout(300);
@@ -116,7 +116,12 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     const t = await bodyText(page);
     assert.match(t, /NIEDOKOŃCZONY TRENING/); // I4.2 Interrupted master
     assert.match(t, /480 kg/);
-    await page.getByText("Wznów trening", { exact: true }).first().click(); // I4.2 Interrupted master
+    // I4.3: the Trening tab protects the unfinished workout (decision screen) and resumes it
+    await page.getByTestId("nav-startWorkout").click();
+    await page.waitForTimeout(400);
+    assert.match(await bodyText(page), /Masz niedokończony trening/);
+    await cov();
+    await page.getByTestId("tef-resume").click();
     await page.waitForTimeout(800);
     assert.equal(await page.locator('input[placeholder="kg"]').first().inputValue(), "60");
   });

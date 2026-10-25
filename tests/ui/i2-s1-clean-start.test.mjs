@@ -172,7 +172,7 @@ describe("I2: clean start on a device with old data", () => {
     await flush(10, 3);
     await click(buttonByText("Rozpocznij trening"));
     await flush(10, 3);
-    await click(buttonByText("GOTOWE PLANY TRENINGOWE"));
+    await click(byTestId("tef-ready"));
     await flush(10, 3);
     assert.equal($$('[data-testid="template-coming-soon"]').length, 8);
     const card = buttonByText("FBW (Full Body Workout)");

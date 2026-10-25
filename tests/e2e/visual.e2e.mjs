@@ -31,13 +31,13 @@ const STEPS = [
   ["04-dashboard-empty", async (p) => click(p, "ZACZYNAMY TRENING")],
   // I4.2: the Dashboard CTA reads „Rozpocznij trening” / „Wznów trening” (New User / Interrupted masters)
   ["05-start-workout", async (p, underTest) => click(p, underTest ? "Rozpocznij trening" : "ROZPOCZNIJ TRENING", { exact: true })],
-  ["06-ready-plans", async (p) => click(p, "GOTOWE PLANY TRENINGOWE")],
+  ["06-ready-plans", async (p, underTest) => (underTest ? p.getByTestId("tef-ready").click({ timeout: 20000 }) : click(p, "GOTOWE PLANY TRENINGOWE"))],
   // I2: the ready-made templates carry no exercises any more, so BOTH builds walk the same workout
   // without a plan, with an exercise created on the way (the picker itself is not compared: the
   // reference lists the old 68 exercises there)
-  ["07-no-plan-workout", async (p) => {
+  ["07-no-plan-workout", async (p, underTest) => {
     await p.locator("button:has(svg.lucide-arrow-left)").first().click({ timeout: 20000 });
-    await click(p, "TRENING BEZ PLANU", { exact: true });
+    await (underTest ? p.getByTestId("tef-no-plan").click({ timeout: 20000 }) : click(p, "TRENING BEZ PLANU", { exact: true }));
   }],
   // I3: the build under test picks the exercise from the atlas (the old "add" form is off); the reference
   // build creates its own exercise with the SAME name and kind, so the workout screens stay comparable
@@ -97,6 +97,7 @@ const INTENDED = {
 // other screen must still match pixel by pixel, and this list must be exactly the screens that differ.
 const CHANGED = {
   "04-dashboard-empty": "I4.2: Dashboard — New User master (no plan, no workout)",
+  "05-start-workout": "I4.3: Training Entry Flow master — selection",
   "06-ready-plans": "I2: every ready-made template is „Wkrótce” (badge, inactive, no chevron)",
   "10-dashboard-resume": "I4.2: Dashboard — Interrupted Workout master",
   "11-finish-confirm": "I4.1: the RIR select glyph under the dialog sits 1 px higher (22 px); the screen is replaced by the AW / WCS masters later in I4",

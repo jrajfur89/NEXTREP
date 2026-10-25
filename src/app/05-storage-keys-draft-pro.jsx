@@ -78,6 +78,38 @@ function clearOwnActiveWorkoutDraft(owner) {
   }
 }
 
+// I4.3 (Training Entry Flow master, dependencies 2 and 4): the stored unfinished workout as one of
+//   none — nothing stored;  ok — a readable draft (`draft`);  unreadable — something is stored but it
+//   cannot be read (broken JSON or an unknown shape). loadActiveWorkoutDraft() returns null for both
+//   "none" and "unreadable"; the entry flow must tell them apart so an unreadable record is never
+//   overwritten silently.
+function readActiveWorkoutDraftState() {
+  let raw;
+  try {
+    raw = localStorage.getItem(STORAGE_KEYS.activeWorkoutDraft);
+  } catch {
+    return { status: "unreadable", draft: null };
+  }
+  if (raw == null || raw === "") return { status: "none", draft: null };
+  try {
+    const d = JSON.parse(raw);
+    if (!d || d.version !== 1 || !Array.isArray(d.blocks)) return { status: "unreadable", draft: null };
+    return { status: "ok", draft: d };
+  } catch {
+    return { status: "unreadable", draft: null };
+  }
+}
+// Deletes the stored unfinished workout and CONFIRMS it (read back): "deleted" | "failed". Local only —
+// sync is off in S1, so there is no "unknown" cross-device outcome yet (master: never claim more).
+function deleteActiveWorkoutDraft() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.activeWorkoutDraft);
+    return localStorage.getItem(STORAGE_KEYS.activeWorkoutDraft) == null ? "deleted" : "failed";
+  } catch {
+    return "failed";
+  }
+}
+
 // Whether the person currently has PRO-tier access — either they've switched it on directly, or
 // they've got a temporary unlock (e.g. from the rewarded-ad placeholder below) that hasn't
 // expired yet.

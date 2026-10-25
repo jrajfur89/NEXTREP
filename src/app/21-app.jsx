@@ -49,7 +49,6 @@ function App() {
   const resumeCheckedRef = useRef(false);
   // SEC-HF-01 (P0-1): a start requested while an unfinished workout exists — { start, summary,
   // confirmDiscard } while the choice dialog is open. Nothing starts until the person decides.
-  const [startConflict, setStartConflict] = useState(null);
 
   // Makes the hardware/gesture back button navigate one level up inside the app (closing
   // whichever overlay is currently topmost, or returning to the dashboard from another tab)
@@ -1446,10 +1445,15 @@ function App() {
     setBackfillInfo(backfill);
     setActiveWorkoutPlan(plan);
   };
+  // I4.3 (Training Entry Flow master): an unfinished workout with exercises — or an unreadable record —
+  // sends every start path to the protection screen of the Trening tab (resume / back / delete with a
+  // confirmation, then the selection without an automatic start). Nothing is overwritten silently.
   const requestStartWorkout = (start) => {
-    const summary = summarizeActiveWorkoutDraft(loadActiveWorkoutDraft());
-    if (summary) {
-      setStartConflict({ start, summary, confirmDiscard: false });
+    const st = readActiveWorkoutDraftState();
+    const summary = st.status === "ok" ? summarizeActiveWorkoutDraft(st.draft) : null;
+    if (summary || st.status === "unreadable") {
+      setDraftTick((n) => n + 1);
+      goToScreen("startWorkout");
       return;
     }
     beginWorkout(start);
@@ -1538,6 +1542,15 @@ function App() {
           onNoPlan={() => requestStartWorkout({ plan: null })}
           isPro={isProEffective}
           onOpenUnlock={() => setProModalOpen(true)}
+          draftState={readActiveWorkoutDraftState()}
+          onResumeDraft={() => resumeStoredDraft()}
+          onDeleteDraft={() => {
+            const result = deleteActiveWorkoutDraft();
+            setResumeDraft(null);
+            setDraftTick((n) => n + 1);
+            return result;
+          }}
+          onRereadDraft={() => setDraftTick((n) => n + 1)}
         />
       );
     case "stats":
@@ -1710,60 +1723,6 @@ function App() {
                 : "Dane w trybie bez logowania pozostały bez zmian."}
             </p>
             <button onClick={() => setGuestMigrationNotice(null)} className="w-full py-2 rounded-xl bg-orange-500 text-neutral-950 font-bold text-sm">OK</button>
-          </div>
-        </div>
-      )}
-      {startConflict && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6" data-testid="start-conflict" onClick={() => setStartConflict(null)}>
-          <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-            {!startConflict.confirmDiscard ? (
-              <>
-                <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">MASZ NIEDOKOŃCZONY TRENING</p>
-                <p className="text-neutral-400 text-sm mb-1 break-words">{startConflict.summary.name}</p>
-                <p className="text-neutral-400 text-sm mb-5">Nowy trening zastąpiłby go. Wybierz, co zrobić z niedokończonym treningiem.</p>
-                <div className="flex flex-col gap-2">
-                  <button
-                    data-testid="start-conflict-resume"
-                    onClick={() => {
-                      setStartConflict(null);
-                      resumeStoredDraft();
-                    }}
-                    className="w-full py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold"
-                  >
-                    Kontynuuj trening
-                  </button>
-                  <button data-testid="start-conflict-discard" onClick={() => setStartConflict((c) => (c ? { ...c, confirmDiscard: true } : c))} className="w-full py-3 rounded-xl bg-neutral-800 text-red-400 font-semibold">
-                    Odrzuć i zacznij nowy
-                  </button>
-                  <button data-testid="start-conflict-cancel" onClick={() => setStartConflict(null)} className="w-full py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
-                    Anuluj
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">ODRZUCIĆ NIEDOKOŃCZONY TRENING?</p>
-                <p className="text-neutral-400 text-sm mb-5 break-words">„{startConflict.summary.name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.</p>
-                <div className="flex gap-3">
-                  <button data-testid="start-conflict-back" onClick={() => setStartConflict((c) => (c ? { ...c, confirmDiscard: false } : c))} className="flex-1 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
-                    Wróć
-                  </button>
-                  <button
-                    data-testid="start-conflict-discard-confirm"
-                    onClick={() => {
-                      const { start } = startConflict;
-                      setStartConflict(null);
-                      clearActiveWorkoutDraft();
-                      setDraftTick((n) => n + 1);
-                      beginWorkout(start);
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-red-500 text-neutral-950 font-bold"
-                  >
-                    Odrzuć i zacznij
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       )}

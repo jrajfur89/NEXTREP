@@ -31,6 +31,8 @@ const ADDED_BY_STAGE = {
     "NrSheetButton", "fmtThousands", "nrHeadText",
     "DASH_HOW_STEPS_NO_PLAN", "DASH_HOW_STEPS_WITH_PLAN", "DashCardLink", "DashCardTop", "DashExploreTile", "DashGreeting",
     "DashLastWorkoutCard", "DashProgressCard", "DashStat", "dashLastSession",
+    "TEF_FOCUS", "TefAlert", "TefBullets", "TefChoice", "TefConfirmSheet", "TefDraftCard", "TefHeader", "TefInfo", "TefStatus",
+    "deleteActiveWorkoutDraft", "readActiveWorkoutDraftState", "tefCardLink", "tefWideButton",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).

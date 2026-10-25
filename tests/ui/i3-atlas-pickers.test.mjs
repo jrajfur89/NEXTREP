@@ -108,7 +108,7 @@ describe("I3: workouts on atlas exercises (whole app, S1)", () => {
     await boot({ plans: [PLAN] });
     await click(btn(/^Trening$/));
     await flush(10, 3);
-    await click(btn(/WŁASNE PLANY TRENINGOWE/));
+    await click(byTestId("tef-own"));
     await flush(5, 2);
     await click(btn(/Klatka A/));
     await flush(10, 4);
@@ -142,7 +142,7 @@ describe("I3: workouts on atlas exercises (whole app, S1)", () => {
     await boot();
     await click(btn(/^Trening$/));
     await flush(10, 3);
-    await click(btn(/TRENING BEZ PLANU/));
+    await click(byTestId("tef-no-plan"));
     await flush(10, 3);
     await click($$("button").find((b) => b.textContent.trim() === "Dodaj ćwiczenie"));
     await flush(5, 3);
