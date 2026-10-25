@@ -31,7 +31,7 @@ try {
   run("node", ["tools/build-web.mjs"], refDir);
 
   // 3. tests
-  const files = process.argv.slice(2).length ? process.argv.slice(2) : ["e2e/s1-flow.e2e.mjs", "e2e/visual.e2e.mjs", "e2e/i5-atlas-browse.e2e.mjs"];
+  const files = process.argv.slice(2).length ? process.argv.slice(2) : ["e2e/s1-flow.e2e.mjs", "e2e/visual.e2e.mjs", "e2e/i5-atlas-browse.e2e.mjs", "e2e/i5-a11y.e2e.mjs"];
   mkdirSync(join(here, ".out"), { recursive: true });
   execFileSync("node", ["--test", "--test-concurrency=1", "--test-reporter=spec", ...files], {
     cwd: resolve(here, ".."),
