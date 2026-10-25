@@ -96,12 +96,16 @@ const INTENDED = {
 // other screen must still match pixel by pixel, and this list must be exactly the screens that differ.
 const CHANGED = {
   "06-ready-plans": "I2: every ready-made template is „Wkrótce” (badge, inactive, no chevron)",
+  "11-finish-confirm": "I4.1: the RIR select glyph under the dialog sits 1 px higher (22 px); the screen is replaced by the AW / WCS masters later in I4",
   "12-history-detail": "I3: an atlas exercise has no link to the old exercise screen (no chevron by its name)",
   "15-backup": "I3 walk: the reference build saves its own exercise first — one more automatic local copy listed",
   "16-account": "I2: accounts and sync temporarily off — the calm „not configured” state",
   "17-exercises": "I2: no old built-in list (the groups are empty); I3: no „Dodaj” (the old form is off)",
 };
 
+const NAV_B2 = 'nav[aria-label="Nawigacja główna"]';
+const NAV_ANY = `${NAV_B2}, div.fixed.bottom-0.left-0.right-0.z-30.backdrop-blur`; // B2 / the bar before I4
+let navShot = null;
 async function walk(dist, { underTest = false } = {}) {
   const { server, url } = await serve(dist);
   const app = await openApp({ fixedTime: FIXED_TIME });
@@ -117,6 +121,11 @@ async function walk(dist, { underTest = false } = {}) {
       }
       await app.page.waitForTimeout(700);
       await app.page.evaluate(() => document.fonts.ready);
+      // I4: B2 replaces the bottom bar on every screen. Its own look is checked on the saved
+      // nav-b2 screenshot (build under test) and by tests/ui/i4-b2-nav; for the comparison of the
+      // screens the bar of BOTH builds is taken out of the layout.
+      if (underTest && !navShot && (await app.page.locator(NAV_B2).count())) navShot = await app.page.locator(NAV_B2).screenshot({ animations: "disabled" }).catch(() => null);
+      await app.page.addStyleTag({ content: `${NAV_ANY}{display:none !important}` });
       const intended = INTENDED[name];
       if (intended && underTest) {
         const count = await app.page.locator(intended.selector).count();
@@ -127,6 +136,7 @@ async function walk(dist, { underTest = false } = {}) {
       }
       shots.set(name, await app.page.screenshot({ animations: "disabled", caret: "hide" }));
       if (intended && underTest) await app.page.evaluate((sel) => { for (const st of document.querySelectorAll("style")) if (st.textContent.startsWith(sel)) st.remove(); }, intended.selector);
+      await app.page.evaluate((sel) => { for (const st of document.querySelectorAll("style")) if (st.textContent.startsWith(sel)) st.remove(); }, NAV_ANY);
     }
   } finally {
     await app.browser.close();
@@ -169,6 +179,8 @@ describe("visual: build under test vs reference build", { concurrency: false }, 
       }
     }
     for (const [name, buf] of cur.withChange) writeFileSync(join(OUT, `${name}.with-change.png`), buf);
+    if (navShot) writeFileSync(join(OUT, "nav-b2.png"), navShot);
+    assert.ok(navShot, "the B2 bar was captured on the build under test");
     assert.deepEqual([...cur.withChange.keys()].sort(), Object.keys(INTENDED).sort(), "every intended change was found");
     assert.deepEqual(changedFound, Object.keys(CHANGED), "every screen listed as changed really differs");
     t.diagnostic(`${ref.shots.size - changedFound.length} screens compared; intended changes (element hidden for the comparison): ${Object.keys(INTENDED).join(", ")}; changed by a stage (reviewed, not compared): ${changedFound.join(", ")}`);

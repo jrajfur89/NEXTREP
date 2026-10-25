@@ -129,40 +129,125 @@ function PlanThumbnail({ tier = 0, variant = "ready", size = 48, planKey = null 
   );
 }
 
+// I4 — bottom navigation B2 (master NAV-B2 v1, approved 14.10.2026; canvas v81 boards NavB2-*, NavIcon-*).
+// 7 production targets, same order and routing. Active tab: #FF851B, line 2.25 vs 1.75, label 500 vs 400,
+// 28 × 2 indicator, glow limited to the tab, aria-current. Safe area: max(inset, 8 px). When the labels
+// no longer fit (enlarged text / page zoom) the bar shows the 7 icons only (row 56 px, NavIcon boards),
+// names in aria-label, visible keyboard focus. The bar height is published as --nr-nav-h.
+const NAV_B2_ITEMS = [
+  { key: "dashboard", label: "Start", icon: Home },
+  { key: "exercises", label: "Ćwiczenia", icon: Dumbbell },
+  { key: "plans", label: "Plany", icon: ClipboardList },
+  { key: "startWorkout", label: "Trening", icon: PlayCircle },
+  { key: "stats", label: "Statystyki", icon: TrendingUp },
+  { key: "history", label: "Historia", icon: HistoryIcon },
+  { key: "more", label: "Więcej", icon: MoreHorizontal },
+];
 function BottomNav({ screen, onNavigate }) {
-  const items = [
-    { key: "dashboard", label: "Start", icon: Home },
-    { key: "exercises", label: "Ćwiczenia", icon: Dumbbell },
-    { key: "plans", label: "Plany", icon: ClipboardList },
-    { key: "startWorkout", label: "Trening", icon: PlayCircle },
-    { key: "stats", label: "Statystyki", icon: TrendingUp },
-    { key: "history", label: "Historia", icon: HistoryIcon },
-  ];
+  const navRef = useRef(null);
+  const [iconOnly, setIconOnly] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const nav = navRef.current;
+      if (!nav) return;
+      // every label keeps its natural width (absolute + hidden in the icon mode), so the same
+      // measurement decides both ways: a label wider than its tab (minus 2 × 2 px) → icons only
+      const labels = [...nav.querySelectorAll("[data-nav-label]")];
+      const tooWide = labels.some((l) => {
+        const tab = l.parentElement;
+        const w = l.getBoundingClientRect().width;
+        return tab && w > 0 && tab.clientWidth > 0 && w > tab.clientWidth - 4;
+      });
+      setIconOnly(tooWide);
+      try {
+        document.documentElement.style.setProperty("--nr-nav-h", `${Math.round(nav.getBoundingClientRect().height)}px`);
+      } catch {}
+    };
+    check();
+    let ro = null;
+    try {
+      if (typeof ResizeObserver !== "undefined") {
+        ro = new ResizeObserver(check);
+        if (navRef.current) ro.observe(navRef.current);
+      }
+    } catch {}
+    window.addEventListener("resize", check);
+    // the label widths change when Barlow Condensed has loaded — measure again then
+    const fonts = typeof document !== "undefined" ? document.fonts : null;
+    try {
+      if (fonts && fonts.ready) fonts.ready.then(check).catch(() => {});
+      if (fonts && fonts.addEventListener) fonts.addEventListener("loadingdone", check);
+    } catch {}
+    return () => {
+      window.removeEventListener("resize", check);
+      try {
+        if (fonts && fonts.removeEventListener) fonts.removeEventListener("loadingdone", check);
+      } catch {}
+      if (ro) ro.disconnect();
+    };
+  }, []);
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 z-30" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <div className="grid grid-cols-7">
-        {items.map((it) => {
+    <nav
+      ref={navRef}
+      aria-label="Nawigacja główna"
+      data-variant="B2"
+      data-layout={iconOnly ? "icons" : "1row"}
+      className="fixed bottom-0 left-0 right-0 z-30"
+      style={{
+        paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)",
+        paddingLeft: "env(safe-area-inset-left, 0px)",
+        paddingRight: "env(safe-area-inset-right, 0px)",
+        background: "linear-gradient(180deg, #121213 0%, #0B0B0C 55%, #090909 100%)",
+        borderTop: "1px solid rgba(255,133,27,.45)",
+        boxShadow: "0 -10px 22px -14px rgba(255,133,27,.3)",
+        fontFamily: "'Barlow Condensed', Inter, sans-serif",
+      }}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${NAV_B2_ITEMS.length}, minmax(0, 1fr))`, gridAutoRows: iconOnly ? "56px" : "62px" }}>
+        {NAV_B2_ITEMS.map((it) => {
           const Icon = it.icon;
           const active = screen === it.key;
           return (
             <button
               key={it.key}
+              type="button"
               onClick={() => onNavigate(it.key)}
-              className="flex flex-col items-center justify-center gap-0.5 py-2.5 px-0.5 min-w-0 active:bg-neutral-900"
+              aria-current={active ? "page" : undefined}
+              aria-label={iconOnly ? it.label : undefined}
+              data-testid={`nav-${it.key}`}
+              className="relative flex flex-col items-center justify-center min-w-0 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#FF851B]"
+              style={{ gap: "4px", padding: "0 2px", color: active ? "#FF851B" : "#B8B8B8", background: "transparent" }}
             >
-              <Icon size={17} strokeWidth={active ? 2.5 : 1.8} className={`flex-shrink-0 ${active ? "text-orange-500" : "text-neutral-500"}`} />
-              <span className={`text-[8px] leading-tight text-center break-words max-w-full ${active ? "text-orange-500 font-semibold" : "text-neutral-500"}`}>
+              {active && (
+                <span aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+                  <span style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 46% 58% at 50% 0%, rgba(255,133,27,.11) 0%, rgba(255,133,27,.04) 55%, rgba(255,133,27,0) 100%)" }} />
+                  <span style={{ position: "absolute", top: 0, left: "50%", width: "28px", height: "2px", marginLeft: "-14px", borderRadius: "0 0 2px 2px", background: "linear-gradient(90deg, #FF9A3D, #FF6A00)", boxShadow: "0 0 5px rgba(255,133,27,.4)" }} />
+                </span>
+              )}
+              <Icon
+                aria-hidden="true"
+                size={24}
+                strokeWidth={active ? 2.25 : 1.75}
+                style={{ position: "relative", flex: "none", filter: active ? "drop-shadow(0 0 2.5px rgba(255,133,27,.28))" : "none" }}
+              />
+              <span
+                data-nav-label=""
+                style={{
+                  position: iconOnly ? "absolute" : "relative",
+                  visibility: iconOnly ? "hidden" : "visible",
+                  fontSize: "13px",
+                  lineHeight: "15px",
+                  fontWeight: active ? 500 : 400,
+                  whiteSpace: "nowrap",
+                }}
+              >
                 {it.label}
               </span>
             </button>
           );
         })}
-        <button onClick={() => onNavigate("more")} className="flex flex-col items-center justify-center gap-0.5 py-2.5 px-0.5 min-w-0 active:bg-neutral-900">
-          <MoreHorizontal size={17} strokeWidth={screen === "more" ? 2.5 : 1.8} className={`flex-shrink-0 ${screen === "more" ? "text-orange-500" : "text-neutral-500"}`} />
-          <span className={`text-[8px] leading-tight text-center break-words max-w-full ${screen === "more" ? "text-orange-500 font-semibold" : "text-neutral-500"}`}>Więcej</span>
-        </button>
       </div>
-    </div>
+    </nav>
   );
 }
 

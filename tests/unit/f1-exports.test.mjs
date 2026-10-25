@@ -24,6 +24,9 @@ const ADDED_BY_STAGE = {
     "atlasLoadHint", "atlasLoadModelChoice", "atlasLoadSnapshot", "atlasPlanItemFields", "atlasRecord", "atlasRefFields",
     "atlasWorkoutKind", "exerciseKindFor", "exerciseNameFor", "isAtlasExerciseId", "pickedExerciseFields",
   ],
+  // I4 (25.10.2026): approved UI masters (canvas v81) — B2 navigation, Dashboard, Training Entry Flow,
+  // Active Workout, Completion & Summary, Atlas Compact Tabs v3
+  I4: ["NAV_B2_ITEMS"],
 };
 // Baseline names an approved stage removed on purpose (and only these).
 const REMOVED_BY_STAGE = {

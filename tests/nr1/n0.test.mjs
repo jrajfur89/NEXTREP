@@ -323,6 +323,11 @@ const I2_APP_FILES = [
 // add-exercise form and incompatible JSON imports off, old-grouping muscle stats off. Beyond the files
 // already listed above (00, 01, 17, 17b, 18, 19) exactly this one; checked by tests/ui/i3-atlas-pickers.
 const I3_APP_FILES = ["src/app/13-account-ui.jsx"];
+// I4 (25.10.2026, approved by the product owner): the approved UI masters of canvas v81 — B2 navigation,
+// Dashboard (Returning / New User / Interrupted), Training Entry Flow, Active Workout, Completion &
+// Summary, Atlas Compact Tabs v3. Beyond the files already listed above exactly these; checked by
+// tests/ui/i4-*.test.mjs and the visual walk.
+const I4_APP_FILES = ["src/app/11-ui-shared.jsx"];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
@@ -345,13 +350,13 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     assert.equal(diff.trim(), "", diff);
   });
 
-  test(`AT2 / SEC-HF-01 / I2 / I3 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files, the three SEC-HF-01 files and the I2 / I3 files`, () => {
+  test(`AT2 / SEC-HF-01 / I2 / I3 / I4 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files, the three SEC-HF-01 files and the I2 / I3 / I4 files`, () => {
     const changed = execFileSync("git", ["diff", "--name-only", AT1_REF, "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
-    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f) && !I2_APP_FILES.includes(f) && !I3_APP_FILES.includes(f));
-    assert.deepEqual(outside, [], "src/app files changed outside AT2, SEC-HF-01, I2 and I3");
+    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f) && !I2_APP_FILES.includes(f) && !I3_APP_FILES.includes(f) && !I4_APP_FILES.includes(f));
+    assert.deepEqual(outside, [], "src/app files changed outside AT2, SEC-HF-01, I2, I3 and I4");
     // ORDER.json: the old order plus exactly one new file after 17-exercises-plans.jsx
     const before = JSON.parse(execFileSync("git", ["show", `${AT1_REF}:src/app/ORDER.json`], { cwd: ROOT, encoding: "utf8" }));
     const now = JSON.parse(readFileSync(resolve(ROOT, "src/app/ORDER.json"), "utf8"));
