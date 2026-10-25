@@ -41,7 +41,7 @@ Approximate visual balance:
 - secondary: #1B1B1D
 - tertiary: #222224 (also the chip surface: fill of atlas row chips and fill + 1 px border of the default filter chip — decision D16)
 - control: #121213 (surface-control: fill of inputs, selects, the atlas search field and the „Filtry” button; the field boundary comes from border control) — approved 2026-10-25
-- control-hover: #1A1A1B (surface-control-hover: secondary-button fills, icon wells and rows on #151515 sheets, the atlas message button and error icon well) — approved 2026-10-25; see the role note below
+- raised: #1A1A1B (surface-raised: secondary-button fills, icon wells and rows on #151515 sheets, the atlas message button and error icon well; a static fill, never a hover or pressed state) — approved 2026-10-25, renamed from surface-control-hover by decision DS-D17 (2026-10-25)
 
 ### Border
 - default: #2A2A2A
@@ -85,8 +85,6 @@ The values below appear in approved masters but their name, role or accessibilit
 | card-deep | #0B0B0C | card and list fills; stop of the bottom-navigation gradient | name and role |
 | surface-tile | #141415 | metric tiles and tile buttons | name and role |
 | border-card | #232325 | table regions, sections, metric tiles | name and role |
-
-Role note (DS-SYNC ATLAS-UX-01, 2026-10-25): every observed use of surface-control-hover #1A1A1B is a static fill (secondary buttons, icon wells, list rows, the atlas message button); none is the hover or pressed state of a surface-control field. The value is approved as is; the name/role mismatch is reported as an open point.
 
 Chips: fill surface-tertiary #222224; the default filter chip (DS-C18) has a 1 px border in the same #222224 (decision D16, board E04, 2026-10-25) and needs no 3:1 boundary (it is identified by its label). border-control is for fields and the „Filtry” button, not for chips.
 
@@ -378,4 +376,4 @@ Status: see COMPONENTS.md, DS-C17–DS-C25. Screens E01–E07: project document 
 
 - Components P1–P9 (DS-C17–DS-C25): search field, filter chip, active filter chip, category tile 3:2, exercise row, sub-region tile, results bar, message, „Filtry” button. Specification: project document claude/atlas-ux-01-design-package-v2.md §4.
 - Category tile with a future photograph (DS-C20, photo variant approved 2026-10-25; release 1.0 ships without photos): photo layer always present (empty in 1.0, no NR-01 photos), object-fit cover with a focus point, alt="", lazy; scrim only with a photo (rgba(9,9,9,0) 35% → .88 at the bottom); text ≥ 4.5:1 on the lightest pixel under it; a missing or failed image falls back to the variant without a photo, same size.
-- Colours: #222224 = surface-tertiary; #121213 = surface-control; #1A1A1B = surface-control-hover; #D9D9D9 = text-chip; text links = brand-bright #FF9A3D (DS-SYNC ATLAS-UX-01, approved 2026-10-25).
+- Colours: #222224 = surface-tertiary; #121213 = surface-control; #1A1A1B = surface-raised (DS-D17); #D9D9D9 = text-chip; text links = brand-bright #FF9A3D (DS-SYNC ATLAS-UX-01, approved 2026-10-25).
