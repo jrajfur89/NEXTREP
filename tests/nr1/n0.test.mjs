@@ -329,7 +329,8 @@ const I3_APP_FILES = ["src/app/13-account-ui.jsx"];
 // tests/ui/i4-*.test.mjs and the visual walk.
 const I4_APP_FILES = ["src/app/11-ui-shared.jsx", "src/app/16-dashboard.jsx"];
 // I5 (25.10.2026, ATLAS-UX-01 approved by the product owner): the module „Ćwiczenia” — its view model
-// (I5.1) in one new file after the atlas catalog; checked by tests/unit/i5-atlas-browse-model.test.mjs.
+// (I5.1), components (I5.2) and screens E01–E03 (I5.3) in one new file after the atlas catalog; checked by
+// tests/unit/i5-atlas-browse-model.test.mjs and tests/ui/i5-atlas-*.test.mjs.
 const I5_APP_FILES = ["src/app/17c-atlas-browse.jsx"];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
@@ -381,7 +382,8 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       'import { ATLAS_NAVIGATION, buildAtlasIndex, ATLAS_FACET_DIMENSIONS, buildHierarchyIndex, validateHierarchy } from "@nextrep-engine";\n';
     // I5.2: icons of the components P1–P9, from lucide-react only
     const i5Icons = "// I5.2 (ATLAS-UX-01): icons of the components P1–P9 not imported above\n" + 'import { SlidersHorizontal, XCircle, RefreshCcw } from "lucide-react";\n';
-    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons);
+    const i53Icons = "// I5.3 (ATLAS-UX-01): the list icon of „Wszystkie ćwiczenia” (E01 / E02)\n" + 'import { List as ListIcon } from "lucide-react";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons + i53Icons);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
     assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx", "src/app/17c-atlas-browse.jsx"]);

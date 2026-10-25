@@ -166,7 +166,7 @@ describe("I3: workouts on atlas exercises (whole app, S1)", () => {
     await click(btn(/^Ćwiczenia$/));
     await flush(10, 3);
     assert.ok(!$$("button").some((b) => b.textContent.trim() === "Dodaj"), "no add button");
-    assert.ok(byTestId("atlas-entry"));
+    assert.ok(byTestId("atlas-home")); // I5.3: E01 of the atlas module
     await click(btn(/^Statystyki$/));
     await flush(10, 3);
     assert.ok(byTestId("muscle-groups-off"));

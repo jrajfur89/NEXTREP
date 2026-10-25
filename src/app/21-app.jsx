@@ -77,6 +77,7 @@ function App() {
   // so the bottom panel isn't reachable there; its Back protection is untouched.)
   const goToScreen = (target) => {
     exvClearRestore(); // I4.6 D7: the card's state is restored only on Back from the workout it opened
+    atlasBrowseReset(); // I5.3 D06: every entry from B2 (also a tap on the active tab, Q1) starts on E01
     setExerciseDetail(null);
     setHistoryDetail(null);
     setWorkoutSummary(null);

@@ -103,3 +103,5 @@ import { Flag, ListOrdered, PauseCircle, Info, Calendar, CalendarCheck, ArrowRig
 import { ATLAS_NAVIGATION, buildAtlasIndex, ATLAS_FACET_DIMENSIONS, buildHierarchyIndex, validateHierarchy } from "@nextrep-engine";
 // I5.2 (ATLAS-UX-01): icons of the components P1–P9 not imported above
 import { SlidersHorizontal, XCircle, RefreshCcw } from "lucide-react";
+// I5.3 (ATLAS-UX-01): the list icon of „Wszystkie ćwiczenia” (E01 / E02)
+import { List as ListIcon } from "lucide-react";

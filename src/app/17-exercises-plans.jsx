@@ -18,23 +18,42 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail,
   const [sheet, setSheet] = useState(null); // 'category' | 'equipment' | null
   const [editing, setEditing] = useState(null); // exercise object or "new"
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [atlasOpen, setAtlasOpen] = useState(() => exvMemory.restore); // AT2: read-only „Atlas ćwiczeń” (I4.6 D7: reopened after a workout from the card)
+  const [atlasOpen, setAtlasOpen] = useState(() => !NR_ATLAS_ONLY_EXERCISES && exvMemory.restore); // AT2: read-only „Atlas ćwiczeń” (I4.6 D7: reopened after a workout from the card)
+  // I5.3 (S1): the module opens on E01 (AtlasBrowseScreen); the person's own exercises — the old list
+  // below, unchanged — are one level deeper („Moje ćwiczenia”, only when there are any).
+  const [ownOpen, setOwnOpen] = useState(() => NR_ATLAS_ONLY_EXERCISES && atlasBrowseMemory.level === "own");
+  const browseScreen = NR_ATLAS_ONLY_EXERCISES && !ownOpen;
 
   const searching = query.trim().length > 0;
   const browsing = !searching && categoryFilter === "Wszystkie";
 
   // Keeps the hardware/gesture back button stepping from a single category (e.g. Klatka) back to
   // the category tiles, instead of skipping past this whole screen — see exercisesOverlayRef.
+  // I5.3: in S1 the list itself is one step from E01, so Back from its root closes it.
   useEffect(() => {
+    if (browseScreen) return; // E01–E03 set the overlay themselves
     if (categoryFilter !== "Wszystkie") {
       exercisesOverlayRef.current = () => setCategoryFilter("Wszystkie");
     } else {
-      exercisesOverlayRef.current = null;
+      exercisesOverlayRef.current = ownOpen ? () => closeOwn() : null;
     }
     return () => {
       exercisesOverlayRef.current = null;
     };
-  }, [categoryFilter]);
+  }, [categoryFilter, browseScreen, ownOpen]);
+  const openOwn = () => {
+    try {
+      window.history.pushState({ trainapp: true }, "", "");
+    } catch {}
+    atlasBrowseMemory.level = "own"; // D06: back from an own exercise's details → this list again
+    setOwnOpen(true);
+  };
+  const closeOwn = () => {
+    atlasBrowseReset();
+    setQuery("");
+    setCategoryFilter("Wszystkie");
+    setOwnOpen(false);
+  };
 
   const selectCategory = (cat) => {
     if (cat !== "Wszystkie" && categoryFilter === "Wszystkie") {
@@ -72,13 +91,15 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail,
     setAtlasOpen(true);
   };
   const closeAtlas = useCallback(() => setAtlasOpen(false), []);
+  if (browseScreen) return <AtlasBrowseScreen onNavigate={onNavigate} history={history} isPro={isPro} onOpenUnlock={onOpenUnlock} onOpenSession={onOpenSession} ownCount={exercises.length} onOpenOwn={openOwn} />;
   if (atlasOpen) return <AtlasCatalogView onClose={closeAtlas} onNavigate={onNavigate} history={history} isPro={isPro} onOpenUnlock={onOpenUnlock} onOpenSession={onOpenSession} />;
 
   return (
     <div className="min-h-screen bg-app-depth font-body pb-28">
       <FontStyles />
       <TopBar
-        title="ĆWICZENIA"
+        title={ownOpen ? "MOJE ĆWICZENIA" : "ĆWICZENIA"}
+        onBack={ownOpen ? () => window.history.back() : undefined}
         right={
           NR_ATLAS_ONLY_EXERCISES ? null : ( // I3: the old "add exercise" form is off in S1
           <button
@@ -107,7 +128,7 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail,
           </div>
         )}
 
-        {browsing && <AtlasCatalogEntry onOpen={openAtlas} />}
+        {browsing && !NR_ATLAS_ONLY_EXERCISES && <AtlasCatalogEntry onOpen={openAtlas} />}
 
         {browsing ? (
           <div className="mt-4">

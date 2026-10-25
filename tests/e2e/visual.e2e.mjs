@@ -87,7 +87,8 @@ const STEPS = [
 // must still equal the reference build pixel by pixel; the element itself must exist in the build
 // under test, and the screen WITH it is saved to e2e/.out/<name>.with-change.png for review.
 const INTENDED = {
-  "17-exercises": { stage: "AT2", selector: '[data-testid="atlas-entry"]' }, // tile „Atlas ćwiczeń”
+  // AT2 added the tile „Atlas ćwiczeń”; I5.3 replaced the whole screen by E01 of ATLAS-UX-01 (see CHANGED)
+  "17-exercises": { stage: "I5.3", selector: '[data-testid="atlas-home"]' },
   // I3: the load-model hint under an atlas exercise (also behind the two dialogs over the workout)
 };
 // Screens whose CONTENT an approved stage changed on purpose (not only an added element). They are not
@@ -104,7 +105,7 @@ const CHANGED = {
   "12-history-detail": "I4.5: after finishing the WCS summary is shown once (before: the history detail of the session)",
   "15-backup": "I3 walk: the reference build saves its own exercise first — one more automatic local copy listed",
   "16-account": "I2: accounts and sync temporarily off — the calm „not configured” state",
-  "17-exercises": "I2: no old built-in list (the groups are empty); I3: no „Dodaj” (the old form is off)",
+  "17-exercises": "I2: no old built-in list (the groups are empty); I3: no „Dodaj” (the old form is off); I5.3: E01 „Ćwiczenia” of ATLAS-UX-01",
   "20-dashboard-after": "I4.2: Dashboard — Returning User master",
 };
 

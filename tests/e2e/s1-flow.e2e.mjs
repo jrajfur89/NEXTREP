@@ -51,7 +51,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await cov();
     const ex = await bodyText(page);
     for (const name of ["Przysiad ze sztangą", "Wyciskanie sztangi leżąc", "Plank z obciążeniem"]) assert.doesNotMatch(ex, new RegExp(name));
-    assert.match(ex, /Atlas ćwiczeń/);
+    assert.match(ex, /Atlas NEXTREP · 55 ćwiczeń/); // I5.3: E01 of the atlas module
     assert.equal(await page.getByRole("button", { name: "Dodaj", exact: true }).count(), 0, "I3: the old add-exercise form is off");
     await page.getByTestId("nav-dashboard").click();
     await page.getByText("Rozpocznij trening", { exact: true }).click();

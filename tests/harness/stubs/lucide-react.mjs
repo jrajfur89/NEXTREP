@@ -64,6 +64,7 @@ export const X = icon("X");
 export const Zap = icon("Zap");
 export const Flag = icon("Flag");
 export const ListOrdered = icon("ListOrdered");
+export const List = icon("List");
 export const PauseCircle = icon("PauseCircle");
 export const Info = icon("Info");
 export const Calendar = icon("Calendar");

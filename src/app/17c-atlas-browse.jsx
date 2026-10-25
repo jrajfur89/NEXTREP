@@ -552,3 +552,271 @@ function AtlasFiltersButton({ count = 0, onOpen, buttonRef, testId = "atlas-filt
     </button>
   );
 }
+
+/* ---------------------------------------------------------------------- */
+/* I5.3 — screens E01 „Ćwiczenia”, E02 (partia → podpartie), E03 (lista)    */
+/* and the existing card Compact Tabs v3 (E06) opened by exerciseId.        */
+/* Back stack E06 → E03 → (E02) → E01: every step in pushes a history entry */
+/* and exercisesOverlayRef steps back ONE level (popstate in 21-app as is). */
+/*                                                                           */
+/* Transitional (until I5.4): the search field P1, „Filtry” P9 and the     */
+/* sort of P7 are NOT shown — E04 / E05 are not built yet and no control    */
+/* that does nothing is offered. The state keeps their fields (D06).        */
+/* ---------------------------------------------------------------------- */
+
+// D06 — state of the module, process memory only (no storage). Kept on Back from the card (and
+// after a workout opened from the card, I4.6 D7); reset to E01 on every entry from B2 (goToScreen),
+// also on a tap of the active „Ćwiczenia” tab (Q1).
+const ATLAS_BROWSE_HOME = Object.freeze({ level: "home", categoryCode: null, subregionCode: null, query: "", sort: "az", scrollY: 0, openExerciseId: null });
+const atlasBrowseMemory = { ...ATLAS_BROWSE_HOME, selection: {} };
+function atlasBrowseReset() {
+  Object.assign(atlasBrowseMemory, ATLAS_BROWSE_HOME, { selection: {} });
+}
+const atlasBrowsePush = () => {
+  try {
+    window.history.pushState({ trainapp: true }, "", "");
+  } catch {}
+};
+const atlasScrollTo = (y) => {
+  try {
+    window.scrollTo(0, y || 0);
+  } catch {}
+};
+// a category goes to E02 only when it has more than one sub-region (Klatka → straight to E03)
+const atlasHasSubregionScreen = (cat) => Boolean(cat && cat.subregions && cat.subregions.length > 1);
+
+const ATLAS_SCREEN_STYLE = { minHeight: "100vh", boxSizing: "border-box", position: "relative", overflowX: "clip", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, display: "flex", flexDirection: "column" };
+const ATLAS_PAD_BOTTOM = "calc(var(--nr-nav-h, 71px) + 16px)"; // the last element ends 16 px above B2
+const ATLAS_H1 = { margin: 0, fontFamily: NR.font, fontSize: "32px", lineHeight: "35px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" };
+const ATLAS_NOTE = { fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: NR.textMuted };
+
+// Bar of E02 / E03: back (44 × 44) + the label of the level it returns to.
+function AtlasBackBar({ label, backLabel, onBack, testId = "atlas-back" }) {
+  return (
+    <div style={{ margin: "0 -12px", padding: "max(env(safe-area-inset-top, 0px), 12px) 6px 0 2px" }}>
+      <header style={{ display: "flex", alignItems: "center", gap: "2px", minHeight: "44px" }}>
+        <button type="button" aria-label={backLabel} data-testid={testId} onClick={onBack} className={ATLAS_UI.focus} style={{ ...AW_ICON_BTN, borderRadius: "22px" }}>
+          <ChevronLeft aria-hidden="true" size={22} color={NR.textPrimary} />
+        </button>
+        <span style={{ flex: "1 1 auto", minWidth: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", fontWeight: 500, letterSpacing: ".06em", textTransform: "uppercase", color: NR.textSecondary, overflowWrap: "anywhere" }}>{label}</span>
+      </header>
+    </div>
+  );
+}
+
+// „Wszystkie ćwiczenia” row of E01 / E02 (min. 64, card surface, list icon tile).
+function AtlasAllRow({ title = "Wszystkie ćwiczenia", sub, onOpen, icon: Icon = ListIcon, testId = "atlas-all" }) {
+  return (
+    <button type="button" onClick={onOpen} data-testid={testId} className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "64px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: "14px", padding: "10px 12px 10px 14px", border: 0, borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow, color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "pointer" }}>
+      <span aria-hidden="true" style={{ flexShrink: 0, width: "44px", height: "44px", boxSizing: "border-box", borderRadius: "12px", background: "rgba(255,133,27,.10)", border: "1px solid rgba(255,133,27,.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Icon size={22} color={NR.warm} />
+      </span>
+      <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+        <span style={{ fontSize: "21px", lineHeight: "24px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "anywhere" }}>{title}</span>
+        <span style={{ fontSize: "15px", lineHeight: "19px", color: NR.textSecondary, overflowWrap: "anywhere" }}>{sub}</span>
+      </span>
+      <ChevronRight aria-hidden="true" size={18} color={NR.warm} style={{ flexShrink: 0 }} />
+    </button>
+  );
+}
+
+const atlasSectionHead = (text, id) => (
+  <h2 id={id} style={{ ...nrHeadText, margin: "6px 0 0 9px" }}>
+    {text}
+  </h2>
+);
+const ATLAS_GRID = { listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" };
+
+// E01 — „Ćwiczenia”: header, „Wszystkie ćwiczenia”, the categories (P4) in 2 columns. The person's
+// own exercises (the old list, kept) get a row only when there are any — not on the board.
+function AtlasHomeView({ model, onOpenAll, onOpenCategory, onRetry, ownCount = 0, onOpenOwn }) {
+  return (
+    <div data-testid="atlas-home" data-screen="exercises-home" style={{ ...ATLAS_SCREEN_STYLE, gap: "12px", padding: `max(env(safe-area-inset-top, 0px), 12px) 12px ${ATLAS_PAD_BOTTOM}` }}>
+      <header style={{ display: "flex", flexDirection: "column", gap: "4px", margin: "4px 0 4px 9px" }}>
+        <h1 style={{ ...ATLAS_H1, lineHeight: "36px" }}>Ćwiczenia</h1>
+        {model.ok && (
+          <p data-testid="atlas-home-total" style={{ margin: 0, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
+            Atlas NEXTREP · <AtlasNum>{model.total}</AtlasNum> {plPlural(model.total, "exercise")}
+          </p>
+        )}
+      </header>
+      {!model.ok ? (
+        <AtlasMessage variant="error" title={ATLAS_MESSAGES.errorTitle} text={ATLAS_MESSAGES.errorText} primary={{ label: ATLAS_MESSAGES.retry, onClick: onRetry }} testId="atlas-error" />
+      ) : (
+        <>
+          <AtlasAllRow sub={<><AtlasNum>{model.total}</AtlasNum> · alfabetycznie</>} onOpen={onOpenAll} />
+          {atlasSectionHead("Partie mięśniowe", "atlas-cats-h")}
+          <ul aria-labelledby="atlas-cats-h" style={ATLAS_GRID}>
+            {model.categories.map((c) => (
+              <li key={c.code} style={{ minWidth: 0 }}>
+                <AtlasCategoryTile label={c.label} count={c.count} enabled={c.enabled} onOpen={() => onOpenCategory(c)} testId={`atlas-category-${c.code}`} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {ownCount > 0 && (
+        <AtlasAllRow title="Moje ćwiczenia" sub={<><AtlasNum>{ownCount}</AtlasNum> {plPlural(ownCount, "exercise")} · zapisane wcześniej</>} icon={Dumbbell} onOpen={onOpenOwn} testId="atlas-own" />
+      )}
+    </div>
+  );
+}
+
+// E02 — a category with its sub-regions (P6); empty ones stay as disabled tiles (D03).
+function AtlasCategoryView({ category, onBack, onOpenAll, onOpenSubregion }) {
+  const n = category.subregions.length;
+  return (
+    <div data-testid="atlas-category" data-screen="exercises-category" data-category={category.code} style={{ ...ATLAS_SCREEN_STYLE, gap: "12px", padding: `0 12px ${ATLAS_PAD_BOTTOM}` }}>
+      <AtlasBackBar label="Ćwiczenia" backLabel="Wróć do Ćwiczeń" onBack={onBack} />
+      <section style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "2px 2px 4px 9px" }}>
+        <h1 style={ATLAS_H1}>{category.label}</h1>
+        <p data-testid="atlas-category-summary" style={{ margin: 0, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
+          <AtlasNum>{category.count}</AtlasNum> {plPlural(category.count, "exercise")} · <AtlasNum>{n}</AtlasNum> {plPlural(n, "subregion")}
+        </p>
+      </section>
+      <AtlasAllRow sub={<><AtlasNum>{category.count}</AtlasNum> w partii {category.label}</>} onOpen={onOpenAll} />
+      {atlasSectionHead("Podpartie", "atlas-subs-h")}
+      <ul aria-labelledby="atlas-subs-h" style={ATLAS_GRID}>
+        {category.subregions.map((s) => (
+          <li key={s.code} style={{ minWidth: 0 }}>
+            <AtlasSubregionTile label={s.label} count={s.count} enabled={s.enabled} onOpen={() => onOpenSubregion(s)} testId={`atlas-subregion-${s.code}`} />
+          </li>
+        ))}
+      </ul>
+      <p style={{ ...ATLAS_NOTE, margin: "0 9px" }}>Ćwiczenie z kilkoma mięśniami głównymi liczy się w każdej ich podpartii, więc liczby podpartii nie sumują się do liczby partii.</p>
+    </div>
+  );
+}
+
+// E03 — the list of a scope (whole atlas / category / sub-region), A–Z, rows P5.
+function AtlasListView({ model, scope, title, barLabel, backLabel, onBack, onOpenExercise }) {
+  const global = !scope.categoryCode && !scope.subregionCode;
+  const { items, total } = model.browseResults(scope, atlasBrowseMemory.query, atlasBrowseMemory.selection, "az");
+  return (
+    <div data-testid="atlas-list" data-screen="exercises-list" data-scope={atlasScopeKey(scope)} style={{ ...ATLAS_SCREEN_STYLE, gap: "10px", padding: `0 12px ${ATLAS_PAD_BOTTOM}` }}>
+      <AtlasBackBar label={barLabel} backLabel={backLabel} onBack={onBack} />
+      <h1 data-testid="atlas-list-title" style={{ ...ATLAS_H1, margin: "0 0 0 9px" }}>{title}</h1>
+      <AtlasResultsBar count={total} />
+      <ul aria-label={`Ćwiczenia: ${title}`} data-testid="atlas-list-items" style={{ listStyle: "none", margin: "0 -12px", padding: 0, borderTop: `1px solid ${ATLAS_UI.divider}` }}>
+        {items.map((ex) => (
+          <AtlasExerciseRow key={ex.exerciseId} {...atlasRowProps(model, ex, { global })} onOpen={onOpenExercise} />
+        ))}
+      </ul>
+      <p data-testid="atlas-list-end" style={{ ...ATLAS_NOTE, margin: "2px 9px 0" }}>
+        To wszystkie ćwiczenia: <AtlasNum>{total}</AtlasNum>.
+      </p>
+    </div>
+  );
+}
+
+// The module „Ćwiczenia” (S1). Levels E01 / E02 / E03 + the card on top of the list.
+function AtlasBrowseScreen({ onNavigate, history = [], isPro = false, onOpenUnlock, onOpenSession, ownCount = 0, onOpenOwn }) {
+  const [model, setModel] = useState(() => atlasBrowseModel());
+  const read = () => ({ level: atlasBrowseMemory.level, categoryCode: atlasBrowseMemory.categoryCode, subregionCode: atlasBrowseMemory.subregionCode, openExerciseId: atlasBrowseMemory.openExerciseId });
+  const [nav, setNavState] = useState(read);
+  const pendingScroll = useRef(null);
+  const setNav = (patch, scrollY = 0) => {
+    Object.assign(atlasBrowseMemory, patch);
+    pendingScroll.current = scrollY;
+    setNavState(read());
+  };
+
+  const categoryOf = (code) => (model.ok && code ? model.categories.find((c) => c.code === code) || null : null);
+  const card = nav.openExerciseId ? ATLAS_CATALOG.exercises.find((e) => e.exerciseId === nav.openExerciseId) || null : null;
+
+  // one step back (hardware / gesture / on-screen Back through popstate → exercisesOverlayRef)
+  const stepBackOne = () => {
+    const m = atlasBrowseMemory;
+    if (m.openExerciseId) return setNav({ openExerciseId: null }, m.scrollY); // E06 → the list, where it was
+    if (m.level === "list") {
+      const cat = categoryOf(m.categoryCode);
+      const toCategory = Boolean(m.subregionCode) || atlasHasSubregionScreen(cat);
+      // D06: selection and sort stay between E03 and E02, the query belongs to the list it was typed in
+      return setNav(toCategory ? { level: "category", subregionCode: null, query: "", scrollY: 0 } : { ...ATLAS_BROWSE_HOME });
+    }
+    if (m.level === "category") return setNav({ ...ATLAS_BROWSE_HOME });
+  };
+  const stepBackRef = useRef(stepBackOne);
+  stepBackRef.current = stepBackOne;
+  const onScreenBack = () => window.history.back(); // pops the entry pushed on the way in → one step
+
+  useEffect(() => {
+    exercisesOverlayRef.current = nav.level === "home" && !nav.openExerciseId ? null : () => stepBackRef.current();
+    return () => {
+      exercisesOverlayRef.current = null;
+    };
+  }, [nav]);
+  useEffect(() => {
+    if (pendingScroll.current == null) return;
+    const y = pendingScroll.current;
+    pendingScroll.current = null;
+    atlasScrollTo(y);
+  }, [nav]);
+
+  const openList = (scope) => {
+    atlasBrowsePush();
+    setNav({ level: "list", categoryCode: scope.categoryCode || null, subregionCode: scope.subregionCode || null, query: "", scrollY: 0, openExerciseId: null });
+  };
+  const openCategory = (cat) => {
+    if (!cat.enabled) return;
+    if (!atlasHasSubregionScreen(cat)) return openList({ categoryCode: cat.code });
+    atlasBrowsePush();
+    setNav({ level: "category", categoryCode: cat.code, subregionCode: null, query: "", scrollY: 0, openExerciseId: null });
+  };
+  const openExercise = (id) => {
+    atlasBrowseMemory.scrollY = typeof window !== "undefined" ? window.scrollY || 0 : 0; // D06: back to the same place
+    atlasBrowsePush();
+    Object.assign(atlasBrowseMemory, { openExerciseId: id });
+    pendingScroll.current = 0; // the card starts at the top, wherever the list was scrolled
+    setNavState(read());
+  };
+
+  if (card)
+    return (
+      <AtlasExerciseDetail
+        key={card.exerciseId}
+        exercise={card}
+        onBack={onScreenBack}
+        onNavigate={onNavigate}
+        history={history}
+        isPro={isPro}
+        onOpenUnlock={onOpenUnlock}
+        onOpenSession={onOpenSession}
+        // a variant opens its own card in place of this one (Back → the list), as in AT2
+        onOpenVariant={(id) => {
+          Object.assign(atlasBrowseMemory, { openExerciseId: id });
+          pendingScroll.current = 0;
+          setNavState(read());
+        }}
+      />
+    );
+
+  const cat = categoryOf(nav.categoryCode);
+  let view;
+  if (model.ok && nav.level === "list") {
+    const sub = cat && nav.subregionCode ? cat.subregions.find((s) => s.code === nav.subregionCode) : null;
+    const fromCategory = Boolean(sub) || atlasHasSubregionScreen(cat);
+    view = (
+      <AtlasListView
+        model={model}
+        scope={{ categoryCode: nav.categoryCode, subregionCode: nav.subregionCode }}
+        title={sub ? sub.label : cat ? cat.label : "Wszystkie ćwiczenia"}
+        barLabel={fromCategory ? cat.label : "Ćwiczenia"}
+        backLabel={fromCategory ? `Wróć do partii ${cat.label}` : "Wróć do Ćwiczeń"}
+        onBack={onScreenBack}
+        onOpenExercise={openExercise}
+      />
+    );
+  } else if (model.ok && nav.level === "category" && cat) {
+    view = <AtlasCategoryView category={cat} onBack={onScreenBack} onOpenAll={() => openList({ categoryCode: cat.code })} onOpenSubregion={(s) => s.enabled && openList({ categoryCode: cat.code, subregionCode: s.code })} />;
+  } else {
+    view = <AtlasHomeView model={model} onOpenAll={() => openList({})} onOpenCategory={openCategory} onRetry={() => setModel(atlasBrowseRetry())} ownCount={ownCount} onOpenOwn={onOpenOwn} />;
+  }
+  return (
+    <>
+      <FontStyles />
+      {view}
+      <BottomNav screen="exercises" onNavigate={onNavigate} />
+    </>
+  );
+}

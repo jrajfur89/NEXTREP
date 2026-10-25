@@ -112,13 +112,14 @@ describe("I2: clean start on a device with old data", () => {
     await click(buttonByText("Ćwiczenia"));
     await flush(10, 3);
     for (const name of ["Przysiad ze sztangą", "Wiosłowanie sztangą", "Plank z obciążeniem"]) assert.ok(!bodyText().includes(name), name);
-    const entry = byTestId("atlas-entry");
-    assert.ok(entry, "atlas entry tile");
-    assert.match(entry.textContent, new RegExp(`${A.ATLAS_CATALOG.exercises.length} ćwiczeń`));
+    // I5.3: the module opens on E01 of the atlas; no own exercises → no „Moje ćwiczenia” row
+    assert.ok(byTestId("atlas-home"), "E01 „Ćwiczenia”");
+    assert.match(byTestId("atlas-home-total").textContent, new RegExp(`${A.ATLAS_CATALOG.exercises.length} ćwiczeń`));
     assert.equal(A.ATLAS_CATALOG.exercises.length, 55);
-    await click(entry);
+    assert.equal(byTestId("atlas-own"), null);
+    await click(byTestId("atlas-all"));
     await flush(10, 3);
-    assert.equal($$('[data-testid="atlas-item"]').length, 55);
+    assert.equal($$('[data-testid="atlas-row"]').length, 55);
   });
 
   test("restart (twice): still no old exercise, nothing seeded, old keys unchanged", async () => {
@@ -141,6 +142,10 @@ describe("I2: clean start on a device with old data", () => {
     await restart();
     assert.deepEqual(read("nextrep1_guest_exercises_v1").map((e) => e.id), ["own-1"]);
     await click(buttonByText("Ćwiczenia"));
+    await flush(10, 3);
+    // I5.3: the own exercises are one level below E01 („Moje ćwiczenia”, shown because there is one)
+    assert.match(byTestId("atlas-own").textContent, /Moje ćwiczenia1 ćwiczenie/);
+    await click(byTestId("atlas-own"));
     await flush(10, 3);
     await type(document.querySelector('input[placeholder="Szukaj ćwiczenia..."]'), "ćwiczenie");
     await flush(10, 3);

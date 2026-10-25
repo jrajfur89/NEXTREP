@@ -33,10 +33,11 @@ async function openCard(name, seed) {
   await boot(seed);
   await click(byTestId("nav-exercises"));
   await flush(10, 3);
-  await click(byTestId("atlas-entry"));
+  // I5.3: E01 „Wszystkie ćwiczenia” → E03 (the whole atlas) → the row of the exercise (by exerciseId)
+  await click(byTestId("atlas-all"));
   await flush(5, 2);
   const ex = A.ATLAS_CATALOG.exercises.find((e) => e.exerciseId === name);
-  await click($$('[data-testid="atlas-item"]').find((b) => b.querySelector("p").textContent === ex.name));
+  await click(document.querySelector(`[data-testid="atlas-row"][data-exercise-id="${name}"]`));
   await flush(5, 2);
   return ex;
 }

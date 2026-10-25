@@ -1,22 +1,28 @@
 // AT2 (NEXTREP 1.0) — „Atlas ćwiczeń”: the approved atlas release as a READ-ONLY catalog in the
-// existing app. Adapter (buildAtlasCatalog), the catalog screen opened from „Ćwiczenia”, and the
-// guarantees of the stage: nothing is written to storage, no network / Supabase call, the user's
-// exercise list and the old built-in exercises are untouched.
+// existing app. Adapter (buildAtlasCatalog), the catalog in „Ćwiczenia”, and the guarantees of the
+// stage: nothing is written to storage, no network / Supabase call, the user's exercise list and the
+// old built-in exercises are untouched.
+// I5.3 (ATLAS-UX-01): the AT2 entry tile and list are replaced by E01 / E03 of the module „Ćwiczenia”
+// (the app as it ships, S1); the same requirements are checked on the new entry, the card is the same.
 import { test, describe, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { React, mount, unmount, byTestId, click, flush, loadApp, $$ } from "../harness/ui.mjs";
-import { resetStorage } from "../harness/load-app.mjs";
+import { resetStorage, useS1Profile } from "../harness/load-app.mjs";
 import { ATLAS_RELEASE } from "../../src/engine/index.js";
 import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
 const h = React.createElement;
 const repoAtlas = JSON.parse(readFileSync(new URL("../../src/atlas/atlas.json", import.meta.url), "utf8"));
+useS1Profile();
 let A;
 before(async () => {
   A = await loadApp();
 });
-beforeEach(() => resetStorage());
+beforeEach(() => {
+  resetStorage();
+  A.atlasBrowseReset();
+});
 after(unmount);
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -130,23 +136,26 @@ function screenProps() {
   };
 }
 
-describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () => {
-  test("entry tile on the browsing view → list of all catalog exercises → details → back to the list → back to „Ćwiczenia”", async () => {
+const rowName = (r) => r.querySelector("span span").textContent;
+describe("AT2 → I5.3 screen: the atlas in „Ćwiczenia” (E01 → E03 → card)", () => {
+  test("E01 „Wszystkie ćwiczenia” → list of all catalog exercises → details → back to the list → back to „Ćwiczenia”", async () => {
     const { props } = screenProps();
     await mount(h(A.ExercisesScreen, props));
-    const entry = byTestId("atlas-entry");
-    assert.ok(entry, "entry tile visible");
-    assert.match(entry.textContent, /Atlas ćwiczeń/);
-    assert.match(entry.textContent, new RegExp(`${A.ATLAS_CATALOG.exercises.length} ćwiczeń`));
-    assert.ok($$("button").some((b) => /Klatka/.test(b.textContent)), "the old category tiles are still there");
+    assert.ok(byTestId("atlas-home"), "E01");
+    assert.equal(byTestId("atlas-entry"), null, "the AT2 tile is replaced");
+    assert.match(byTestId("atlas-home-total").textContent, new RegExp(`${A.ATLAS_CATALOG.exercises.length} ćwiczeń`));
+    const entry = byTestId("atlas-all");
+    assert.equal(entry.textContent, `Wszystkie ćwiczenia${A.ATLAS_CATALOG.exercises.length} · alfabetycznie`);
+    assert.match(byTestId("atlas-own").textContent, new RegExp(`^Moje ćwiczenia${LEGACY_DEFAULT_EXERCISES.length} ćwiczeń`), "the person's own list is still there");
 
     await click(entry);
-    assert.ok(byTestId("atlas-catalog"));
-    assert.equal(byTestId("atlas-entry"), null);
-    assert.match(byTestId("atlas-catalog-info").textContent, new RegExp(`wydanie ${A.ATLAS_CATALOG.atlasVersion} · ${A.ATLAS_CATALOG.exercises.length} ćwiczeń · tylko do odczytu`));
-    const items = $$('[data-testid="atlas-item"]');
+    assert.ok(byTestId("atlas-list"));
+    assert.equal(byTestId("atlas-home"), null);
+    assert.equal(byTestId("atlas-results-count").textContent, `${A.ATLAS_CATALOG.exercises.length} ćwiczeń`);
+    const items = $$('[data-testid="atlas-row"]');
     assert.equal(items.length, A.ATLAS_CATALOG.exercises.length);
-    assert.deepEqual(items.map((b) => b.querySelector("p").textContent), A.ATLAS_CATALOG.exercises.map((e) => e.name));
+    assert.deepEqual(items.map(rowName), A.ATLAS_CATALOG.exercises.map((e) => e.name));
+    assert.deepEqual(items.map((b) => b.dataset.exerciseId), A.ATLAS_CATALOG.exercises.map((e) => e.exerciseId));
     // no edit / delete / add controls in the catalog
     assert.equal($$("button").filter((b) => /Dodaj|Usuń|Edytuj/.test(b.textContent)).length, 0);
 
@@ -171,10 +180,10 @@ describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () =>
     // Back (hardware or on screen → popstate → exercisesOverlayRef): detail → list → „Ćwiczenia”
     await React.act(async () => A.exercisesOverlayRef.current());
     await flush();
-    assert.ok(byTestId("atlas-catalog"));
+    assert.ok(byTestId("atlas-list"));
     await React.act(async () => A.exercisesOverlayRef.current());
     await flush();
-    assert.ok(byTestId("atlas-entry"), "back on „Ćwiczenia”");
+    assert.ok(byTestId("atlas-home"), "back on „Ćwiczenia”");
     assert.equal(A.exercisesOverlayRef.current, null, "no overlay left behind");
   });
 
@@ -185,15 +194,16 @@ describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () =>
     await mount(h(A.ExercisesScreen, props));
     const spy = spyAll();
     try {
-      await click(byTestId("atlas-entry"));
+      await click(byTestId("atlas-all"));
       for (let i = 0; i < A.ATLAS_CATALOG.exercises.length; i++) {
-        await click($$('[data-testid="atlas-item"]')[i]);
+        await click($$('[data-testid="atlas-row"]')[i]);
         assert.ok(byTestId("atlas-detail"));
         await React.act(async () => A.exercisesOverlayRef.current());
         await flush();
       }
       await React.act(async () => A.exercisesOverlayRef.current());
       await flush(20);
+      assert.ok(byTestId("atlas-home"));
     } finally {
       spy.restore();
     }
@@ -217,9 +227,14 @@ describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () =>
     assert.deepEqual(old.category, ["Brzuch", "Pośladki"], "the old entry keeps its old data");
   });
 
-  test("searching or a selected category hides the entry tile (the old views are unchanged)", async () => {
+  test("the person's own list (old views, unchanged) is one level below E01; searching there finds only own exercises", async () => {
     const { props } = screenProps();
     await mount(h(A.ExercisesScreen, props));
+    await click(byTestId("atlas-own"));
+    await flush();
+    assert.equal(byTestId("atlas-home"), null);
+    assert.equal(byTestId("atlas-entry"), null, "no AT2 entry tile in S1");
+    assert.ok($$("button").some((b) => /Klatka/.test(b.textContent)), "the old category tiles are still there");
     const input = document.querySelector('input[placeholder="Szukaj ćwiczenia..."]');
     await React.act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
@@ -227,6 +242,10 @@ describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () =>
       input.dispatchEvent(new window.Event("input", { bubbles: true }));
     });
     await flush();
-    assert.equal(byTestId("atlas-entry"), null);
+    assert.ok(document.body.textContent.includes("Przysiad ze sztangą"), "an own exercise (test data) is found");
+    assert.equal($$('[data-testid="atlas-row"]').length, 0, "no atlas row in the own list");
+    await React.act(async () => A.exercisesOverlayRef.current());
+    await flush();
+    assert.ok(byTestId("atlas-home"), "Back → E01");
   });
 });

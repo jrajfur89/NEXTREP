@@ -56,7 +56,7 @@ describe("I4.2 Dashboard — New User", () => {
     assert.match(byTestId("dashboard-tile-plans").textContent, /wkrótce/);
     await click(byTestId("dashboard-tile-exercises"));
     await flush(10, 3);
-    assert.ok(byTestId("atlas-entry"), "Ćwiczenia");
+    assert.ok(byTestId("atlas-home"), "Ćwiczenia (I5.3: E01)");
   });
   test("B (plan, no finished workout): „Pierwszy trening z planu” with the plan; CTA starts that plan", async () => {
     await boot({ plans: [PLAN] });
