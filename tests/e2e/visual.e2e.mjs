@@ -66,7 +66,8 @@ const STEPS = [
     await p.locator("button:has(svg.lucide-ellipsis-vertical)").first().click();
     await click(p, "Zakończ trening", { exact: true });
   }],
-  ["12-history-detail", async (p) => {
+  ["12-history-detail", async (p, underTest) => {
+    if (underTest) return p.getByTestId("wcs-finish").click(); // I4.5: WCS sheet → the summary
     const b = p.locator("div.fixed button");
     const labels = await b.allInnerTexts();
     await b.nth(labels.findIndex((l) => /Zakończ/.test(l))).click();
@@ -99,8 +100,8 @@ const CHANGED = {
   "08-active-workout": "I4.4: Active Workout master (photo header, set cards, rest dock, footer); the I3 load hint stays",
   "09-leave-dialog": "I4.4: the leave dialog over the Active Workout master",
   "10-dashboard-resume": "I4.2: Dashboard — Interrupted Workout master",
-  "11-finish-confirm": "I4.4: the finish confirmation over the Active Workout master (the confirmation itself: WCS master, I4.5)",
-  "12-history-detail": "I3: an atlas exercise has no link to the old exercise screen (no chevron by its name)",
+  "11-finish-confirm": "I4.4 / I4.5: the WCS confirmation sheet over the Active Workout master",
+  "12-history-detail": "I4.5: after finishing the WCS summary is shown once (before: the history detail of the session)",
   "15-backup": "I3 walk: the reference build saves its own exercise first — one more automatic local copy listed",
   "16-account": "I2: accounts and sync temporarily off — the calm „not configured” state",
   "17-exercises": "I2: no old built-in list (the groups are empty); I3: no „Dodaj” (the old form is off)",

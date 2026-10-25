@@ -133,12 +133,12 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await page.waitForTimeout(400);
     await page.getByText("Zakończ trening", { exact: true }).first().click();
     await page.waitForTimeout(400);
-    const buttons = page.locator("div.fixed button");
-    const labels = await buttons.allInnerTexts();
-    const idx = labels.findIndex((l) => /Zakończ/.test(l));
-    assert.ok(idx >= 0, `no finish button in ${JSON.stringify(labels)}`);
-    await buttons.nth(idx).click();
+    // I4.5: the WCS confirmation (sets 2–3 unfilled → grouped list, „Zakończ mimo to”), then the summary
+    assert.match(await page.getByTestId("wcs-unfinished").innerText(), /2 niewypełnione serie/);
+    await page.getByTestId("wcs-finish").click();
     await page.waitForTimeout(1500);
+    assert.ok(await page.getByTestId("workout-summary").isVisible(), "the one-time summary");
+    assert.match(await page.getByTestId("wcs-sync-status").innerText(), /Zapisano na tym urządzeniu/);
     await cov();
     saved = await historyCounts();
     assert.ok(saved.some(([, n]) => n >= 1), JSON.stringify(saved));

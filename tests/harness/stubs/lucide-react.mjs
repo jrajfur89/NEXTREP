@@ -78,3 +78,5 @@ export const Sparkles = icon("Sparkles");
 export const Pause = icon("Pause");
 export const Play = icon("Play");
 export const Link = icon("Link");
+export const Smartphone = icon("Smartphone");
+export const Cloud = icon("Cloud");

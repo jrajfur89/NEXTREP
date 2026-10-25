@@ -297,8 +297,7 @@ describe("active guest workout: never migrated mid-session", () => {
     const { S } = await openGuestWorkoutThenRecoverA();
     await click(buttonText("Zakończ")[0]);
     await flush(20, 3);
-    const confirm = buttonText("Zakończ");
-    await click(confirm[confirm.length - 1]);
+    await click(byTestId("wcs-finish")); // I4.5: the WCS confirmation sheet
     assert.ok(await waitFor(() => byTestId("init-guest-migrate")), "offer after the workout ended");
     assert.match(byTestId("init-guest-summary").textContent, /2 treningi/, "the finished workout is part of the guest data");
     assert.ok(!byTestId("init-guest-draft-note"), "no draft left");

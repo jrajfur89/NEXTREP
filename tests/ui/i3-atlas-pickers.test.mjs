@@ -49,7 +49,7 @@ async function finishWorkout() {
   }
   await click(btn(/^Zakończ/));
   await flush(10, 3);
-  await click($$("button").filter((b) => b.textContent.trim() === "Zakończ").pop());
+  await click(byTestId("wcs-finish"));
   await flush(10, 5);
 }
 

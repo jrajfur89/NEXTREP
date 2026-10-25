@@ -1106,68 +1106,51 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
           draft (progress saved) and goes to the Dashboard; "Wróć do treningu" just closes the dialog
           (that tap also tops the Back guard up). Finishing stays on the workout's own "Zakończ". */
   const leaveDialog = leaveStep ? (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6" onClick={() => setLeaveStep(null)}>
-          <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-            <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">OPUSZCZASZ AKTYWNY TRENING</p>
-            {progressNotSaved ? (
-              <p className="text-red-400 text-sm mb-5" data-testid="leave-unsaved-warning">
-                Postępu nie udało się zapisać na urządzeniu — jest tylko w pamięci aplikacji. Jeśli wyjdziesz, możesz go stracić.
-              </p>
-            ) : (
-              <p className="text-neutral-400 text-sm mb-5">
-                Twój aktualny postęp zostanie zapisany. Będziesz mógł wrócić do tego treningu później i kontynuować od tego miejsca.
-              </p>
-            )}
-            <div className="flex flex-col gap-2">
-              <button onClick={() => { setLeaveStep(null); setLeaveUnsaved(false); }} className="w-full py-3 rounded-xl bg-orange-500 text-neutral-950 font-bold">
-                Wróć do treningu
-              </button>
-              {progressNotSaved && leaveUnsaved ? (
-                <button data-no-rearm data-testid="leave-without-saving" onClick={() => interruptWorkout(true)} className="w-full py-3 rounded-xl bg-red-500/90 text-neutral-950 font-semibold">
-                  Opuść bez zapisu
-                </button>
-              ) : (
-                <button data-no-rearm onClick={() => interruptWorkout()} className="w-full py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
-                  Opuść trening
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+    <WcsSheet labelledBy="aw-leave-t" testId="aw-leave" edge={progressNotSaved ? "rgba(242,85,90,.45)" : "#2E2E30"} onClose={() => setLeaveStep(null)} actions={
+      <>
+        <WcsButton primary onClick={() => { setLeaveStep(null); setLeaveUnsaved(false); }}>Wróć do treningu</WcsButton>
+        {progressNotSaved && leaveUnsaved ? (
+          <WcsButton onClick={() => interruptWorkout(true)} testId="leave-without-saving" noRearm>Opuść bez zapisu</WcsButton>
+        ) : (
+          <WcsButton onClick={() => interruptWorkout()} noRearm>Opuść trening</WcsButton>
+        )}
+      </>
+    }>
+      <h2 id="aw-leave-t" style={WCS_TITLE}>Opuszczasz aktywny trening</h2>
+      <div style={{ height: "10px" }} />
+      {progressNotSaved ? (
+        <p style={{ ...WCS_BODY, color: NR.dangerText }} data-testid="leave-unsaved-warning">
+          Postępu nie udało się zapisać na urządzeniu — jest tylko w pamięci aplikacji. Jeśli wyjdziesz, możesz go stracić.
+        </p>
+      ) : (
+        <p style={WCS_BODY}>Twój aktualny postęp zostanie zapisany. Będziesz mógł wrócić do tego treningu później i kontynuować od tego miejsca.</p>
+      )}
+    </WcsSheet>
   ) : null;
 
   // SEC-HF-01: visible safety messages — never a "saved" message while the data is only in memory.
-  const safetyBanner =
-    progressNotSaved || finishError ? (
-      <div className="fixed inset-x-0 top-0 z-30 px-4 pt-2 flex justify-center" data-testid="workout-safety-banner">
-        <div className="w-full max-w-sm bg-neutral-900 border border-red-500/70 rounded-2xl p-3 shadow-lg text-left">
-          {finishError && (
-            <p className="text-red-400 text-xs leading-relaxed" data-testid="finish-error">
-              {finishError} Trening nie został zakończony{progressNotSaved ? "" : " — jest zachowany jako niedokończony"}. Zwolnij miejsce na urządzeniu i spróbuj ponownie.
-            </p>
-          )}
-          {progressNotSaved && (
-            <p className={`text-red-400 text-xs leading-relaxed ${finishError ? "mt-1" : ""}`} data-testid="draft-save-warning" data-reason={draftSaveStatus}>
+  const safetyBanner = (
+    <>
+      {progressNotSaved && (
+        <div className="fixed inset-x-0 top-0 z-30 px-4 pt-2 flex justify-center" data-testid="workout-safety-banner">
+          <div className="w-full max-w-sm bg-neutral-900 border border-red-500/70 rounded-2xl p-3 shadow-lg text-left">
+            <p className="text-red-400 text-xs leading-relaxed" data-testid="draft-save-warning" data-reason={draftSaveStatus}>
               {draftSaveStatus === "conflict"
                 ? "Na urządzeniu jest inny niedokończony trening — ten trening NIE jest zapisywany. Nie zamykaj aplikacji."
                 : "Postęp NIE jest zapisany na urządzeniu — jest tylko w pamięci aplikacji. Nie zamykaj aplikacji."}
             </p>
-          )}
-          <div className="flex gap-2 mt-2">
-            {progressNotSaved && (
+            <div className="flex gap-2 mt-2">
               <button onClick={() => saveDraftNow()} className="flex-1 py-1.5 rounded-xl bg-neutral-800 text-neutral-100 font-semibold text-xs" data-testid="draft-save-retry">
                 Zapisz ponownie
               </button>
-            )}
-            {finishError && (
-              <button onClick={() => finish()} className="flex-1 py-1.5 rounded-xl bg-orange-500 text-neutral-950 font-bold text-xs" data-testid="finish-retry">
-                Spróbuj zakończyć ponownie
-              </button>
-            )}
+            </div>
           </div>
         </div>
-      </div>
-    ) : null;
+      )}
+      {/* WCS 10a: the save was refused on this device — the workout and its draft stay as they are */}
+      {finishError && <WcsSaveFailed planName={plan?.name || null} onRetry={() => finish()} onBack={() => setFinishError(null)} />}
+    </>
+  );
 
   if (!currentBlock) {
     return (
@@ -1725,57 +1708,55 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
         </NrSheet>
       )}
 
-      {confirmFinish && (
-        <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center px-6" onClick={() => setConfirmFinish(false)}>
-          <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-            <p className="font-display text-2xl text-neutral-50 tracking-wide mb-2">
-              {confirmFinish === "cancel" ? (editingSession ? "ODRZUCIĆ ZMIANY?" : "PRZERYWASZ AKTYWNY TRENING") : editingSession ? "ZAPISAĆ ZMIANY?" : "ZAKOŃCZYĆ TRENING?"}
-            </p>
-            <p className="text-neutral-400 text-sm mb-5">
-              {confirmFinish === "cancel"
-                ? editingSession
-                  ? "Wprowadzone zmiany nie zostaną zapisane."
-                  : progressNotSaved
-                  ? "Postępu nie udało się zapisać na urządzeniu — jest tylko w pamięci aplikacji."
-                  : "Twój aktualny postęp zostanie zapisany. Będziesz mógł wrócić do tego treningu później i kontynuować od tego miejsca."
-                : editingSession
-                ? "Zapisany wcześniej trening zostanie zaktualizowany."
-                : "Bieżące wyniki zostaną zapisane."}
-            </p>
-            {confirmFinish === "finish" && !editingSession && unfilledSetsCount > 0 && (
-              <p className="text-amber-400 text-xs mb-5 -mt-3">
-                {unfilledSetsCount} {plWord(unfilledSetsCount, "niewypełniona seria", "niewypełnione serie", "niewypełnionych serii")} nie zostanie zapisan{unfilledSetsCount === 1 ? "a" : "e"}.
-              </p>
-            )}
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmFinish(false)} className="flex-1 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold">
-                {confirmFinish === "cancel" && !editingSession ? "Wróć do treningu" : "Wróć"}
-              </button>
-              <button
-                data-no-rearm
-                onClick={() => {
-                  if (confirmFinish !== "cancel") {
-                    finish();
-                    return;
-                  }
-                  if (!editingSession) {
-                    interruptWorkout(); // keep the draft, go to the Dashboard
-                    return;
-                  }
-                  // Interrupting an active workout (not discarding an edit) must actually exit —
-                  // not just close this confirm dialog. Clearing the overlay ref first means the
-                  // history.back() below hits the "activeWorkoutPlan !== undefined" branch of the
-                  // root popstate handler instead of being intercepted as "just close this modal".
-                  if (!editingSession) activeWorkoutOverlayRef.current = null;
-                  onCancel(workoutOwner);
-                }}
-                className={`flex-1 py-3 rounded-xl font-bold ${confirmFinish === "cancel" && editingSession ? "bg-red-500 text-neutral-950" : "bg-orange-500 text-neutral-950"}`}
-              >
-                {confirmFinish === "cancel" ? (editingSession ? "Odrzuć" : "Przerwij trening") : editingSession ? "Zapisz" : "Zakończ"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {confirmFinish === "finish" && !editingSession && (
+        <WcsFinishSheet
+          blocks={blocks}
+          title={`${plan?.name || "Trening bez planu"} · ${fmtDuration(backfillInfo ? Math.max(0, Math.round(manualDuration * 60)) : elapsed)}`}
+          onFinish={() => finish()}
+          onBack={() => setConfirmFinish(false)}
+          onInterrupt={() => {
+            setConfirmFinish(false);
+            interruptWorkout(); // nothing performed: no empty workout — the draft is kept
+          }}
+        />
+      )}
+      {confirmFinish && (confirmFinish === "cancel" || editingSession) && (
+        <WcsSheet labelledBy="aw-confirm-t" testId="aw-confirm" edge={confirmFinish === "cancel" && editingSession ? "rgba(242,85,90,.45)" : "rgba(255,133,27,.35)"} onClose={() => setConfirmFinish(false)} actions={
+          <>
+            <WcsButton
+              primary
+              noRearm
+              onClick={() => {
+                if (confirmFinish !== "cancel") {
+                  finish();
+                  return;
+                }
+                if (!editingSession) {
+                  interruptWorkout(); // keep the draft, go to the Dashboard
+                  return;
+                }
+                onCancel(workoutOwner);
+              }}
+            >
+              {confirmFinish === "cancel" ? (editingSession ? "Odrzuć" : "Przerwij trening") : "Zapisz"}
+            </WcsButton>
+            <WcsButton onClick={() => setConfirmFinish(false)}>{confirmFinish === "cancel" && !editingSession ? "Wróć do treningu" : "Wróć"}</WcsButton>
+          </>
+        }>
+          <h2 id="aw-confirm-t" style={WCS_TITLE}>
+            {confirmFinish === "cancel" ? (editingSession ? "Odrzucić zmiany?" : "Przerywasz aktywny trening") : "Zapisać zmiany?"}
+          </h2>
+          <div style={{ height: "10px" }} />
+          <p style={WCS_BODY}>
+            {confirmFinish === "cancel"
+              ? editingSession
+                ? "Wprowadzone zmiany nie zostaną zapisane."
+                : progressNotSaved
+                ? "Postępu nie udało się zapisać na urządzeniu — jest tylko w pamięci aplikacji."
+                : "Twój aktualny postęp zostanie zapisany. Będziesz mógł wrócić do tego treningu później i kontynuować od tego miejsca."
+              : "Zapisany wcześniej trening zostanie zaktualizowany."}
+          </p>
+        </WcsSheet>
       )}
 
       {leaveDialog}
@@ -1783,3 +1764,433 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   );
 }
 
+/* ---------------------------------------------------------------------- */
+/* I4.5 — Workout Completion & Summary (master WCSM v1, canvas v81)        */
+/* Confirmation sheets over the Active Workout, the save-error screen and  */
+/* the one-time post-workout summary. Values come from the saved session    */
+/* (finish()), the volume access point and generateTrainingReport — the    */
+/* engine is unchanged.                                                     */
+/* ---------------------------------------------------------------------- */
+const WCS_AMBER = "#FFB547";
+// Bottom sheet with a scrolling body and pinned actions (alertdialog for decisions, dialog for info).
+function WcsSheet({ role = "alertdialog", labelledBy, edge = "rgba(255,133,27,.35)", testId, onClose, children, actions, handleGap = "12px" }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const prev = typeof document !== "undefined" ? document.activeElement : null;
+    const first = ref.current && ref.current.querySelector("[data-autofocus], button");
+    if (first && first.focus) first.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape" && onClose) onClose();
+      if (e.key === "Tab" && ref.current) {
+        const els = [...ref.current.querySelectorAll("button, [href], input, select, textarea")].filter((el) => !el.disabled);
+        if (!els.length) return;
+        const a = els[0];
+        const z = els[els.length - 1];
+        if (e.shiftKey && document.activeElement === a) {
+          e.preventDefault();
+          z.focus();
+        } else if (!e.shiftKey && document.activeElement === z) {
+          e.preventDefault();
+          a.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      try {
+        if (prev && prev.focus) prev.focus();
+      } catch {}
+    };
+  }, []);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, fontFamily: NR.font }}>
+      <div aria-hidden="true" data-scrim onClick={onClose} style={{ position: "absolute", inset: 0, background: role === "dialog" ? "rgba(0,0,0,.66)" : "rgba(0,0,0,.72)" }} />
+      <div ref={ref} role={role} aria-modal="true" aria-labelledby={labelledBy} data-testid={testId} style={{ position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "calc(100% - 48px)", display: "flex", flexDirection: "column", boxSizing: "border-box", borderRadius: "20px 20px 0 0", background: "linear-gradient(180deg, #151515 0%, #0F0F10 100%)", borderTop: `1px solid ${edge}` }}>
+        <div aria-hidden="true" style={{ flexShrink: 0, width: "40px", height: "4px", borderRadius: "2px", background: "#3A3A3A", margin: `10px auto ${handleGap}` }} />
+        <div data-sheet-body tabIndex={0} style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: actions ? "0 16px 14px" : "0 16px max(env(safe-area-inset-bottom, 0px), 20px)", outline: "none" }}>
+          {children}
+        </div>
+        {actions && <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px", padding: "12px 16px max(env(safe-area-inset-bottom, 0px), 12px)", borderTop: "1px solid #1E1E20" }}>{actions}</div>}
+      </div>
+    </div>
+  );
+}
+function WcsButton({ primary = false, children, sub, onClick, testId, noRearm = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      data-no-rearm={noRearm ? "" : undefined}
+      className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]"
+      style={{ minHeight: "52px", width: "100%", border: 0, borderRadius: "12px", fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: primary ? 600 : 500, cursor: "pointer", padding: "8px 14px", ...(primary ? { background: NR.ctaFill, boxShadow: NR.ctaShadow, color: NR.bg } : { background: "#1A1A1B", color: NR.textPrimary }) }}
+    >
+      {sub ? (
+        <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+          <span>{children}</span>
+          <span style={{ fontSize: "14px", lineHeight: "17px", fontWeight: 400, color: NR.textSecondary }}>{sub}</span>
+        </span>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
+const WCS_TITLE = { margin: 0, fontFamily: NR.font, fontSize: "25px", lineHeight: "28px", fontWeight: 600, color: NR.textDisplay };
+const WCS_SUB = { margin: "4px 0 0", fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, color: NR.textSecondary };
+const WCS_BODY = { margin: 0, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", color: "#D9D9D9" };
+
+// Sets not performed (production rule isSetPerformed), grouped by exercise in workout order.
+function wcsUnfilled(blocks) {
+  const groups = [];
+  for (const b of blocks) {
+    for (const it of b.items) {
+      const labels = awSetLabels(it.sets);
+      const missing = it.sets.map((s, i) => (isSetPerformed(s, it.type) ? null : labels[i])).filter(Boolean);
+      if (missing.length) groups.push({ name: it.name, missing, whole: missing.length === it.sets.length });
+    }
+  }
+  return groups;
+}
+
+// The finish confirmation of the master: all sets done / unfilled sets (grouped) / nothing performed.
+function WcsFinishSheet({ blocks, title, onFinish, onBack, onInterrupt }) {
+  const performed = blocks.reduce((n, b) => n + b.items.reduce((m, it) => m + it.sets.filter((s) => isSetPerformed(s, it.type)).length, 0), 0);
+  const groups = wcsUnfilled(blocks);
+  const missing = groups.reduce((n, g) => n + g.missing.length, 0);
+  const head = (text) => (
+    <>
+      <h2 id="wcs-fin-t" style={WCS_TITLE}>{text}</h2>
+      <p style={WCS_SUB}>{title}</p>
+      <div style={{ height: "12px" }} />
+    </>
+  );
+  if (performed === 0) {
+    return (
+      <WcsSheet labelledBy="wcs-fin-t" edge="#2E2E30" testId="wcs-no-sets" onClose={onBack} actions={
+        <>
+          <WcsButton primary onClick={onBack}>Wróć do treningu</WcsButton>
+          <WcsButton onClick={onInterrupt} sub="Niedokończony trening zostanie zachowany" testId="wcs-interrupt" noRearm>Przerwij trening</WcsButton>
+        </>
+      }>
+        {head("Brak wykonanych serii")}
+        <p style={WCS_BODY}>Nie wpisano jeszcze żadnych wyników, więc nie ma czego zapisać w Historii. Pusty trening nie zostanie utworzony.</p>
+      </WcsSheet>
+    );
+  }
+  if (missing > 0) {
+    return (
+      <WcsSheet labelledBy="wcs-fin-t" edge="rgba(255,181,71,.45)" testId="wcs-unfinished" onClose={onBack} actions={
+        <>
+          <WcsButton primary onClick={onBack}>Wróć i uzupełnij</WcsButton>
+          <WcsButton onClick={onFinish} sub={`Pominie ${missing} ${plWord(missing, "serię", "serie", "serii")} · zapisze wykonane`} testId="wcs-finish" noRearm>Zakończ mimo to</WcsButton>
+        </>
+      }>
+        {head("Zakończyć trening?")}
+        <div style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "12px", borderRadius: "12px", border: "1px solid rgba(255,181,71,.45)", background: "rgba(255,181,71,.08)" }}>
+          <AlertTriangle aria-hidden="true" size={20} color={WCS_AMBER} style={{ flexShrink: 0 }} />
+          <span style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+            <span style={{ fontFamily: NR.font, fontSize: "18px", lineHeight: "21px", fontWeight: 600, color: NR.textDisplay }}>
+              {missing} {plWord(missing, "niewypełniona seria", "niewypełnione serie", "niewypełnionych serii")}
+            </span>
+            <span style={{ fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: "#E8E8E8" }}>Niewypełnione serie zostaną pominięte. Zapiszemy tylko wykonane serie.</span>
+          </span>
+        </div>
+        <div style={{ marginTop: "6px" }}>
+          <ul aria-label="Niewypełnione serie według ćwiczeń" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {groups.map((g, gi) => (
+              <li key={gi} data-testid="wcs-unfilled-exercise" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "10px 0", borderTop: "1px solid #222224" }}>
+                <span style={{ fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "anywhere" }}>{g.name}</span>
+                {g.whole && <span style={{ fontFamily: NR.font, fontSize: "14px", lineHeight: "17px", color: WCS_AMBER }}>Całe ćwiczenie zostanie pominięte — brak wykonanych serii</span>}
+                <ul aria-label="Niewypełnione serie" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {g.missing.map((l, i) => (
+                    <li key={i} style={{ padding: "3px 9px", borderRadius: "8px", background: "#1A1A1B", border: "1px solid #2A2A2C", fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: "#E8E8E8" }}>
+                      {l}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p style={{ margin: "4px 0 0", fontFamily: NR.font, fontSize: "14px", lineHeight: "18px", color: NR.textMuted }}>Seria liczy się jako wykonana, gdy ma wpisane powtórzenia (lub czas).</p>
+      </WcsSheet>
+    );
+  }
+  return (
+    <WcsSheet labelledBy="wcs-fin-t" testId="wcs-confirm" onClose={onBack} actions={
+      <>
+        <WcsButton primary onClick={onFinish} testId="wcs-finish" noRearm>Zakończ i zapisz</WcsButton>
+        <WcsButton onClick={onBack}>Wróć do treningu</WcsButton>
+      </>
+    }>
+      {head("Zakończyć trening?")}
+      <p style={WCS_BODY}>Bieżące wyniki zostaną zapisane w Historii.</p>
+    </WcsSheet>
+  );
+}
+
+// 10a — the save was refused on this device (confirmed failure): the draft stays protected.
+function WcsSaveFailed({ planName, onRetry, onBack }) {
+  return (
+    <div data-testid="wcs-save-failed" data-screen="save-error" style={{ position: "fixed", inset: 0, zIndex: 45, overflowY: "auto", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font }}>
+      <div style={{ boxSizing: "border-box", minHeight: "100%", padding: "max(env(safe-area-inset-top, 0px), 12px) 12px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        <header style={{ display: "flex", flexDirection: "column", gap: "6px", margin: "4px 0 8px 9px" }}>
+          <h1 style={{ margin: 0, fontWeight: 600, fontSize: "32px", lineHeight: "36px", color: NR.textDisplay }}>Nie udało się potwierdzić zapisu treningu</h1>
+        </header>
+        <section role="alert" data-testid="finish-error" style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px 14px", borderRadius: "16px", border: "1px solid rgba(242,85,90,.45)", background: "rgba(242,85,90,.08)" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+            <AlertTriangle aria-hidden="true" size={22} color={NR.dangerText} style={{ flexShrink: 0 }} />
+            <span style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
+              <span style={{ fontSize: "19px", lineHeight: "22px", fontWeight: 600, color: NR.textDisplay }}>Trening nie został zapisany w Historii</span>
+              <span style={{ fontSize: "16px", lineHeight: "20px", color: "#D9D9D9" }}>
+                Zapis na tym urządzeniu nie powiódł się. Niedokończony trening{planName ? ` „${planName}”` : ""} jest nadal chroniony — żadne wpisane serie nie zostały usunięte.
+              </span>
+            </span>
+          </div>
+        </section>
+        <section aria-label="Możliwości" style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+          <div style={{ display: "flex" }}>
+            <NrPillCta onClick={onRetry} testId="finish-retry">Spróbuj ponownie zapisać</NrPillCta>
+          </div>
+          <button type="button" onClick={onBack} data-testid="finish-error-back" style={{ width: "100%", minHeight: "52px", boxSizing: "border-box", padding: "10px 16px", borderRadius: "12px", border: `1px solid ${NR.hairline}`, background: "#121213", color: NR.textPrimary, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", cursor: "pointer" }}>
+            <PlayCircle aria-hidden="true" size={20} color={NR.textPrimary} />
+            <span>Wróć do treningu</span>
+          </button>
+          <p style={{ margin: "2px 4px 0", display: "flex", gap: "8px", fontSize: "15px", lineHeight: "19px", color: NR.textSecondary }}>
+            <Info aria-hidden="true" size={17} color={NR.textSecondary} style={{ flexShrink: 0 }} />
+            <span>Jeśli problem się powtarza, pamięć urządzenia może być pełna.</span>
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// D3 — the save / sync status line (computeSyncStatus unchanged; a sync problem is never a failed save).
+const WCS_SYNC_LINES = {
+  upToDate: ["Zapisano", "Synchronizacja aktualna"],
+  syncing: ["Zapisano na tym urządzeniu", "Synchronizacja w toku — na innych urządzeniach jeszcze niepotwierdzone."],
+  pending: ["Zapisano na tym urządzeniu", "Oczekuje na synchronizację — na innych urządzeniach jeszcze niepotwierdzone."],
+  willRetry: ["Zapisano na tym urządzeniu", "Synchronizacja zostanie ponowiona — na innych urządzeniach jeszcze niepotwierdzone."],
+  conflicts: ["Zapisano na tym urządzeniu", "Konflikt synchronizacji wymaga decyzji — sprawdź w Koncie."],
+  offline: ["Zapisano na tym urządzeniu", "Offline — synchronizacja nastąpi po połączeniu z internetem."],
+  loggedOut: ["Zapisano na tym urządzeniu", "Bez konta — dane są dostępne lokalnie."],
+  paused: ["Zapisano na tym urządzeniu", "Synchronizacja wstrzymana — na innych urządzeniach jeszcze niepotwierdzone."],
+};
+function WcsSyncStatus({ kind }) {
+  const k = WCS_SYNC_LINES[kind] ? kind : "loggedOut";
+  const [l1, l2] = WCS_SYNC_LINES[k];
+  const amber = k === "pending" || k === "syncing" || k === "willRetry" || k === "conflicts" || k === "paused";
+  const Icon = k === "upToDate" ? Check : k === "offline" ? CloudOff : k === "loggedOut" ? Smartphone : k === "conflicts" ? AlertTriangle : Cloud;
+  const color = k === "upToDate" ? NR.success : amber ? WCS_AMBER : NR.textSecondary;
+  const border = k === "upToDate" ? "rgba(66,201,138,.35)" : amber ? "rgba(255,181,71,.45)" : "#2E2E30";
+  return (
+    <div role="status" data-testid="wcs-sync-status" data-kind={k} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", borderRadius: "12px", border: `1px solid ${border}`, background: "rgba(9,9,9,.66)" }}>
+      <Icon aria-hidden="true" size={20} color={color} strokeWidth={2.25} style={{ flexShrink: 0 }} />
+      <span style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+        <span style={{ fontFamily: NR.font, fontSize: "17px", lineHeight: "20px", fontWeight: 600, color: NR.textDisplay }}>{l1}</span>
+        <span style={{ fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: "#C8C8C8" }}>{l2}</span>
+      </span>
+    </div>
+  );
+}
+
+// Metric explanations — wording of the master's sheets (Objętość, Suma ciężarów, Serie, Czas); Ćwiczenia
+// and Powtórzenia follow the master's metric definitions (no separate board).
+const WCS_METRICS = {
+  ex: { label: "Ćwiczenia", what: "Liczba ćwiczeń z co najmniej jedną wykonaną serią.", how: "Liczymy ćwiczenia, w których jest co najmniej jedna wykonana seria.", note: "Ćwiczenie bez wykonanych serii nie trafia do zapisanego treningu." },
+  sets: { label: "Serie", what: "Liczba wykonanych serii w tym treningu.", how: "Seria jest wykonana, gdy ma wpisane powtórzenia (ćwiczenia na czas i cardio: czas). Niewypełnione serie są pomijane.", note: "Wiersze dropsetu liczą się jako osobne serie." },
+  reps: { label: "Powtórzenia", what: "Suma powtórzeń z wykonanych serii.", how: "Powtórzenia wszystkich wykonanych serii, łącznie z dropsetami, zsumowane.", note: "Ćwiczenia na czas i cardio nie dodają powtórzeń." },
+  dur: { label: "Czas", what: "Czas trwania treningu.", how: "Od rozpoczęcia do zakończenia treningu, łącznie z przerwami między seriami.", note: "W treningu dodanym później jest to czas wpisany ręcznie." },
+  sumw: { label: "Suma ciężarów", what: "Suma ciężarów wpisanych w wykonanych seriach.", how: "Ciężar każdej wykonanej serii dodany raz, bez mnożenia przez powtórzenia. Przykład: 80 kg × 8 i 80 kg × 6 → 160 kg.", note: "To nie jest objętość. Serie bez ciężaru (np. z masą ciała) dodają 0 kg." },
+  vol: { label: "Objętość", what: "Łączna praca wykonana z ciężarem.", how: "Ciężar × powtórzenia dla każdej wykonanej serii, zsumowane. Przykład: 80 kg × 8 i 80 kg × 6 → 1 120 kg.", note: "Obejmuje dropsety; „Objętość wg ćwiczeń” liczy bez dropsetów, więc suma pasków może być mniejsza. Serie bez ciężaru dodają 0 kg; seria bez powtórzeń liczy ciężar raz." },
+};
+function WcsMetricSheet({ metric, valueText, onClose }) {
+  const m = WCS_METRICS[metric];
+  const part = (h, t) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+      <h3 style={{ margin: 0, fontFamily: NR.font, fontSize: "14px", lineHeight: "17px", fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#FF9A3D" }}>{h}</h3>
+      <p style={{ margin: 0, fontFamily: NR.font, fontSize: "17px", lineHeight: "22px", color: "#E8E8E8" }}>{t}</p>
+    </div>
+  );
+  return (
+    <WcsSheet role="dialog" labelledBy="wcs-mx-t" testId="wcs-metric-sheet" onClose={onClose} handleGap="6px">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }} data-metric-sheet={metric}>
+        <h2 id="wcs-mx-t" style={{ ...WCS_TITLE, margin: "6px 0 0" }}>{m.label}</h2>
+        <button type="button" data-autofocus aria-label="Zamknij wyjaśnienie" onClick={onClose} style={{ ...AW_ICON_BTN, marginRight: "-10px", borderRadius: "22px" }}>
+          <X aria-hidden="true" size={22} strokeWidth={2.25} color={NR.textPrimary} />
+        </button>
+      </div>
+      <p style={{ margin: "2px 0 14px", fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", color: NR.textSecondary }}>
+        W tym treningu: <span style={{ fontFamily: AW_NUM, fontWeight: 600, color: NR.textDisplay, whiteSpace: "nowrap" }}>{valueText}</span>
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {part("Co pokazuje", m.what)}
+        {part("Jak liczymy", m.how)}
+        {part("Uwaga", m.note)}
+      </div>
+    </WcsSheet>
+  );
+}
+function WcsMetricTile({ metric, parts, unit, onOpen }) {
+  const m = WCS_METRICS[metric];
+  const text = `${parts.join(" ")}${unit ? ` ${unit}` : ""}`;
+  return (
+    <button type="button" data-metric={metric} data-testid={`wcs-metric-${metric}`} aria-haspopup="dialog" aria-label={`${m.label}: ${text}. Pokaż wyjaśnienie`} onClick={(e) => onOpen(metric, text, e.currentTarget)} style={{ minWidth: 0, minHeight: "56px", boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "1px", padding: "7px 8px 8px", borderRadius: "12px", background: "linear-gradient(180deg, #141415 0%, #0F0F10 100%)", border: "1px solid #232325", color: NR.textDisplay, textAlign: "left", cursor: "pointer" }}>
+      <span style={{ width: "100%", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "4px" }}>
+        <span style={{ minWidth: 0, fontFamily: NR.font, fontSize: "13px", lineHeight: "16px", color: NR.textSecondary }}>{m.label}</span>
+        <Info aria-hidden="true" size={12} color="#6E6E70" style={{ flexShrink: 0 }} />
+      </span>
+      <span style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: "3px", fontFamily: AW_NUM, fontSize: "17px", lineHeight: "21px", letterSpacing: "-.01em", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+        {parts.map((p, i) => (
+          <span key={i} style={{ whiteSpace: "nowrap" }}>
+            {p}
+          </span>
+        ))}
+        {unit && <span style={{ whiteSpace: "nowrap", fontSize: "12px", lineHeight: "21px", fontWeight: 500, color: NR.textSecondary, letterSpacing: 0 }}>{unit}</span>}
+      </span>
+    </button>
+  );
+}
+
+// The post-workout summary — shown once after finishing (D5); X / Back → the History list (D1); the
+// bottom nav goes straight to its destination with no active tab (D2).
+function WorkoutSummary({ session, history, exercises, isPro, syncKind, onClose, onOpenReport, onOpenUnlock, onNavigate }) {
+  const [sheet, setSheet] = useState(null);
+  const returnRef = useRef(null);
+  const openSheet = (metric, text, el) => {
+    returnRef.current = el;
+    setSheet({ metric, text });
+  };
+  const closeSheet = () => {
+    setSheet(null);
+    const el = returnRef.current;
+    setTimeout(() => {
+      try {
+        if (el && el.focus) el.focus();
+      } catch {}
+    }, 0);
+  };
+  const report = isPro ? generateTrainingReport(session, history, exercises) : null;
+  const achievements = report ? report.achievements : [];
+  const durParts = fmtDuration(session.durationSec).split(" ");
+  // "Objętość wg ćwiczeń" — exerciseVolume of the volume access point; bars compare only exercises of
+  // the same unit (kg, repetitions, time); cardio has no volume and is not listed.
+  const volUnit = (type) => (type === "time" ? "time" : type === "bodyweight" ? "reps" : "kg");
+  const unitOrder = { kg: 0, reps: 1, time: 2 };
+  const rows = (session.exercises || [])
+    .filter((ex) => ex.type !== "cardio")
+    .map((ex) => ({ name: ex.name, unit: volUnit(ex.type), type: ex.type, vol: exerciseVolume(ex.sets, ex.type) }));
+  const maxBy = {};
+  rows.forEach((r) => (maxBy[r.unit] = Math.max(maxBy[r.unit] || 0, r.vol)));
+  rows.sort((a, b) => unitOrder[a.unit] - unitOrder[b.unit] || b.vol - a.vol);
+  const volText = (r) => (r.unit === "time" ? fmtDuration(r.vol) : r.unit === "reps" ? `${fmtThousands(r.vol)} powt.` : `${fmtThousands(r.vol)} kg`);
+  const sectionStyle = { display: "flex", flexDirection: "column", gap: "10px", padding: "14px", borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow };
+  const reportButton = (
+    <button type="button" onClick={onOpenReport} data-testid="wcs-open-report" style={{ width: "100%", minHeight: "52px", boxSizing: "border-box", padding: "10px 16px", borderRadius: "12px", border: "1px solid rgba(255,133,27,.45)", background: "transparent", color: "#FF9A3D", fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", cursor: "pointer" }}>
+      <TrendingUp aria-hidden="true" size={20} color="#FF9A3D" />
+      <span>Zobacz pełny raport treningowy</span>
+    </button>
+  );
+  return (
+    <div data-testid="workout-summary" data-screen="summary" style={{ minHeight: "100vh", boxSizing: "border-box", position: "relative", overflow: "hidden", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, padding: "max(env(safe-area-inset-top, 0px), 12px) 12px calc(var(--nr-nav-h, 71px) + 16px)", display: "flex", flexDirection: "column", gap: "12px" }}>
+      <FontStyles />
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <NrHeroCard labelledBy="wcs-sum-h" testId="wcs-hero" photoPos="62% 45%" bottomShade="linear-gradient(0deg, rgba(11,11,12,.92) 0%, rgba(11,11,12,.45) 45%, rgba(11,11,12,0) 72%)">
+          <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: "4px", padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+              <NrSectionHead icon={Flag}>Trening zakończony</NrSectionHead>
+              <button type="button" data-close data-testid="wcs-close" aria-label="Zamknij podsumowanie i przejdź do Historii" onClick={onClose} style={{ ...AW_ICON_BTN, margin: "-10px -10px -10px 0", borderRadius: "22px", background: "rgba(9,9,9,.55)" }}>
+                <X aria-hidden="true" size={22} strokeWidth={2.25} color={NR.textPrimary} />
+              </button>
+            </div>
+            <h1 id="wcs-sum-h" style={{ margin: "2px 0 0", fontFamily: NR.font, fontSize: "32px", lineHeight: "36px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" }}>{session.planName || "Trening bez planu"}</h1>
+            <p style={{ margin: "0 0 28px", fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textPrimary }}>
+              {fmtDate(session.date)} · {fmtDuration(session.durationSec)}
+            </p>
+            <WcsSyncStatus kind={syncKind} />
+          </div>
+        </NrHeroCard>
+      </div>
+
+      <section aria-label="Wyniki treningu" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 6.4em), 1fr))", gap: "6px", fontSize: "15px" }}>
+        <WcsMetricTile metric="ex" parts={[String(session.exercisesCount)]} onOpen={openSheet} />
+        <WcsMetricTile metric="sets" parts={[String(session.totalSets)]} onOpen={openSheet} />
+        <WcsMetricTile metric="reps" parts={[fmtThousands(session.totalReps)]} onOpen={openSheet} />
+        <WcsMetricTile metric="dur" parts={durParts} onOpen={openSheet} />
+        <WcsMetricTile metric="sumw" parts={[fmtThousands(session.totalWeight)]} unit="kg" onOpen={openSheet} />
+        <WcsMetricTile metric="vol" parts={[fmtThousands(sessionVolume(session))]} unit="kg" onOpen={openSheet} />
+      </section>
+
+      {isPro ? (
+        achievements.length > 0 ? (
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <section aria-labelledby="wcs-ach-h" data-testid="wcs-records" style={sectionStyle}>
+              <h2 id="wcs-ach-h" style={{ margin: 0, display: "flex" }}>
+                <NrSectionHead icon={Trophy}>Rekordy z tego treningu</NrSectionHead>
+              </h2>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
+                {achievements.map((a, i) => (
+                  <li key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: "#E8E8E8" }}>
+                    <Trophy aria-hidden="true" size={17} color="#FF9A3D" style={{ flexShrink: 0 }} />
+                    <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{a}</span>
+                  </li>
+                ))}
+              </ul>
+              {reportButton}
+            </section>
+            <NrFadeBorder alpha={0.5} />
+          </div>
+        ) : (
+          // D4: a PRO workout with no records — no empty records section; the full report stays reachable
+          reportButton
+        )
+      ) : (
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <section aria-labelledby="wcs-ach-h" data-testid="wcs-pro-offer" style={{ ...sectionStyle, border: "1px solid rgba(255,133,27,.30)" }}>
+            <h2 id="wcs-ach-h" style={{ margin: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+              <NrSectionHead icon={Trophy}>Rekordy z tego treningu</NrSectionHead>
+              <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "10px", background: NR.warm, color: NR.bg, fontFamily: NR.font, fontSize: "13px", lineHeight: "16px", fontWeight: 700 }}>
+                <Lock aria-hidden="true" size={12} strokeWidth={2.5} color={NR.bg} />
+                PRO
+              </span>
+            </h2>
+            <p style={{ margin: 0, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 600, color: NR.textPrimary }}>Zobacz trend, nie tylko pojedynczy wynik</p>
+            <p style={{ margin: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: NR.textSecondary }}>PRO porówna ten trening z właściwym punktem odniesienia i pokaże, dokąd zmierza każde ćwiczenie.</p>
+            <button type="button" onClick={onOpenUnlock} data-testid="wcs-pro-cta" style={{ width: "100%", minHeight: "52px", boxSizing: "border-box", padding: "10px 16px", borderRadius: "12px", border: "1px solid rgba(255,133,27,.45)", background: "transparent", color: "#FF9A3D", fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", cursor: "pointer" }}>
+              <Lock aria-hidden="true" size={20} color="#FF9A3D" />
+              <span>Poznaj PRO</span>
+            </button>
+          </section>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <section aria-labelledby="wcs-pe-h" data-testid="wcs-volume" style={{ ...sectionStyle, gap: "12px" }}>
+          <h2 id="wcs-pe-h" style={{ margin: 0, display: "flex" }}>
+            <NrSectionHead icon={Layers}>Objętość wg ćwiczeń</NrSectionHead>
+          </h2>
+          <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {rows.map((r, i) => (
+              <li key={i} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", fontFamily: NR.font, fontSize: "16px", lineHeight: "19px" }}>
+                  <span style={{ color: NR.textPrimary, minWidth: 0, overflowWrap: "anywhere" }}>{r.name}</span>
+                  <span style={{ flexShrink: 0, fontFamily: AW_NUM, fontSize: "15px", lineHeight: "19px", fontWeight: 500, color: NR.textSecondary, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{volText(r)}</span>
+                </span>
+                <span aria-hidden="true" style={{ height: "6px", borderRadius: "3px", background: "#1A1A1B", overflow: "hidden" }}>
+                  <span style={{ display: "block", height: "100%", width: `${maxBy[r.unit] > 0 ? Math.max(2, Math.round((r.vol / maxBy[r.unit]) * 100)) : 0}%`, borderRadius: "3px", background: "linear-gradient(90deg, #FF9A3D, #FF6A00)" }} />
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p style={{ margin: 0, fontFamily: NR.font, fontSize: "14px", lineHeight: "18px", color: NR.textMuted }}>Paski porównują tylko ćwiczenia w tej samej jednostce: kg, powtórzenia i czas osobno.</p>
+        </section>
+      )}
+
+      <BottomNav screen={null} onNavigate={onNavigate} />
+      {sheet && <WcsMetricSheet metric={sheet.metric} valueText={sheet.text} onClose={closeSheet} />}
+    </div>
+  );
+}

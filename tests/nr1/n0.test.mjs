@@ -371,7 +371,7 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     const anchor = '  draftVolume,\n} from "@nextrep-engine";\n';
     // I4: one more import line at the end — icons of the approved masters, from lucide-react only
     const i4Icons = "// I4: icons used by the approved UI masters (canvas v81) and not imported above\n" +
-      'import { Flag, ListOrdered, PauseCircle, Info, Calendar, CalendarCheck, ArrowRight, CloudOff, Trophy, ListChecks, Hourglass, Sigma, Sparkles, Pause, Play, RotateCcw, Link as LinkIcon } from "lucide-react";\n';
+      'import { Flag, ListOrdered, PauseCircle, Info, Calendar, CalendarCheck, ArrowRight, CloudOff, Trophy, ListChecks, Hourglass, Sigma, Sparkles, Pause, Play, RotateCcw, Smartphone, Cloud, Link as LinkIcon } from "lucide-react";\n';
     assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();

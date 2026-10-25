@@ -40,6 +40,9 @@ function App() {
   const [editSessionTarget, setEditSessionTarget] = useState(null); // session object being edited, or null
   const [trainingReportTarget, setTrainingReportTarget] = useState(null); // session object to show full report for, or null
   const [historyDetail, setHistoryDetail] = useState(null);
+  // I4.5 (WCS master): the post-workout summary — shown once after finishing (D5); closing it, Back or
+  // a bottom-nav tab leaves it for good (D1, D2). The saved workout stays reachable in History.
+  const [workoutSummary, setWorkoutSummary] = useState(null);
   const [exerciseDetail, setExerciseDetail] = useState(null);
   // Unfinished workout found on launch: { draft } while the "resume" prompt is shown; resumeDraft
   // is what gets handed to ActiveWorkout when the person chooses to continue it.
@@ -75,6 +78,7 @@ function App() {
   const goToScreen = (target) => {
     setExerciseDetail(null);
     setHistoryDetail(null);
+    setWorkoutSummary(null);
     setTrainingReportTarget(null);
     if (screenRef.current === target) {
       setNavResetKey((k) => k + 1);
@@ -135,6 +139,10 @@ function App() {
         setTrainingReportTarget(null);
         return;
       }
+      if (workoutSummary) {
+        setWorkoutSummary(null); // D1: Back → the History list
+        return;
+      }
       if (historyDetail) {
         setHistoryDetail(null);
         return;
@@ -152,7 +160,7 @@ function App() {
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [editSessionTarget, activeWorkoutPlan, exerciseDetail, trainingReportTarget, historyDetail, planEditorTarget, backfillInfo]);
+  }, [editSessionTarget, activeWorkoutPlan, exerciseDetail, trainingReportTarget, workoutSummary, historyDetail, planEditorTarget, backfillInfo]);
 
   // Reads the local data keys into React state — the same logic the app has always used on
   // first load. Pulled out into its own stable function so a cloud restore can call it too,
@@ -413,6 +421,7 @@ function App() {
         setActiveWorkoutPlan(undefined);
         setBackfillInfo(null);
         setHistoryDetail(null);
+        setWorkoutSummary(null);
         setExerciseDetail(null);
         setEditSessionTarget(null);
         setPlanEditorTarget(undefined);
@@ -1342,7 +1351,7 @@ function App() {
           setActiveWorkoutPlan(undefined);
           setBackfillInfo(null);
           setScreen("history");
-          setHistoryDetail(session);
+          setWorkoutSummary(session); // I4.5: the one-time summary (WCS master); then History
           return { ok: true };
         }}
       />
@@ -1388,6 +1397,37 @@ function App() {
         ) : (
           <ProPaywall onBack={() => window.history.back()} onOpenUnlock={() => setProModalOpen(true)} title="RAPORT TRENINGOWY" />
         )}
+        {proModalOpen && (
+          <ProUnlockModal proStatus={proStatus} serverPro={serverProForModal} onClose={() => setProModalOpen(false)} onSetManualPro={setManualPro} onGrantAdUnlock={grantAdUnlock} />
+        )}
+      </>
+    );
+  }
+
+  // I4.5: post-workout summary (WCS master) — once, right after finishing
+  if (workoutSummary) {
+    const summarySyncKind = (() => {
+      if (!authUser) return "loggedOut";
+      const m = getAccountInitMarker(authUser.id);
+      const paused = !m || m.status !== "ready" || m.syncPaused ? "paused" : null;
+      return computeSyncStatus({ authUser, isOnline, queue: syncQueueState || [], paused }).kind;
+    })();
+    return (
+      <>
+        <WorkoutSummary
+          session={workoutSummary}
+          history={history}
+          exercises={exercises}
+          isPro={isProEffective}
+          syncKind={summarySyncKind}
+          onClose={() => setWorkoutSummary(null)}
+          onOpenReport={() => {
+            pushNavMarker();
+            setTrainingReportTarget(workoutSummary);
+          }}
+          onOpenUnlock={() => setProModalOpen(true)}
+          onNavigate={goToScreen}
+        />
         {proModalOpen && (
           <ProUnlockModal proStatus={proStatus} serverPro={serverProForModal} onClose={() => setProModalOpen(false)} onSetManualPro={setManualPro} onGrantAdUnlock={grantAdUnlock} />
         )}

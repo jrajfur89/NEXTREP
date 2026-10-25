@@ -79,7 +79,7 @@ async function openTrening() {
 async function finishWorkout() {
   await click(btn(/^Zakończ/));
   await flush(10, 3);
-  const dialogBtn = $$("button").filter((b) => b.textContent.trim() === "Zakończ").pop();
+  const dialogBtn = byTestId("wcs-finish");
   await click(dialogBtn);
   await flush(10, 5);
 }
@@ -243,9 +243,9 @@ describe("P0-2 — finishing a workout", () => {
     failWrites((k) => k === GUEST("history"));
     await finishWorkout();
     assert.ok(byTestId("finish-error"), "an error is shown");
-    assert.match(byTestId("finish-error").textContent, /Nie udało się zapisać treningu/);
+    assert.match(byTestId("finish-error").textContent, /Trening nie został zapisany w Historii/);
     assert.ok(workoutOpen(), "the workout stays open");
-    assert.ok(!btn(/Zobacz pełny raport treningowy/), "no summary (no false success)");
+    assert.ok(!byTestId("workout-summary"), "no summary (no false success)");
     assert.equal(localStorage.getItem(GUEST("history")), null, "nothing claimed saved");
     assert.ok(draftHasPushDay(), "the draft is kept");
   });
@@ -267,14 +267,14 @@ describe("P0-2 — finishing a workout", () => {
     assert.equal(history.length, 1);
     assert.equal(history[0].id, sessionId, "the session keeps the id fixed for this workout");
     assert.equal(localStorage.getItem(GUEST("active_workout_draft")), null, "the draft is removed only after the save");
-    assert.ok(btn(/Zobacz pełny raport treningowy/), "the summary is shown now");
+    assert.ok(byTestId("workout-summary"), "the summary is shown now");
   });
 
   test("double tap on the final Zakończ adds one session", async () => {
     await resumeAndOpen();
     await click(btn(/^Zakończ/));
     await flush(10, 3);
-    const dialogBtn = $$("button").filter((b) => b.textContent.trim() === "Zakończ").pop();
+    const dialogBtn = byTestId("wcs-finish");
     await act(async () => {
       dialogBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       dialogBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -288,7 +288,7 @@ describe("P0-2 — finishing a workout", () => {
     failWrites((k) => /backup/.test(k));
     await finishWorkout();
     assert.equal(read(GUEST("history")).length, 1);
-    assert.ok(btn(/Zobacz pełny raport treningowy/));
+    assert.ok(byTestId("workout-summary"));
     assert.equal(localStorage.getItem(GUEST("active_workout_draft")), null);
   });
 
@@ -331,7 +331,7 @@ describe("P0-2 — finishing a workout", () => {
     Object.defineProperty(globalThis.navigator, "onLine", { value: false, configurable: true });
     await finishWorkout();
     assert.equal(read(GUEST("history")).length, 1);
-    assert.ok(btn(/Zobacz pełny raport treningowy/));
+    assert.ok(byTestId("workout-summary"));
   });
 
   test("signed-in account: a failed write then a retry queue the session for sync exactly once", async () => {

@@ -73,8 +73,7 @@ describe("A. guest offline → session recovered during an active guest workout"
     // finish the guest workout
     await click(buttonText("Zakończ")[0]);
     await flush(20, 3);
-    const confirm = buttonText("Zakończ");
-    await click(confirm[confirm.length - 1]);
+    await click(byTestId("wcs-finish")); // I4.5: the WCS confirmation sheet
     await flush(40, 10);
     assert.equal(A.__testState.activeDataNamespace, `user_${UA}`, "held switch performed after finishing");
     assert.ok(byTestId("session-recovered-notice"), "user is told the account session was recovered");

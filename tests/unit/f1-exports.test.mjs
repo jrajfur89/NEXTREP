@@ -35,6 +35,8 @@ const ADDED_BY_STAGE = {
     "deleteActiveWorkoutDraft", "readActiveWorkoutDraftState", "tefCardLink", "tefWideButton",
     "AW_LABEL", "AW_ICON_BTN", "AW_NUM", "AW_SR", "AwCardToggle", "AwField", "AwMenuItem", "AwProgress", "AwRestRing", "AwSetDone", "AwSetPending", "AwSupersetBar",
     "awClockLabel", "awKg", "awMmSs", "awPendingText", "awPriorFor", "awRange", "awResultText", "awSetLabels", "awSetResult",
+    "WCS_AMBER", "WCS_BODY", "WCS_METRICS", "WCS_SUB", "WCS_SYNC_LINES", "WCS_TITLE", "WcsButton", "WcsFinishSheet", "WcsMetricSheet", "WcsMetricTile", "WcsSaveFailed",
+    "WcsSheet", "WcsSyncStatus", "WorkoutSummary", "wcsUnfilled",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).
