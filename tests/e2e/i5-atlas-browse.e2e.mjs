@@ -56,7 +56,7 @@ const tap = async (sel) => {
   await page.waitForTimeout(250);
 };
 
-describe("I5.3 / I5.4 ATLAS-UX-01 screens on the built app", { concurrency: false }, () => {
+describe("I5.3–I5.5 ATLAS-UX-01 screens and Compact B2 on the built app", { concurrency: false }, () => {
   before(async () => {
     mkdirSync(OUT, { recursive: true });
     srv = await serve(DIST);
@@ -189,6 +189,69 @@ describe("I5.3 / I5.4 ATLAS-UX-01 screens on the built app", { concurrency: fals
       await page.goBack();
       await page.waitForTimeout(300);
       assert.ok(await page.getByTestId("atlas-home").isVisible(), "E03 → E01");
+      assert.deepEqual(problems, {});
+    });
+  }
+
+  // I5.5 — Compact B2 on every screen with the bar: 56 + 1 px border (no inset in Chromium), icon 22,
+  // gap 2, every tab ≥ 48 × 48, labels fit (1 row), and at the end of each screen no content under it.
+  for (const size of SIZES) {
+    test(`${size[0]} × ${size[1]}: Compact B2 on Start, Ćwiczenia (E01 / E03 end), Plany, Trening, Statystyki, Historia, Więcej — sizes and nothing under the bar`, async () => {
+      await page.setViewportSize({ width: size[0], height: size[1] });
+      const problems = {};
+      const measure = async (name) => {
+        await page.waitForTimeout(350);
+        await page.evaluate(() => document.fonts.ready);
+        const r = await page.evaluate(async () => {
+          const out = [];
+          const nav = document.querySelector('nav[aria-label="Nawigacja główna"]');
+          const nr = nav.getBoundingClientRect();
+          if (Math.round(nr.height) !== 57) out.push(`bar height ${nr.height}`);
+          if (nav.dataset.layout !== "1row") out.push(`layout ${nav.dataset.layout}`);
+          const v = getComputedStyle(document.documentElement).getPropertyValue("--nr-nav-h").trim();
+          if (v !== "57px") out.push(`--nr-nav-h ${v}`);
+          for (const b of nav.querySelectorAll("button")) {
+            const br = b.getBoundingClientRect();
+            if (br.width < 48 || br.height < 48) out.push(`tab ${Math.round(br.width)}×${Math.round(br.height)}`);
+            const svg = b.querySelector("svg");
+            if (Math.round(svg.getBoundingClientRect().width) !== 22) out.push(`icon ${svg.getBoundingClientRect().width}`);
+            const lab = b.querySelector("[data-nav-label]");
+            const gap = lab.getBoundingClientRect().top - svg.getBoundingClientRect().bottom;
+            if (Math.abs(gap - 2) > 0.6) out.push(`gap ${gap.toFixed(1)}`);
+            if (lab.getBoundingClientRect().width > br.width - 4) out.push(`label too wide: ${lab.textContent}`);
+          }
+          window.scrollTo(0, document.documentElement.scrollHeight);
+          await new Promise((res) => setTimeout(res, 150));
+          const top = nav.getBoundingClientRect().top;
+          for (const el of document.querySelectorAll("body *")) {
+            if (nav.contains(el) || el.closest('[role="dialog"]')) continue;
+            const cs = getComputedStyle(el);
+            if (cs.position === "fixed" || cs.display === "none" || cs.visibility === "hidden") continue;
+            const leaf = el.matches("button, a, input, h1, h2, h3, p, li") || (el.children.length === 0 && el.textContent.trim());
+            if (!leaf) continue;
+            if (el.closest("[style*='position: fixed'], .fixed")) continue;
+            const er = el.getBoundingClientRect();
+            if (er.height === 0 || er.width <= 1) continue;
+            if (er.bottom > top + 0.5 && er.top < window.innerHeight) out.push(`under the bar: ${(el.getAttribute("aria-label") || el.textContent).trim().slice(0, 30)}`);
+          }
+          window.scrollTo(0, 0);
+          return [...new Set(out)];
+        });
+        if (r.length) problems[name] = r;
+      };
+      for (const [name, tid] of [["Start", "nav-dashboard"], ["Plany", "nav-plans"], ["Trening", "nav-startWorkout"], ["Statystyki", "nav-stats"], ["Historia", "nav-history"], ["Więcej", "nav-more"], ["Ćwiczenia", "nav-exercises"]]) {
+        await page.getByTestId(tid).click();
+        await measure(name);
+      }
+      await page.screenshot({ path: join(OUT, `i5-B2-E01-${size[0]}.png`), animations: "disabled", caret: "hide" });
+      await tap('[data-testid="atlas-category-chest"]');
+      await measure("E03-Klatka (long list)");
+      await page.getByTestId("nav-dashboard").click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(OUT, `i5-B2-Start-${size[0]}.png`), animations: "disabled", caret: "hide" });
+      await page.getByTestId("nav-startWorkout").click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(OUT, `i5-B2-Trening-${size[0]}.png`), animations: "disabled", caret: "hide" });
       assert.deepEqual(problems, {});
     });
   }

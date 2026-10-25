@@ -1761,7 +1761,7 @@ function TefAlert({ title, text, onRetry, retryLabel = "Spróbuj ponownie", test
 // The ≈4 s result message (role=status) above the B2 bar.
 function TefStatus({ text }) {
   return (
-    <div role="status" aria-live="polite" data-testid="tef-status" style={{ position: "fixed", left: "12px", right: "12px", bottom: "calc(var(--nr-nav-h, 71px) + 12px)", zIndex: 40, display: "flex", alignItems: "center", gap: "10px", minHeight: "52px", boxSizing: "border-box", padding: "10px 14px", borderRadius: "14px", background: "linear-gradient(180deg, #1A1A1B, #121213)", border: "1px solid rgba(66,201,138,.45)", boxShadow: "0 12px 28px -8px rgba(0,0,0,.9)", fontFamily: NR.font }}>
+    <div role="status" aria-live="polite" data-testid="tef-status" style={{ position: "fixed", left: "12px", right: "12px", bottom: "calc(var(--nr-nav-h, 57px) + 12px)", zIndex: 40, display: "flex", alignItems: "center", gap: "10px", minHeight: "52px", boxSizing: "border-box", padding: "10px 14px", borderRadius: "14px", background: "linear-gradient(180deg, #1A1A1B, #121213)", border: "1px solid rgba(66,201,138,.45)", boxShadow: "0 12px 28px -8px rgba(0,0,0,.9)", fontFamily: NR.font }}>
       <Check aria-hidden="true" size={20} strokeWidth={2.5} color={NR.success} style={{ flexShrink: 0 }} />
       <span style={{ fontSize: "17px", lineHeight: "21px", color: NR.textPrimary, overflowWrap: "anywhere" }}>{text}</span>
     </div>

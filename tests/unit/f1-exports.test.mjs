@@ -49,6 +49,8 @@ const ADDED_BY_STAGE = {
     // I5.4: E04 sheet, E05 search, E07 states
     "ATLAS_ALIAS_NOTE", "ATLAS_SHEET_EQUIPMENT_VISIBLE", "AtlasActiveFilters", "AtlasFilterSheet", "AtlasResults", "AtlasSearchRow", "atlasActiveFilters", "atlasEffectiveSort",
     "atlasFiltersZeroText", "atlasFocusedSearch", "atlasKeyboardOpen", "atlasPruneSelection", "atlasScopePhrase", "atlasSelectionCount",
+    // I5.5: the app's one soft-keyboard detector (moved out of the Active Workout) for the Compact B2
+    "NR_KEYBOARD_GAP", "nrIsTextField", "nrSoftKeyboardOpen", "nrViewportBase", "useSoftKeyboard",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).

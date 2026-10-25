@@ -586,7 +586,7 @@ const atlasScrollTo = (y) => {
 const atlasHasSubregionScreen = (cat) => Boolean(cat && cat.subregions && cat.subregions.length > 1);
 
 const ATLAS_SCREEN_STYLE = { minHeight: "100vh", boxSizing: "border-box", position: "relative", overflowX: "clip", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, display: "flex", flexDirection: "column" };
-const ATLAS_PAD_BOTTOM = "calc(var(--nr-nav-h, 71px) + 16px)"; // the last element ends 16 px above B2
+const ATLAS_PAD_BOTTOM = "calc(var(--nr-nav-h, 57px) + 16px)"; // the last element ends 16 px above B2
 const ATLAS_H1 = { margin: 0, fontFamily: NR.font, fontSize: "32px", lineHeight: "35px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" };
 const ATLAS_NOTE = { fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: NR.textMuted };
 
@@ -656,13 +656,12 @@ function AtlasCategoryView({ category, onBack, onOpenAll, onOpenSubregion }) {
 // ---- helpers of the list state (D06) -----------------------------------------------------------
 const atlasSelectionCount = (sel) => Object.values(sel || {}).reduce((n, v) => n + ((v && v.length) || 0), 0);
 const atlasEffectiveSort = (sort, query) => sort || (String(query || "").trim() ? "best" : "az");
-// the soft keyboard is open: the visual viewport is clearly smaller than the window (same 120 px rule
-// as the Active Workout); without visualViewport (old WebView, tests) a focused field counts as open
+// the soft keyboard is open — the app's one detector (11-ui-shared nrSoftKeyboardOpen, I5.5); without
+// visualViewport (old WebView, tests) a focused search field counts as open, so Back only leaves it
 function atlasKeyboardOpen() {
   if (typeof window === "undefined") return false;
-  const vv = window.visualViewport;
-  if (!vv || !window.innerHeight) return true;
-  return window.innerHeight - vv.height > 120;
+  if (!window.visualViewport) return true;
+  return nrSoftKeyboardOpen();
 }
 const atlasFocusedSearch = () => (typeof document !== "undefined" && document.activeElement && document.activeElement.matches && document.activeElement.matches("[data-atlas-search]") ? document.activeElement : null);
 // selected options with their labels, in the order of the sheet (for P3 and the texts)

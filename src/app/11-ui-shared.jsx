@@ -129,11 +129,63 @@ function PlanThumbnail({ tier = 0, variant = "ready", size = 48, planKey = null 
   );
 }
 
+// I5.5 (ATLAS-UX-01, D07 / Q2) — the soft keyboard, ONE detector for the whole app (moved out of the
+// Active Workout, behaviour unchanged): the keyboard counts as open when a text field (input /
+// textarea) has the focus and the visual viewport is more than 120 px shorter than without the
+// keyboard. „Without the keyboard” = the largest visual viewport seen while nothing was typed (an
+// Android WebView with adjustResize shrinks window.innerHeight too, so the window is not the base).
+// Without visualViewport (old WebView, jsdom) the keyboard is never reported open.
+const NR_KEYBOARD_GAP = 120;
+let nrViewportBase = 0;
+const nrIsTextField = (a) => Boolean(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA"));
+// the instant check (also for Back handlers): root = only fields inside it count; false = no root yet
+function nrSoftKeyboardOpen(root = null) {
+  const vv = typeof window !== "undefined" ? window.visualViewport : null;
+  if (!vv) return false;
+  const a = typeof document !== "undefined" ? document.activeElement : null;
+  const typing = nrIsTextField(a) && root !== false && (!root || root.contains(a));
+  if (!typing) {
+    nrViewportBase = Math.max(nrViewportBase, vv.height);
+    return false;
+  }
+  return vv.height < (nrViewportBase || window.innerHeight || vv.height) - NR_KEYBOARD_GAP;
+}
+// the hook: re-checks on viewport resize and on focus changes; onOpen(field) runs when it opens
+function useSoftKeyboard(rootRef = null, onOpen = null) {
+  const [open, setOpen] = useState(false);
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    nrViewportBase = Math.max(nrViewportBase, vv.height);
+    const check = () => {
+      const now = nrSoftKeyboardOpen(rootRef ? rootRef.current || false : null);
+      setOpen(now);
+      if (now && onOpenRef.current) onOpenRef.current(document.activeElement);
+    };
+    const later = () => setTimeout(check, 0);
+    vv.addEventListener("resize", check);
+    document.addEventListener("focusin", later);
+    document.addEventListener("focusout", later);
+    return () => {
+      vv.removeEventListener("resize", check);
+      document.removeEventListener("focusin", later);
+      document.removeEventListener("focusout", later);
+    };
+  }, []);
+  return open;
+}
+
 // I4 — bottom navigation B2 (master NAV-B2 v1, approved 14.10.2026; canvas v81 boards NavB2-*, NavIcon-*).
 // 7 production targets, same order and routing. Active tab: #FF851B, line 2.25 vs 1.75, label 500 vs 400,
-// 28 × 2 indicator, glow limited to the tab, aria-current. Safe area: max(inset, 8 px). When the labels
-// no longer fit (enlarged text / page zoom) the bar shows the 7 icons only (row 56 px, NavIcon boards),
-// names in aria-label, visible keyboard focus. The bar height is published as --nr-nav-h.
+// 28 × 2 indicator, glow limited to the tab, aria-current. When the labels no longer fit (enlarged text /
+// page zoom) the bar shows the 7 icons only, names in aria-label, visible keyboard focus. The bar height
+// is published as --nr-nav-h.
+// I5.5 — Compact B2 (ATLAS-UX-01 §6, proposal DS-C04 / master NAV-B2 v2 — DS-SYNC pending): row 56 px
+// in both modes, icon 22, icon–label gap 2, bottom padding = the system safe area only (56 + inset;
+// fallback of --nr-nav-h 57 = 56 + 1 px border). Hidden (display: none, --nr-nav-h 0) while the soft
+// keyboard is open, on every screen (D07, Q2).
 const NAV_B2_ITEMS = [
   { key: "dashboard", label: "Start", icon: Home },
   { key: "exercises", label: "Ćwiczenia", icon: Dumbbell },
@@ -146,10 +198,21 @@ const NAV_B2_ITEMS = [
 function BottomNav({ screen, onNavigate }) {
   const navRef = useRef(null);
   const [iconOnly, setIconOnly] = useState(false);
+  const keyboard = useSoftKeyboard();
+  const hiddenRef = useRef(false);
+  hiddenRef.current = keyboard;
+  const checkRef = useRef(null);
   useEffect(() => {
     const check = () => {
       const nav = navRef.current;
       if (!nav) return;
+      if (hiddenRef.current) {
+        // hidden with the keyboard: nothing to measure, the content may use the whole height
+        try {
+          document.documentElement.style.setProperty("--nr-nav-h", "0px");
+        } catch {}
+        return;
+      }
       // every label keeps its natural width (absolute + hidden in the icon mode), so the same
       // measurement decides both ways: a label wider than its tab (minus 2 × 2 px) → icons only
       const labels = [...nav.querySelectorAll("[data-nav-label]")];
@@ -163,6 +226,7 @@ function BottomNav({ screen, onNavigate }) {
         document.documentElement.style.setProperty("--nr-nav-h", `${Math.round(nav.getBoundingClientRect().height)}px`);
       } catch {}
     };
+    checkRef.current = check;
     check();
     let ro = null;
     try {
@@ -186,15 +250,21 @@ function BottomNav({ screen, onNavigate }) {
       if (ro) ro.disconnect();
     };
   }, []);
+  useEffect(() => {
+    if (checkRef.current) checkRef.current(); // hide → --nr-nav-h 0; show → measured again
+  }, [keyboard]);
   return (
     <nav
       ref={navRef}
       aria-label="Nawigacja główna"
       data-variant="B2"
+      data-size="compact"
       data-layout={iconOnly ? "icons" : "1row"}
+      data-keyboard={keyboard ? "open" : undefined}
       className="fixed bottom-0 left-0 right-0 z-30"
       style={{
-        paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)",
+        display: keyboard ? "none" : undefined,
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
         paddingLeft: "env(safe-area-inset-left, 0px)",
         paddingRight: "env(safe-area-inset-right, 0px)",
         background: "linear-gradient(180deg, #121213 0%, #0B0B0C 55%, #090909 100%)",
@@ -203,7 +273,7 @@ function BottomNav({ screen, onNavigate }) {
         fontFamily: "'Barlow Condensed', Inter, sans-serif",
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${NAV_B2_ITEMS.length}, minmax(0, 1fr))`, gridAutoRows: iconOnly ? "56px" : "62px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${NAV_B2_ITEMS.length}, minmax(0, 1fr))`, gridAutoRows: "56px" }}>
         {NAV_B2_ITEMS.map((it) => {
           const Icon = it.icon;
           const active = screen === it.key;
@@ -216,7 +286,7 @@ function BottomNav({ screen, onNavigate }) {
               aria-label={iconOnly ? it.label : undefined}
               data-testid={`nav-${it.key}`}
               className="relative flex flex-col items-center justify-center min-w-0 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#FF851B]"
-              style={{ gap: "4px", padding: "0 2px", color: active ? "#FF851B" : "#B8B8B8", background: "transparent" }}
+              style={{ gap: "2px", padding: "0 2px", color: active ? "#FF851B" : "#B8B8B8", background: "transparent" }}
             >
               {active && (
                 <span aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
@@ -226,7 +296,7 @@ function BottomNav({ screen, onNavigate }) {
               )}
               <Icon
                 aria-hidden="true"
-                size={24}
+                size={22}
                 strokeWidth={active ? 2.25 : 1.75}
                 style={{ position: "relative", flex: "none", filter: active ? "drop-shadow(0 0 2.5px rgba(255,133,27,.28))" : "none" }}
               />
@@ -868,7 +938,7 @@ function NrScreen({ children, testId, screen }) {
         background: NR.bg,
         color: NR.textPrimary,
         fontFamily: NR.font,
-        padding: "max(env(safe-area-inset-top, 0px), 12px) 12px calc(var(--nr-nav-h, 71px) + 16px)",
+        padding: "max(env(safe-area-inset-top, 0px), 12px) 12px calc(var(--nr-nav-h, 57px) + 16px)",
         display: "flex",
         flexDirection: "column",
         gap: "12px",

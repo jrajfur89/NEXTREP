@@ -804,35 +804,17 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   const awHeaderRef = useRef(null);
   const awDockRef = useRef(null);
   const awFooterRef = useRef(null);
-  const [kbOpen, setKbOpen] = useState(false);
+  // I5.5: the shared detector (11-ui-shared useSoftKeyboard) — same rule as before: a field of this
+  // screen focused and the visual viewport > 120 px shorter; the field is scrolled into view on open
+  const kbOpen = useSoftKeyboard(awRootRef, (a) => {
+    if (a && a.scrollIntoView) {
+      try {
+        a.scrollIntoView({ block: "center" });
+      } catch {}
+    }
+  });
   const kbOpenRef = useRef(false);
   kbOpenRef.current = kbOpen;
-  useEffect(() => {
-    const vv = typeof window !== "undefined" ? window.visualViewport : null;
-    if (!vv) return;
-    let base = vv.height;
-    const check = () => {
-      const a = document.activeElement;
-      const typing = Boolean(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && awRootRef.current && awRootRef.current.contains(a));
-      if (!typing) base = Math.max(base, vv.height);
-      const open = typing && vv.height < base - 120;
-      setKbOpen(open);
-      if (open && a && a.scrollIntoView) {
-        try {
-          a.scrollIntoView({ block: "center" });
-        } catch {}
-      }
-    };
-    const later = () => setTimeout(check, 0);
-    vv.addEventListener("resize", check);
-    document.addEventListener("focusin", later);
-    document.addEventListener("focusout", later);
-    return () => {
-      vv.removeEventListener("resize", check);
-      document.removeEventListener("focusin", later);
-      document.removeEventListener("focusout", later);
-    };
-  }, []);
   // Compact header when the working area left by the photo header, the dock and the footer is
   // under 280 px (constrained height / large text) — the threshold of the master's tests.
   const [compactHeader, setCompactHeader] = useState(false);
@@ -2095,7 +2077,7 @@ function WorkoutSummary({ session, history, exercises, isPro, syncKind, onClose,
     </button>
   );
   return (
-    <div data-testid="workout-summary" data-screen="summary" style={{ minHeight: "100vh", boxSizing: "border-box", position: "relative", overflow: "hidden", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, padding: "max(env(safe-area-inset-top, 0px), 12px) 12px calc(var(--nr-nav-h, 71px) + 16px)", display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div data-testid="workout-summary" data-screen="summary" style={{ minHeight: "100vh", boxSizing: "border-box", position: "relative", overflow: "hidden", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, padding: "max(env(safe-area-inset-top, 0px), 12px) 12px calc(var(--nr-nav-h, 57px) + 16px)", display: "flex", flexDirection: "column", gap: "12px" }}>
       <FontStyles />
       <div style={{ position: "relative", flexShrink: 0 }}>
         <NrHeroCard labelledBy="wcs-sum-h" testId="wcs-hero" photoPos="62% 45%" bottomShade="linear-gradient(0deg, rgba(11,11,12,.92) 0%, rgba(11,11,12,.45) 45%, rgba(11,11,12,0) 72%)">
