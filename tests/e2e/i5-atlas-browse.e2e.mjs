@@ -1,12 +1,14 @@
 // I5.3 / I5.4 — ATLAS-UX-01 E01 / E02 / E03 / E04 / E05 / E06 / E07 on the BUILT app (Chromium, offline) at 360 × 780 and
 // 390 × 844: the walk E01 → E02 → E03 → E06 → Back, and the layout rules of the design check —
 // no horizontal scroll, nothing cut, touch targets ≥ 44, the last element ≥ 16 px above B2.
-// Screenshots for the visual review go to e2e/.out/i5-<screen>-<width>.png.
+// Screenshots for the visual review go to e2e/.out/i5-<screen>-<width>.png; with E2E_UPDATE_SCREENSHOTS=1
+// they are also kept as the I5 patterns in e2e/screenshots/i5/ (I5.6, for people to look at — the
+// automated checks are the layout rules, not a pixel comparison with stored images).
 import { describe, test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, copyFileSync, readdirSync } from "node:fs";
 import { serve, openApp } from "./lib.mjs";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), ".out");
@@ -70,6 +72,11 @@ describe("I5.3–I5.5 ATLAS-UX-01 screens and Compact B2 on the built app", { co
   after(async () => {
     await app?.browser.close();
     srv?.server.close();
+    if (process.env.E2E_UPDATE_SCREENSHOTS === "1") {
+      const dir = join(dirname(fileURLToPath(import.meta.url)), "screenshots", "i5");
+      mkdirSync(dir, { recursive: true });
+      for (const f of readdirSync(OUT)) if (/^i5-.*\.png$/.test(f)) copyFileSync(join(OUT, f), join(dir, f.slice(3)));
+    }
   });
 
   for (const size of SIZES) {

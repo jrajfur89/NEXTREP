@@ -238,20 +238,14 @@ function atlasBrowseRetry() {
 /* E01–E07). Presentational: data comes from the view model above; nothing  */
 /* here is wired to a screen yet (I5.3).                                    */
 /* ---------------------------------------------------------------------- */
-// Colours of the boards that are not DS tokens yet (DS-3): one place, to be replaced after DS-SYNC.
-const ATLAS_PROPOSED_DS = Object.freeze({
-  surfaceS2: "#121213", // PROPOSED DS — S2 (input / filter button surface)
-  surfaceS4: "#1A1A1B", // PROPOSED DS — S4 (secondary button, error icon tile)
-  textChip: "#D9D9D9", // PROPOSED DS — chip text in rows
-});
+// Colours: Design System tokens from NR (11-ui-shared) — surface-control, surface-raised, surface-tertiary,
+// text-chip, brand-bright (DS-SYNC ATLAS-UX-01, DS-D17; I5.6). Values unchanged.
 const ATLAS_UI = Object.freeze({
   num: "Inter, 'Barlow Condensed', sans-serif",
   focus: "focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]",
   muted: "#9A9A9A",
-  chip: "#222224",
   divider: "#1E1E20",
   dashed: "#2A2A2A",
-  link: "#FF9A3D",
   tileSurface: "radial-gradient(90% 80% at 100% 0%, rgba(255,133,27,.06) 0%, rgba(255,133,27,0) 60%), linear-gradient(180deg, #151515 0%, #0F0F10 55%, #090909 100%)",
   subSurface: "linear-gradient(180deg, #151515 0%, #0F0F10 55%, #090909 100%)",
 });
@@ -297,7 +291,7 @@ function AtlasSearchField({ value, onChange, label, placeholder = "", onCancel, 
             setFocused(false);
             if (onBlur) onBlur(e);
           }}
-          style={{ width: "100%", minHeight: "48px", boxSizing: "border-box", padding: value ? "0 48px 0 44px" : "0 14px 0 44px", borderRadius: "12px", border: focused ? `2px solid ${NR.warm}` : `1px solid ${NR.control}`, background: ATLAS_PROPOSED_DS.surfaceS2, color: NR.textPrimary, fontFamily: NR.font, fontSize: "18px", lineHeight: "22px", outline: "none", WebkitAppearance: "none", appearance: "none", opacity: disabled ? 0.5 : 1 }}
+          style={{ width: "100%", minHeight: "48px", boxSizing: "border-box", padding: value ? "0 48px 0 44px" : "0 14px 0 44px", borderRadius: "12px", border: focused ? `2px solid ${NR.warm}` : `1px solid ${NR.control}`, background: NR.surfaceControl, color: NR.textPrimary, fontFamily: NR.font, fontSize: "18px", lineHeight: "22px", outline: "none", WebkitAppearance: "none", appearance: "none", opacity: disabled ? 0.5 : 1 }}
         />
         {value && !disabled && (
           <button
@@ -317,7 +311,7 @@ function AtlasSearchField({ value, onChange, label, placeholder = "", onCancel, 
         )}
       </label>
       {onCancel && (
-        <button type="button" onClick={onCancel} data-testid={`${testId}-cancel`} className={ATLAS_UI.focus} style={{ flexShrink: 0, minHeight: "48px", padding: "0 6px", border: 0, background: "transparent", display: "flex", alignItems: "center", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+        <button type="button" onClick={onCancel} data-testid={`${testId}-cancel`} className={ATLAS_UI.focus} style={{ flexShrink: 0, minHeight: "48px", padding: "0 6px", border: 0, background: "transparent", display: "flex", alignItems: "center", color: NR.brandBright, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
           Anuluj
         </button>
       )}
@@ -337,9 +331,9 @@ function AtlasFilterChip({ label, count, selected = false, enabled = true, onTog
       onClick={onToggle}
       data-testid={testId}
       className={ATLAS_UI.focus}
-      style={{ minHeight: "44px", padding: "0 12px", borderRadius: "100px", border: off ? `1px dashed ${ATLAS_UI.dashed}` : selected ? `1px solid ${NR.warm}` : `1px solid ${ATLAS_UI.chip}`, background: off ? "transparent" : selected ? "rgba(255,133,27,.14)" : ATLAS_UI.chip, color: off ? NR.textMuted : NR.textPrimary, display: "flex", alignItems: "center", gap: "6px", fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", cursor: off ? "default" : "pointer" }}
+      style={{ minHeight: "44px", padding: "0 12px", borderRadius: "100px", border: off ? `1px dashed ${ATLAS_UI.dashed}` : selected ? `1px solid ${NR.warm}` : `1px solid ${NR.surfaceTertiary}`, background: off ? "transparent" : selected ? "rgba(255,133,27,.14)" : NR.surfaceTertiary, color: off ? NR.textMuted : NR.textPrimary, display: "flex", alignItems: "center", gap: "6px", fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", cursor: off ? "default" : "pointer" }}
     >
-      {selected && <Check aria-hidden="true" size={16} color={ATLAS_UI.link} />}
+      {selected && <Check aria-hidden="true" size={16} color={NR.brandBright} />}
       {label}
       {count != null && <AtlasNum style={{ fontSize: "14px", color: off ? NR.textMuted : NR.textSecondary }}>{count}</AtlasNum>}
     </button>
@@ -351,7 +345,7 @@ function AtlasActiveFilterChip({ dimensionLabel, label, onRemove, testId = "atla
   return (
     <button type="button" aria-label={`Usuń filtr ${dimensionLabel}: ${label}`} onClick={onRemove} data-testid={testId} className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px 0 12px", borderRadius: "100px", border: "1px solid rgba(255,133,27,.55)", background: "rgba(255,133,27,.10)", display: "flex", alignItems: "center", gap: "6px", color: NR.textPrimary, fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", cursor: "pointer" }}>
       {label}
-      <X aria-hidden="true" size={16} color={ATLAS_UI.link} />
+      <X aria-hidden="true" size={16} color={NR.brandBright} />
     </button>
   );
 }
@@ -387,7 +381,7 @@ function AtlasCategoryTile({ label, count, enabled = true, onOpen, photo = null,
       <span style={body}>
         <span style={{ fontSize: "20px", lineHeight: "23px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "anywhere" }}>{label}</span>
         <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
-          <span style={{ fontSize: "15px", lineHeight: "18px", color: withPhoto ? ATLAS_PROPOSED_DS.textChip : NR.textSecondary }}>
+          <span style={{ fontSize: "15px", lineHeight: "18px", color: withPhoto ? NR.textChip : NR.textSecondary }}>
             <AtlasNum>{count}</AtlasNum> {plPlural(count, "exercise")}
           </span>
           <ChevronRight aria-hidden="true" size={16} color={NR.warm} />
@@ -410,7 +404,7 @@ function AtlasExerciseRow({ exerciseId, name, line, alias = null, chips = [], on
           {chips.length > 0 && (
             <span style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "2px" }}>
               {chips.slice(0, 2).map((c) => (
-                <span key={c.code} style={{ padding: "2px 8px", borderRadius: "100px", background: ATLAS_UI.chip, fontSize: "14px", lineHeight: "18px", color: ATLAS_PROPOSED_DS.textChip }}>
+                <span key={c.code} style={{ padding: "2px 8px", borderRadius: "100px", background: NR.surfaceTertiary, fontSize: "14px", lineHeight: "18px", color: NR.textChip }}>
                   {c.label}
                 </span>
               ))}
@@ -508,7 +502,7 @@ function AtlasMessage({ variant = "empty", title, text, primary = null, link = n
   const error = variant === "error";
   const content = (
     <div data-testid={testId} data-variant={variant} style={{ marginTop: `${marginTop}px`, display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "0 20px", textAlign: "center", fontFamily: NR.font }}>
-      <span aria-hidden="true" style={{ width: "56px", height: "56px", borderRadius: "16px", background: error ? ATLAS_PROPOSED_DS.surfaceS4 : "rgba(255,133,27,.10)", border: error ? `1px solid ${ATLAS_UI.dashed}` : "1px solid rgba(255,133,27,.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span aria-hidden="true" style={{ width: "56px", height: "56px", borderRadius: "16px", background: error ? NR.surfaceRaised : "rgba(255,133,27,.10)", border: error ? `1px solid ${ATLAS_UI.dashed}` : "1px solid rgba(255,133,27,.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         {error ? <RefreshCcw size={26} color={NR.textSecondary} /> : <Search size={26} color={NR.warm} />}
       </span>
       <p style={{ margin: 0, fontSize: "23px", lineHeight: "26px", fontWeight: 500, color: NR.textDisplay }}>{title}</p>
@@ -516,7 +510,7 @@ function AtlasMessage({ variant = "empty", title, text, primary = null, link = n
       {(primary || link) && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", marginTop: "6px" }}>
           {primary && (
-            <button type="button" onClick={primary.onClick} data-testid={`${testId}-primary`} className={ATLAS_UI.focus} style={{ minHeight: "52px", boxSizing: "border-box", border: 0, borderRadius: "12px", padding: "8px 20px", background: ATLAS_PROPOSED_DS.surfaceS4, color: NR.textPrimary, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 500, cursor: "pointer" }}>
+            <button type="button" onClick={primary.onClick} data-testid={`${testId}-primary`} className={ATLAS_UI.focus} style={{ minHeight: "52px", boxSizing: "border-box", border: 0, borderRadius: "12px", padding: "8px 20px", background: NR.surfaceRaised, color: NR.textPrimary, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 500, cursor: "pointer" }}>
               {primary.label}
               {primary.count != null && (
                 <>
@@ -527,7 +521,7 @@ function AtlasMessage({ variant = "empty", title, text, primary = null, link = n
             </button>
           )}
           {link && (
-            <button type="button" onClick={link.onClick} data-testid={`${testId}-link`} className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+            <button type="button" onClick={link.onClick} data-testid={`${testId}-link`} className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: NR.brandBright, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
               {link.label}
             </button>
           )}
@@ -542,7 +536,7 @@ function AtlasMessage({ variant = "empty", title, text, primary = null, link = n
 function AtlasFiltersButton({ count = 0, onOpen, buttonRef, testId = "atlas-filters-button" }) {
   const active = count > 0;
   return (
-    <button ref={buttonRef} type="button" aria-label={active ? `Filtry, aktywne: ${count}` : "Filtry"} aria-haspopup="dialog" onClick={onOpen} data-testid={testId} className={ATLAS_UI.focus} style={{ position: "relative", flexShrink: 0, width: "48px", height: "48px", boxSizing: "border-box", borderRadius: "12px", border: active ? `2px solid ${NR.warm}` : `1px solid ${NR.control}`, background: ATLAS_PROPOSED_DS.surfaceS2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+    <button ref={buttonRef} type="button" aria-label={active ? `Filtry, aktywne: ${count}` : "Filtry"} aria-haspopup="dialog" onClick={onOpen} data-testid={testId} className={ATLAS_UI.focus} style={{ position: "relative", flexShrink: 0, width: "48px", height: "48px", boxSizing: "border-box", borderRadius: "12px", border: active ? `2px solid ${NR.warm}` : `1px solid ${NR.control}`, background: NR.surfaceControl, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
       <SlidersHorizontal aria-hidden="true" size={20} color={active ? NR.warm : NR.textPrimary} />
       {active && (
         <span aria-hidden="true" data-testid={`${testId}-badge`} style={{ position: "absolute", top: "-7px", right: "-7px", minWidth: "20px", height: "20px", boxSizing: "border-box", padding: "0 5px", borderRadius: "100px", background: NR.brand, color: NR.bg, fontFamily: ATLAS_UI.num, fontVariantNumeric: "tabular-nums", fontSize: "12px", lineHeight: "20px", fontWeight: 600, textAlign: "center" }}>
@@ -702,7 +696,7 @@ function AtlasActiveFilters({ filters, onRemove, onClearAll }) {
         <AtlasActiveFilterChip key={`${f.dimension}:${f.code}`} dimensionLabel={f.dimensionLabel} label={f.label} onRemove={() => onRemove(f)} testId={`atlas-active-${f.dimension}-${f.code}`} />
       ))}
       {onClearAll && (
-        <button type="button" onClick={onClearAll} data-testid="atlas-clear-filters" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+        <button type="button" onClick={onClearAll} data-testid="atlas-clear-filters" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: NR.brandBright, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
           Wyczyść filtry
         </button>
       )}
@@ -914,7 +908,7 @@ function AtlasFilterSheet({ model, scope, scopeLine, query, selection, onChange,
             <h2 id="atlas-flt-t" style={{ margin: 0, fontSize: "25px", lineHeight: "28px", fontWeight: 600, color: NR.textDisplay }}>Filtry</h2>
             <p data-testid="atlas-filter-scope" style={{ margin: "2px 0 0", fontSize: "16px", lineHeight: "20px", color: NR.textSecondary, overflowWrap: "anywhere" }}>{scopeLine}</p>
           </div>
-          <button type="button" onClick={() => onChange({})} data-testid="atlas-filter-clear" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+          <button type="button" onClick={() => onChange({})} data-testid="atlas-filter-clear" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: NR.brandBright, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
             Wyczyść
           </button>
           <button type="button" aria-label="Zamknij filtry" data-sheet-close="" data-testid="atlas-filter-close" onClick={onClose} className={ATLAS_UI.focus} style={{ ...AW_ICON_BTN, borderRadius: "22px" }}>
@@ -933,7 +927,7 @@ function AtlasFilterSheet({ model, scope, scopeLine, query, selection, onChange,
                     <AtlasFilterChip key={o.code} label={o.label} count={o.count} selected={o.selected} enabled={o.enabled} onToggle={() => toggle(d.dimension, o.code)} testId={`atlas-chip-${d.dimension}-${o.code}`} />
                   ))}
                   {many && (
-                    <button type="button" onClick={() => setAllEquipment(true)} data-testid="atlas-filter-more" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+                    <button type="button" onClick={() => setAllEquipment(true)} data-testid="atlas-filter-more" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: NR.brandBright, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
                       Pokaż wszystkie ({d.options.length})
                     </button>
                   )}
@@ -943,7 +937,7 @@ function AtlasFilterSheet({ model, scope, scopeLine, query, selection, onChange,
           })}
         </div>
         <div style={{ flexShrink: 0, padding: "12px 16px max(env(safe-area-inset-bottom, 0px), 12px)", borderTop: `1px solid ${ATLAS_UI.divider}` }}>
-          <button type="button" disabled={n === 0} onClick={onClose} data-testid="atlas-filter-show" className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "52px", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: 0, borderRadius: "12px", padding: "8px 14px", background: n === 0 ? ATLAS_PROPOSED_DS.surfaceS4 : NR.ctaFill, boxShadow: n === 0 ? "none" : NR.ctaShadow, color: n === 0 ? NR.textMuted : NR.bg, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 600, cursor: n === 0 ? "default" : "pointer" }}>
+          <button type="button" disabled={n === 0} onClick={onClose} data-testid="atlas-filter-show" className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "52px", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: 0, borderRadius: "12px", padding: "8px 14px", background: n === 0 ? NR.surfaceRaised : NR.ctaFill, boxShadow: n === 0 ? "none" : NR.ctaShadow, color: n === 0 ? NR.textMuted : NR.bg, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 600, cursor: n === 0 ? "default" : "pointer" }}>
             {n === 0 ? (
               "Brak wyników"
             ) : (

@@ -247,7 +247,12 @@ describe("P9 AtlasFiltersButton", () => {
 });
 
 describe("I5.2 scope", () => {
-  test("PROPOSED DS colours live in one place; the components are not on any screen yet", async () => {
-    assert.deepEqual({ ...A.ATLAS_PROPOSED_DS }, { surfaceS2: "#121213", surfaceS4: "#1A1A1B", textChip: "#D9D9D9" });
+  test("I5.6: the atlas components take their colours from the approved DS tokens (NR), values unchanged", async () => {
+    assert.equal(A.ATLAS_PROPOSED_DS, undefined, "no local PROPOSED colours any more");
+    const { surfaceControl, surfaceRaised, surfaceTertiary, textChip, brandBright } = A.NR;
+    assert.deepEqual({ surfaceControl, surfaceRaised, surfaceTertiary, textChip, brandBright }, { surfaceControl: "#121213", surfaceRaised: "#1A1A1B", surfaceTertiary: "#222224", textChip: "#D9D9D9", brandBright: "#FF9A3D" });
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../../src/app/17c-atlas-browse.jsx", import.meta.url), "utf8");
+    for (const hex of ["#121213", "#1A1A1B", "#222224", "#D9D9D9", "#FF9A3D"]) assert.ok(!src.toUpperCase().includes(hex), `${hex} only through its token`);
   });
 });

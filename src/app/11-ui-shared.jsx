@@ -792,6 +792,12 @@ const NR = {
   dangerText: "#FF6B60",
   hairline: "#2A2A2A",
   control: "#66666A",
+  // DS-SYNC ATLAS-UX-01 / DS-D17 (Design System v18): tokens used by the atlas components (I5.6)
+  brandBright: "#FF9A3D", // brand-bright — also the atlas text-link colour
+  surfaceTertiary: "#222224", // surface-tertiary — chip surface (D16)
+  surfaceControl: "#121213", // surface-control — fields, „Filtry” button
+  surfaceRaised: "#1A1A1B", // surface-raised — static raised fill (secondary button, icon well)
+  textChip: "#D9D9D9", // text-chip — text of row chips
   font: "'Barlow Condensed', Inter, sans-serif",
   cardSurface:
     "radial-gradient(90% 70% at 0% 0%, rgba(255,133,27,.07) 0%, rgba(255,133,27,0) 60%), linear-gradient(180deg, #151515 0%, #0F0F10 55%, #090909 100%)",
