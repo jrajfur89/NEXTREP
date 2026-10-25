@@ -554,20 +554,20 @@ function AtlasFiltersButton({ count = 0, onOpen, buttonRef, testId = "atlas-filt
 }
 
 /* ---------------------------------------------------------------------- */
-/* I5.3 — screens E01 „Ćwiczenia”, E02 (partia → podpartie), E03 (lista)    */
-/* and the existing card Compact Tabs v3 (E06) opened by exerciseId.        */
-/* Back stack E06 → E03 → (E02) → E01: every step in pushes a history entry */
-/* and exercisesOverlayRef steps back ONE level (popstate in 21-app as is). */
-/*                                                                           */
-/* Transitional (until I5.4): the search field P1, „Filtry” P9 and the     */
-/* sort of P7 are NOT shown — E04 / E05 are not built yet and no control    */
-/* that does nothing is offered. The state keeps their fields (D06).        */
+/* I5.3 / I5.4 — screens E01 „Ćwiczenia”, E02 (partia → podpartie), E03     */
+/* (lista), E04 (filtry), E05 (wyszukiwanie), E07 (stany) and the existing  */
+/* card Compact Tabs v3 (E06) opened by exerciseId.                         */
+/* Back stack E06 → E03 → (E02) → E01: every level in pushes a history      */
+/* entry and exercisesOverlayRef steps back ONE level (popstate in 21-app   */
+/* as is). Steps inside a level (the E04 sheet, the keyboard, E05 on E01)   */
+/* push nothing: Back undoes them and puts the popped entry back.           */
 /* ---------------------------------------------------------------------- */
 
 // D06 — state of the module, process memory only (no storage). Kept on Back from the card (and
 // after a workout opened from the card, I4.6 D7); reset to E01 on every entry from B2 (goToScreen),
 // also on a tap of the active „Ćwiczenia” tab (Q1).
-const ATLAS_BROWSE_HOME = Object.freeze({ level: "home", categoryCode: null, subregionCode: null, query: "", sort: "az", scrollY: 0, openExerciseId: null });
+// sort: null = automatic (A–Z without a query, „Najlepsze dopasowanie” with one); "az" / "best" = chosen
+const ATLAS_BROWSE_HOME = Object.freeze({ level: "home", categoryCode: null, subregionCode: null, query: "", sort: null, scrollY: 0, openExerciseId: null });
 const atlasBrowseMemory = { ...ATLAS_BROWSE_HOME, selection: {} };
 function atlasBrowseReset() {
   Object.assign(atlasBrowseMemory, ATLAS_BROWSE_HOME, { selection: {} });
@@ -627,41 +627,6 @@ const atlasSectionHead = (text, id) => (
 );
 const ATLAS_GRID = { listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" };
 
-// E01 — „Ćwiczenia”: header, „Wszystkie ćwiczenia”, the categories (P4) in 2 columns. The person's
-// own exercises (the old list, kept) get a row only when there are any — not on the board.
-function AtlasHomeView({ model, onOpenAll, onOpenCategory, onRetry, ownCount = 0, onOpenOwn }) {
-  return (
-    <div data-testid="atlas-home" data-screen="exercises-home" style={{ ...ATLAS_SCREEN_STYLE, gap: "12px", padding: `max(env(safe-area-inset-top, 0px), 12px) 12px ${ATLAS_PAD_BOTTOM}` }}>
-      <header style={{ display: "flex", flexDirection: "column", gap: "4px", margin: "4px 0 4px 9px" }}>
-        <h1 style={{ ...ATLAS_H1, lineHeight: "36px" }}>Ćwiczenia</h1>
-        {model.ok && (
-          <p data-testid="atlas-home-total" style={{ margin: 0, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
-            Atlas NEXTREP · <AtlasNum>{model.total}</AtlasNum> {plPlural(model.total, "exercise")}
-          </p>
-        )}
-      </header>
-      {!model.ok ? (
-        <AtlasMessage variant="error" title={ATLAS_MESSAGES.errorTitle} text={ATLAS_MESSAGES.errorText} primary={{ label: ATLAS_MESSAGES.retry, onClick: onRetry }} testId="atlas-error" />
-      ) : (
-        <>
-          <AtlasAllRow sub={<><AtlasNum>{model.total}</AtlasNum> · alfabetycznie</>} onOpen={onOpenAll} />
-          {atlasSectionHead("Partie mięśniowe", "atlas-cats-h")}
-          <ul aria-labelledby="atlas-cats-h" style={ATLAS_GRID}>
-            {model.categories.map((c) => (
-              <li key={c.code} style={{ minWidth: 0 }}>
-                <AtlasCategoryTile label={c.label} count={c.count} enabled={c.enabled} onOpen={() => onOpenCategory(c)} testId={`atlas-category-${c.code}`} />
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {ownCount > 0 && (
-        <AtlasAllRow title="Moje ćwiczenia" sub={<><AtlasNum>{ownCount}</AtlasNum> {plPlural(ownCount, "exercise")} · zapisane wcześniej</>} icon={Dumbbell} onOpen={onOpenOwn} testId="atlas-own" />
-      )}
-    </div>
-  );
-}
-
 // E02 — a category with its sub-regions (P6); empty ones stay as disabled tiles (D03).
 function AtlasCategoryView({ category, onBack, onOpenAll, onOpenSubregion }) {
   const n = category.subregions.length;
@@ -688,82 +653,448 @@ function AtlasCategoryView({ category, onBack, onOpenAll, onOpenSubregion }) {
   );
 }
 
-// E03 — the list of a scope (whole atlas / category / sub-region), A–Z, rows P5.
-function AtlasListView({ model, scope, title, barLabel, backLabel, onBack, onOpenExercise }) {
-  const global = !scope.categoryCode && !scope.subregionCode;
-  const { items, total } = model.browseResults(scope, atlasBrowseMemory.query, atlasBrowseMemory.selection, "az");
+// ---- helpers of the list state (D06) -----------------------------------------------------------
+const atlasSelectionCount = (sel) => Object.values(sel || {}).reduce((n, v) => n + ((v && v.length) || 0), 0);
+const atlasEffectiveSort = (sort, query) => sort || (String(query || "").trim() ? "best" : "az");
+// the soft keyboard is open: the visual viewport is clearly smaller than the window (same 120 px rule
+// as the Active Workout); without visualViewport (old WebView, tests) a focused field counts as open
+function atlasKeyboardOpen() {
+  if (typeof window === "undefined") return false;
+  const vv = window.visualViewport;
+  if (!vv || !window.innerHeight) return true;
+  return window.innerHeight - vv.height > 120;
+}
+const atlasFocusedSearch = () => (typeof document !== "undefined" && document.activeElement && document.activeElement.matches && document.activeElement.matches("[data-atlas-search]") ? document.activeElement : null);
+// selected options with their labels, in the order of the sheet (for P3 and the texts)
+function atlasActiveFilters(model, scope, query, selection) {
+  if (!atlasSelectionCount(selection)) return [];
+  const out = [];
+  for (const d of model.sheetFacets(scope, query, selection)) for (const o of d.options) if (o.selected) out.push({ dimension: d.dimension, dimensionLabel: d.label, code: o.code, label: o.label });
+  return out;
+}
+// a selection keeps only the values that exist in the scope it is used in (no invisible filter)
+function atlasPruneSelection(model, scope, selection) {
+  if (!model.ok || !atlasSelectionCount(selection)) return selection || {};
+  const base = model.scopeIndex(scope).facets({});
+  const out = {};
+  for (const [dim, codes] of Object.entries(selection)) {
+    const have = new Set((base[dim] || []).map((o) => o.code));
+    const kept = (codes || []).filter((c) => have.has(c));
+    if (kept.length) out[dim] = kept;
+  }
+  return out;
+}
+const atlasScopePhrase = (scopeKind, label) => (scopeKind === "global" ? "w całym Atlasie" : scopeKind === "subregion" ? `w podpartii ${label}` : `w partii ${label}`);
+// E07-FiltryZero: „smith” w partii Klatka piersiowa z filtrem Hantel nie daje wyników.
+function atlasFiltersZeroText(query, scopeKind, scopeLabel, filters) {
+  const q = String(query || "").trim();
+  const f = filters.map((x) => x.label).join(", ");
+  const s = `${q ? `„${q}” ` : ""}${atlasScopePhrase(scopeKind, scopeLabel)} z ${filters.length > 1 ? "filtrami" : "filtrem"} ${f} nie daje wyników.`;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const ATLAS_ALIAS_NOTE = "Szukamy w polskich nazwach i aliasach z Atlasu. Gdy pasuje tylko alias, widać go pod nazwą.";
+
+// P3 group: the active filters + „Wyczyść filtry” (not when the message offers „Usuń filtry”)
+function AtlasActiveFilters({ filters, onRemove, onClearAll }) {
+  if (!filters.length) return null;
   return (
-    <div data-testid="atlas-list" data-screen="exercises-list" data-scope={atlasScopeKey(scope)} style={{ ...ATLAS_SCREEN_STYLE, gap: "10px", padding: `0 12px ${ATLAS_PAD_BOTTOM}` }}>
-      <AtlasBackBar label={barLabel} backLabel={backLabel} onBack={onBack} />
-      <h1 data-testid="atlas-list-title" style={{ ...ATLAS_H1, margin: "0 0 0 9px" }}>{title}</h1>
-      <AtlasResultsBar count={total} />
-      <ul aria-label={`Ćwiczenia: ${title}`} data-testid="atlas-list-items" style={{ listStyle: "none", margin: "0 -12px", padding: 0, borderTop: `1px solid ${ATLAS_UI.divider}` }}>
-        {items.map((ex) => (
-          <AtlasExerciseRow key={ex.exerciseId} {...atlasRowProps(model, ex, { global })} onOpen={onOpenExercise} />
-        ))}
-      </ul>
-      <p data-testid="atlas-list-end" style={{ ...ATLAS_NOTE, margin: "2px 9px 0" }}>
-        To wszystkie ćwiczenia: <AtlasNum>{total}</AtlasNum>.
-      </p>
+    <div role="group" aria-label="Aktywne filtry" data-testid="atlas-active-filters" style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+      {filters.map((f) => (
+        <AtlasActiveFilterChip key={`${f.dimension}:${f.code}`} dimensionLabel={f.dimensionLabel} label={f.label} onRemove={() => onRemove(f)} testId={`atlas-active-${f.dimension}-${f.code}`} />
+      ))}
+      {onClearAll && (
+        <button type="button" onClick={onClearAll} data-testid="atlas-clear-filters" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+          Wyczyść filtry
+        </button>
+      )}
     </div>
   );
 }
 
-// The module „Ćwiczenia” (S1). Levels E01 / E02 / E03 + the card on top of the list.
+// Results of a list or a search: P7 (or the bare status when empty) + rows P5 / E07 message.
+function AtlasResults({ model, scope, scopeKind, scopeLabel, query, selection, sort, onToggleSort, listLabel, onOpenExercise, onQuery, onClearSelection, endNote = false }) {
+  const q = String(query || "").trim();
+  const eff = atlasEffectiveSort(sort, q);
+  const { items, total, inScope } = model.browseResults(scope, q, selection, eff);
+  const nSel = atlasSelectionCount(selection);
+  const global = scopeKind === "global";
+  const searchCounter = global && q; // E05: „N wyników w całym Atlasie”
+  const narrowed = Boolean(q || nSel);
+  const bar = searchCounter ? { count: total, noun: "result", suffix: " w całym Atlasie" } : narrowed ? { count: total, of: inScope } : { count: total };
+  if (total === 0) {
+    const filters = atlasActiveFilters(model, scope, q, selection);
+    const relax = nSel ? model.relaxFiltersCount(scope, q) : 0;
+    const status = (
+      <p role="status" aria-live="polite" data-testid="atlas-results-count" style={{ margin: 0, minHeight: "44px", display: "flex", alignItems: "center", paddingLeft: "9px", fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
+        <span>
+          <AtlasNum style={{ color: NR.textPrimary, fontWeight: 500 }}>{total}</AtlasNum>
+          {bar.of != null ? (
+            <>
+              {" z "}
+              <AtlasNum>{bar.of}</AtlasNum> {ATLAS_PLURALS.exercise[2]}
+            </>
+          ) : (
+            ` ${plPlural(total, bar.noun || "exercise")}${bar.suffix || ""}`
+          )}
+        </span>
+      </p>
+    );
+    if (nSel && relax > 0) {
+      return (
+        <>
+          {status}
+          <AtlasMessage
+            variant="filters"
+            marginTop={8}
+            title={ATLAS_MESSAGES.filtersZeroTitle}
+            text={atlasFiltersZeroText(q, scopeKind, scopeLabel, filters)}
+            primary={{ label: ATLAS_MESSAGES.removeFilters, count: relax, onClick: onClearSelection }}
+            link={q ? { label: ATLAS_MESSAGES.clearSearch, onClick: () => onQuery("") } : null}
+            testId="atlas-filters-zero"
+          />
+        </>
+      );
+    }
+    const sug = q ? model.searchSuggestion(scope, q, selection) : null;
+    return (
+      <>
+        {status}
+        <AtlasMessage
+          title={q ? ATLAS_MESSAGES.noResultsTitle(q) : ATLAS_MESSAGES.filtersZeroTitle}
+          text={q ? ATLAS_MESSAGES.noResultsText : null}
+          primary={sug ? { label: ATLAS_MESSAGES.suggestion(sug.query), count: sug.count, onClick: () => onQuery(sug.query) } : nSel ? { label: ATLAS_MESSAGES.removeFilters, onClick: onClearSelection } : null}
+          link={q ? { label: ATLAS_MESSAGES.clearSearch, onClick: () => onQuery("") } : null}
+          testId="atlas-no-results"
+        />
+      </>
+    );
+  }
+  const filters = nSel ? atlasActiveFilters(model, scope, q, selection) : [];
+  const label = `${listLabel}${filters.length ? `, ${filters.length > 1 ? "filtry" : "filtr"} ${filters.map((f) => f.label).join(", ")}` : ""}`;
+  const rowsProps = items.map((ex) => atlasRowProps(model, ex, { global, query: q }));
+  return (
+    <>
+      <AtlasResultsBar {...bar} sort={eff} onToggleSort={() => onToggleSort(eff === "az" ? "best" : "az")} />
+      <ul aria-label={label} data-testid="atlas-list-items" style={{ listStyle: "none", margin: "0 -12px", padding: 0, borderTop: `1px solid ${ATLAS_UI.divider}` }}>
+        {rowsProps.map((r) => (
+          <AtlasExerciseRow key={r.exerciseId} {...r} onOpen={onOpenExercise} />
+        ))}
+      </ul>
+      {rowsProps.some((r) => r.alias) && (
+        <p data-testid="atlas-alias-note" style={{ ...ATLAS_NOTE, margin: "6px 9px 0" }}>
+          {ATLAS_ALIAS_NOTE}
+        </p>
+      )}
+      {endNote && (
+        <p data-testid="atlas-list-end" style={{ ...ATLAS_NOTE, margin: "2px 9px 0" }}>
+          To wszystkie ćwiczenia: <AtlasNum>{total}</AtlasNum>.
+        </p>
+      )}
+    </>
+  );
+}
+
+// P1 + P9 row (E01 / E03 / E05); in E05 „Anuluj” replaces P9 while the field has the focus.
+function AtlasSearchRow({ search, label, placeholder, cancel = false, filtersCount, onOpenFilters, filtersRef, inputRef }) {
+  return (
+    <AtlasSearchField value={search.query} onChange={search.onQuery} label={label} placeholder={placeholder} onFocus={search.onFocus} onBlur={search.onBlur} onCancel={cancel ? search.onCancel : undefined} inputRef={inputRef}>
+      {!cancel && <AtlasFiltersButton count={filtersCount} onOpen={onOpenFilters} buttonRef={filtersRef} />}
+    </AtlasSearchField>
+  );
+}
+
+// E01 — „Ćwiczenia”: header, P1 + P9, „Wszystkie ćwiczenia”, the categories (P4) in 2 columns, the
+// person's own exercises when there are any. E05 (search on E01) replaces everything under the field.
+function AtlasHomeView({ model, onOpenAll, onOpenCategory, onRetry, ownCount = 0, onOpenOwn, search = null, results = null, searching = false }) {
+  // one root for E01 and E05: the field keeps its place in the tree, so focusing it (which turns E01
+  // into E05) never remounts the input and the keyboard stays open
+  const e05 = Boolean(model.ok && searching && search);
+  return (
+    <div data-testid={e05 ? "atlas-search-screen" : "atlas-home"} data-screen={e05 ? "exercises-search" : "exercises-home"} style={{ ...ATLAS_SCREEN_STYLE, gap: e05 ? "8px" : "12px", padding: `max(env(safe-area-inset-top, 0px), 12px) 12px ${ATLAS_PAD_BOTTOM}` }}>
+      {!e05 && (
+        <header style={{ display: "flex", flexDirection: "column", gap: "4px", margin: "4px 0 4px 9px" }}>
+          <h1 style={{ ...ATLAS_H1, lineHeight: "36px" }}>Ćwiczenia</h1>
+          {model.ok && (
+            <p data-testid="atlas-home-total" style={{ margin: 0, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
+              Atlas NEXTREP · <AtlasNum>{model.total}</AtlasNum> {plPlural(model.total, "exercise")}
+            </p>
+          )}
+        </header>
+      )}
+      {!model.ok && <AtlasMessage variant="error" title={ATLAS_MESSAGES.errorTitle} text={ATLAS_MESSAGES.errorText} primary={{ label: ATLAS_MESSAGES.retry, onClick: onRetry }} testId="atlas-error" />}
+      {model.ok && search && search.row}
+      {e05 && search.filters}
+      {e05 && results}
+      {model.ok && !e05 && (
+        <>
+          <AtlasAllRow sub={<><AtlasNum>{model.total}</AtlasNum> · alfabetycznie</>} onOpen={onOpenAll} />
+          {atlasSectionHead("Partie mięśniowe", "atlas-cats-h")}
+          <ul aria-labelledby="atlas-cats-h" style={ATLAS_GRID}>
+            {model.categories.map((c) => (
+              <li key={c.code} style={{ minWidth: 0 }}>
+                <AtlasCategoryTile label={c.label} count={c.count} enabled={c.enabled} onOpen={() => onOpenCategory(c)} testId={`atlas-category-${c.code}`} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {!e05 && ownCount > 0 && (
+        <AtlasAllRow title="Moje ćwiczenia" sub={<><AtlasNum>{ownCount}</AtlasNum> {plPlural(ownCount, "exercise")} · zapisane wcześniej</>} icon={Dumbbell} onOpen={onOpenOwn} testId="atlas-own" />
+      )}
+    </div>
+  );
+}
+
+// E03 — the list of a scope (whole atlas / category / sub-region): P1 + P9, active filters, P7,
+// rows P5; E07 states in place of the rows.
+function AtlasListView({ title, barLabel, backLabel, onBack, search, results }) {
+  return (
+    <div data-testid="atlas-list" data-screen="exercises-list" data-scope={search.scopeKey} style={{ ...ATLAS_SCREEN_STYLE, gap: "10px", padding: `0 12px ${ATLAS_PAD_BOTTOM}` }}>
+      <AtlasBackBar label={barLabel} backLabel={backLabel} onBack={onBack} />
+      <h1 data-testid="atlas-list-title" style={{ ...ATLAS_H1, margin: "0 0 0 9px" }}>{title}</h1>
+      {search.row}
+      {search.filters}
+      {results}
+    </div>
+  );
+}
+
+// E04 — the filter sheet: OR inside a dimension, AND between them (engine); counts from the facets
+// without the dimension's own choice; 0 → disabled; the choice works at once (closing keeps it);
+// „Pokaż N ćwiczeń” live, N = 0 → disabled „Brak wyników”. role=dialog + aria-modal, focus inside,
+// Tab stays in the sheet, Escape / Back / ✕ / the dimmed background close it.
+const ATLAS_SHEET_EQUIPMENT_VISIBLE = 7;
+function AtlasFilterSheet({ model, scope, scopeLine, query, selection, onChange, onClose }) {
+  const ref = useRef(null);
+  const [allEquipment, setAllEquipment] = useState(false);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const first = ref.current && ref.current.querySelector("[data-sheet-close]");
+    if (first && first.focus) first.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRef.current();
+      }
+      if (e.key === "Tab" && ref.current) {
+        const els = [...ref.current.querySelectorAll("button, [href], input")].filter((el) => !el.disabled);
+        if (!els.length) return;
+        const a = els[0];
+        const z = els[els.length - 1];
+        if (e.shiftKey && document.activeElement === a) {
+          e.preventDefault();
+          z.focus();
+        } else if (!e.shiftKey && document.activeElement === z) {
+          e.preventDefault();
+          a.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  const dims = model.sheetFacets(scope, query, selection);
+  const n = model.browseResults(scope, query, selection).total;
+  const toggle = (dim, code) => {
+    const cur = new Set(selection[dim] || []);
+    if (cur.has(code)) cur.delete(code);
+    else cur.add(code);
+    const next = { ...selection };
+    if (cur.size) next[dim] = [...cur];
+    else delete next[dim];
+    onChange(next);
+  };
+  return (
+    <div data-testid="atlas-filter-sheet" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+      <div aria-hidden="true" onClick={onClose} data-testid="atlas-filter-scrim" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.72)" }} />
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="atlas-flt-t" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "calc(100% - 48px)", display: "flex", flexDirection: "column", boxSizing: "border-box", borderRadius: "20px 20px 0 0", background: "linear-gradient(180deg, #151515 0%, #0F0F10 100%)", borderTop: "1px solid rgba(255,133,27,.35)", fontFamily: NR.font, color: NR.textPrimary }}>
+        <div aria-hidden="true" style={{ flexShrink: 0, width: "40px", height: "4px", borderRadius: "2px", background: "#3A3A3A", margin: "10px auto 6px" }} />
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "4px", padding: "0 6px 6px 16px" }}>
+          <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+            <h2 id="atlas-flt-t" style={{ margin: 0, fontSize: "25px", lineHeight: "28px", fontWeight: 600, color: NR.textDisplay }}>Filtry</h2>
+            <p data-testid="atlas-filter-scope" style={{ margin: "2px 0 0", fontSize: "16px", lineHeight: "20px", color: NR.textSecondary, overflowWrap: "anywhere" }}>{scopeLine}</p>
+          </div>
+          <button type="button" onClick={() => onChange({})} data-testid="atlas-filter-clear" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+            Wyczyść
+          </button>
+          <button type="button" aria-label="Zamknij filtry" data-sheet-close="" data-testid="atlas-filter-close" onClick={onClose} className={ATLAS_UI.focus} style={{ ...AW_ICON_BTN, borderRadius: "22px" }}>
+            <X aria-hidden="true" size={22} color={NR.textPrimary} />
+          </button>
+        </div>
+        <div tabIndex={0} data-testid="atlas-filter-body" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: "14px", borderTop: `1px solid ${ATLAS_UI.divider}`, outline: "none" }}>
+          {dims.map((d) => {
+            const many = d.dimension === "equipment" && d.options.length > ATLAS_SHEET_EQUIPMENT_VISIBLE && !allEquipment;
+            const shown = many ? d.options.filter((o, i) => i < ATLAS_SHEET_EQUIPMENT_VISIBLE || o.selected) : d.options;
+            return (
+              <section key={d.dimension} data-dimension={d.dimension} aria-labelledby={`atlas-flt-${d.dimension}`} style={{ display: "flex", flexDirection: "column", gap: "8px", paddingTop: "10px" }}>
+                <h3 id={`atlas-flt-${d.dimension}`} style={{ ...nrHeadText, margin: 0 }}>{d.label}</h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {shown.map((o) => (
+                    <AtlasFilterChip key={o.code} label={o.label} count={o.count} selected={o.selected} enabled={o.enabled} onToggle={() => toggle(d.dimension, o.code)} testId={`atlas-chip-${d.dimension}-${o.code}`} />
+                  ))}
+                  {many && (
+                    <button type="button" onClick={() => setAllEquipment(true)} data-testid="atlas-filter-more" className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 8px", border: 0, background: "transparent", color: ATLAS_UI.link, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
+                      Pokaż wszystkie ({d.options.length})
+                    </button>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+        <div style={{ flexShrink: 0, padding: "12px 16px max(env(safe-area-inset-bottom, 0px), 12px)", borderTop: `1px solid ${ATLAS_UI.divider}` }}>
+          <button type="button" disabled={n === 0} onClick={onClose} data-testid="atlas-filter-show" className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "52px", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: 0, borderRadius: "12px", padding: "8px 14px", background: n === 0 ? ATLAS_PROPOSED_DS.surfaceS4 : NR.ctaFill, boxShadow: n === 0 ? "none" : NR.ctaShadow, color: n === 0 ? NR.textMuted : NR.bg, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 600, cursor: n === 0 ? "default" : "pointer" }}>
+            {n === 0 ? (
+              "Brak wyników"
+            ) : (
+              <span>
+                Pokaż{" "}
+                <AtlasNum>{n}</AtlasNum>
+                {" "}
+                {plPlural(n, "exercise")}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The module „Ćwiczenia” (S1). Levels E01 / E02 / E03 + the card on top of the list; E04 / E05 / E07.
 function AtlasBrowseScreen({ onNavigate, history = [], isPro = false, onOpenUnlock, onOpenSession, ownCount = 0, onOpenOwn }) {
   const [model, setModel] = useState(() => atlasBrowseModel());
-  const read = () => ({ level: atlasBrowseMemory.level, categoryCode: atlasBrowseMemory.categoryCode, subregionCode: atlasBrowseMemory.subregionCode, openExerciseId: atlasBrowseMemory.openExerciseId });
+  const read = () => ({
+    level: atlasBrowseMemory.level,
+    categoryCode: atlasBrowseMemory.categoryCode,
+    subregionCode: atlasBrowseMemory.subregionCode,
+    openExerciseId: atlasBrowseMemory.openExerciseId,
+    query: atlasBrowseMemory.query,
+    selection: atlasBrowseMemory.selection,
+    sort: atlasBrowseMemory.sort,
+  });
   const [nav, setNavState] = useState(read);
+  const [focused, setFocused] = useState(false);
+  const [sheet, setSheet] = useState(false);
   const pendingScroll = useRef(null);
+  const filtersRef = useRef(null);
+  const inputRef = useRef(null);
+  const bgRef = useRef(null);
   const setNav = (patch, scrollY = 0) => {
     Object.assign(atlasBrowseMemory, patch);
     pendingScroll.current = scrollY;
     setNavState(read());
   };
+  const patch = (p) => {
+    Object.assign(atlasBrowseMemory, p);
+    setNavState(read());
+  };
 
   const categoryOf = (code) => (model.ok && code ? model.categories.find((c) => c.code === code) || null : null);
   const card = nav.openExerciseId ? ATLAS_CATALOG.exercises.find((e) => e.exerciseId === nav.openExerciseId) || null : null;
+  const searching = nav.level === "home" && (focused || Boolean(String(nav.query).trim()));
 
+  // the scope of the current list / search
+  const cat = categoryOf(nav.categoryCode);
+  const sub = cat && nav.subregionCode ? cat.subregions.find((s) => s.code === nav.subregionCode) || null : null;
+  const scope = nav.level === "list" ? { categoryCode: nav.categoryCode, subregionCode: nav.subregionCode } : {};
+  const scopeKind = nav.level === "list" && sub ? "subregion" : nav.level === "list" && cat ? "category" : "global";
+  const scopeLabel = sub ? sub.label : cat && nav.level === "list" ? cat.label : "";
+
+  const restoreFocusToFilters = () =>
+    setTimeout(() => {
+      try {
+        if (filtersRef.current && filtersRef.current.focus) filtersRef.current.focus();
+      } catch {}
+    }, 0);
+  const closeSheet = () => {
+    setSheet(false);
+    const m = atlasBrowseMemory;
+    // E01: the choice made in the sheet opens the whole-atlas list with it (E04 → „lista z filtrami”)
+    if (m.level === "home" && !String(m.query).trim() && atlasSelectionCount(m.selection) && !m.openExerciseId) {
+      atlasBrowsePush();
+      setNav({ level: "list", categoryCode: null, subregionCode: null, query: "", scrollY: 0, openExerciseId: null });
+      return;
+    }
+    restoreFocusToFilters();
+  };
   // one step back (hardware / gesture / on-screen Back through popstate → exercisesOverlayRef)
   const stepBackOne = () => {
     const m = atlasBrowseMemory;
+    const input = atlasFocusedSearch();
+    if (sheetRef.current) {
+      atlasBrowsePush(); // the sheet is a step inside the level: put the popped entry back
+      return closeSheet();
+    }
+    if (input && atlasKeyboardOpen()) {
+      atlasBrowsePush(); // E05: Back first hides the keyboard
+      input.blur();
+      return;
+    }
+    if (input) input.blur();
+    if (input && m.level === "home" && !String(m.query).trim()) {
+      atlasBrowsePush(); // an empty E05 (field focused, keyboard already down): Back only leaves the field
+      return;
+    }
     if (m.openExerciseId) return setNav({ openExerciseId: null }, m.scrollY); // E06 → the list, where it was
     if (m.level === "list") {
-      const cat = categoryOf(m.categoryCode);
-      const toCategory = Boolean(m.subregionCode) || atlasHasSubregionScreen(cat);
+      const c = categoryOf(m.categoryCode);
+      const toCategory = Boolean(m.subregionCode) || atlasHasSubregionScreen(c);
       // D06: selection and sort stay between E03 and E02, the query belongs to the list it was typed in
-      return setNav(toCategory ? { level: "category", subregionCode: null, query: "", scrollY: 0 } : { ...ATLAS_BROWSE_HOME });
+      return setNav(toCategory ? { level: "category", subregionCode: null, query: "", scrollY: 0 } : { level: "home", categoryCode: null, subregionCode: null, query: "", scrollY: 0 });
     }
-    if (m.level === "category") return setNav({ ...ATLAS_BROWSE_HOME });
+    if (m.level === "category") return setNav({ level: "home", categoryCode: null, subregionCode: null, query: "", scrollY: 0 });
+    if (m.level === "home" && String(m.query).trim()) {
+      atlasBrowsePush(); // E05 is a state of E01: Back ends the search, the module stays
+      return setNav({ query: "", sort: null });
+    }
   };
+  const sheetRef = useRef(false);
+  sheetRef.current = sheet;
   const stepBackRef = useRef(stepBackOne);
   stepBackRef.current = stepBackOne;
   const onScreenBack = () => window.history.back(); // pops the entry pushed on the way in → one step
 
+  const atRoot = nav.level === "home" && !nav.openExerciseId && !searching && !sheet;
   useEffect(() => {
-    exercisesOverlayRef.current = nav.level === "home" && !nav.openExerciseId ? null : () => stepBackRef.current();
+    exercisesOverlayRef.current = atRoot ? null : () => stepBackRef.current();
     return () => {
       exercisesOverlayRef.current = null;
     };
-  }, [nav]);
+  }, [atRoot]);
   useEffect(() => {
     if (pendingScroll.current == null) return;
     const y = pendingScroll.current;
     pendingScroll.current = null;
     atlasScrollTo(y);
   }, [nav]);
+  // E04: the screen behind the sheet is inert and hidden from assistive technology
+  useEffect(() => {
+    const el = bgRef.current;
+    if (!el) return;
+    if (sheet) {
+      el.setAttribute("inert", "");
+      el.setAttribute("aria-hidden", "true");
+    } else {
+      el.removeAttribute("inert");
+      el.removeAttribute("aria-hidden");
+    }
+  }, [sheet]);
 
-  const openList = (scope) => {
+  const openList = (sc) => {
     atlasBrowsePush();
-    setNav({ level: "list", categoryCode: scope.categoryCode || null, subregionCode: scope.subregionCode || null, query: "", scrollY: 0, openExerciseId: null });
+    setNav({ level: "list", categoryCode: sc.categoryCode || null, subregionCode: sc.subregionCode || null, query: "", scrollY: 0, openExerciseId: null, selection: atlasPruneSelection(model, sc, atlasBrowseMemory.selection) });
   };
-  const openCategory = (cat) => {
-    if (!cat.enabled) return;
-    if (!atlasHasSubregionScreen(cat)) return openList({ categoryCode: cat.code });
+  const openCategory = (c) => {
+    if (!c.enabled) return;
+    if (!atlasHasSubregionScreen(c)) return openList({ categoryCode: c.code });
     atlasBrowsePush();
-    setNav({ level: "category", categoryCode: cat.code, subregionCode: null, query: "", scrollY: 0, openExerciseId: null });
+    setNav({ level: "category", categoryCode: c.code, subregionCode: null, query: "", scrollY: 0, openExerciseId: null });
   };
   const openExercise = (id) => {
+    const input = atlasFocusedSearch();
+    if (input) input.blur();
     atlasBrowseMemory.scrollY = typeof window !== "undefined" ? window.scrollY || 0 : 0; // D06: back to the same place
     atlasBrowsePush();
     Object.assign(atlasBrowseMemory, { openExerciseId: id });
@@ -791,32 +1122,111 @@ function AtlasBrowseScreen({ onNavigate, history = [], isPro = false, onOpenUnlo
       />
     );
 
-  const cat = categoryOf(nav.categoryCode);
+  // search + filters of the current level (E01 / E05 / E03)
+  const nSel = atlasSelectionCount(nav.selection);
+  // results at every character (55 records — no delay); the automatic sort follows the query
+  const onQuery = (q) => patch({ query: q });
+  const searchCtl = {
+    query: nav.query,
+    onQuery,
+    onFocus: () => setFocused(true),
+    onBlur: () => setFocused(false),
+    onCancel: () => {
+      // „Anuluj”: the query is cleared and E01 is back as before the search
+      if (inputRef.current) inputRef.current.blur();
+      setFocused(false);
+      patch({ query: "", sort: null });
+    },
+    scopeKey: atlasScopeKey(scope),
+  };
+  const filtersCtl = model.ok && (nav.level === "list" || nav.level === "home") ? atlasActiveFilters(model, scope, nav.query, nav.selection) : [];
+  const removeFilter = (f) => {
+    const next = { ...nav.selection, [f.dimension]: (nav.selection[f.dimension] || []).filter((c) => c !== f.code) };
+    if (!next[f.dimension].length) delete next[f.dimension];
+    patch({ selection: next });
+  };
+  const clearSelection = () => patch({ selection: {} });
+  const openFilters = () => {
+    const input = atlasFocusedSearch();
+    if (input) input.blur();
+    setSheet(true);
+  };
+  const resultsFor = (listLabel, endNote) => {
+    if (!model.ok) return null;
+    return (
+      <AtlasResults
+        model={model}
+        scope={scope}
+        scopeKind={scopeKind}
+        scopeLabel={scopeLabel}
+        query={nav.query}
+        selection={nav.selection}
+        sort={nav.sort}
+        onToggleSort={(s) => patch({ sort: s })}
+        listLabel={listLabel}
+        onOpenExercise={openExercise}
+        onQuery={(q) => patch({ query: q })}
+        onClearSelection={clearSelection}
+        endNote={endNote}
+      />
+    );
+  };
+  const zeroWithMessage = model.ok && nav.level !== "category" && nSel > 0 && model.browseResults(scope, nav.query, nav.selection).total === 0;
+  const activeGroup = <AtlasActiveFilters filters={filtersCtl} onRemove={removeFilter} onClearAll={zeroWithMessage ? null : clearSelection} />;
+
   let view;
   if (model.ok && nav.level === "list") {
-    const sub = cat && nav.subregionCode ? cat.subregions.find((s) => s.code === nav.subregionCode) : null;
     const fromCategory = Boolean(sub) || atlasHasSubregionScreen(cat);
+    const title = sub ? sub.label : cat ? cat.label : "Wszystkie ćwiczenia";
+    const row = (
+      <AtlasSearchRow
+        search={searchCtl}
+        label={scopeKind === "global" ? "Szukaj w całym Atlasie" : scopeKind === "subregion" ? `Szukaj w podpartii ${title}` : `Szukaj w partii ${title}`}
+        placeholder={scopeKind === "global" ? "Szukaj po nazwie lub aliasie" : scopeKind === "subregion" ? "Szukaj w tej podpartii" : "Szukaj w tej partii"}
+        filtersCount={nSel}
+        onOpenFilters={openFilters}
+        filtersRef={filtersRef}
+        inputRef={inputRef}
+      />
+    );
     view = (
       <AtlasListView
-        model={model}
-        scope={{ categoryCode: nav.categoryCode, subregionCode: nav.subregionCode }}
-        title={sub ? sub.label : cat ? cat.label : "Wszystkie ćwiczenia"}
+        title={title}
         barLabel={fromCategory ? cat.label : "Ćwiczenia"}
         backLabel={fromCategory ? `Wróć do partii ${cat.label}` : "Wróć do Ćwiczeń"}
         onBack={onScreenBack}
-        onOpenExercise={openExercise}
+        search={{ ...searchCtl, row, filters: activeGroup }}
+        results={resultsFor(`Ćwiczenia: ${title}`, true)}
       />
     );
   } else if (model.ok && nav.level === "category" && cat) {
     view = <AtlasCategoryView category={cat} onBack={onScreenBack} onOpenAll={() => openList({ categoryCode: cat.code })} onOpenSubregion={(s) => s.enabled && openList({ categoryCode: cat.code, subregionCode: s.code })} />;
   } else {
-    view = <AtlasHomeView model={model} onOpenAll={() => openList({})} onOpenCategory={openCategory} onRetry={() => setModel(atlasBrowseRetry())} ownCount={ownCount} onOpenOwn={onOpenOwn} />;
+    const row = <AtlasSearchRow search={searchCtl} label="Szukaj ćwiczenia" placeholder="Szukaj po nazwie lub aliasie" cancel={searching && focused} filtersCount={nSel} onOpenFilters={openFilters} filtersRef={filtersRef} inputRef={inputRef} />;
+    const hasQuery = Boolean(String(nav.query).trim());
+    view = (
+      <AtlasHomeView
+        model={model}
+        onOpenAll={() => openList({})}
+        onOpenCategory={openCategory}
+        onRetry={() => setModel(atlasBrowseRetry())}
+        ownCount={ownCount}
+        onOpenOwn={onOpenOwn}
+        searching={searching}
+        search={{ row, filters: searching ? activeGroup : null }}
+        results={hasQuery ? resultsFor("Wyniki wyszukiwania", false) : null}
+      />
+    );
   }
+  const scopeLine = scopeKind === "global" ? "Cały Atlas" : scopeKind === "subregion" ? `Podpartia: ${scopeLabel}` : `Partia: ${scopeLabel}`;
   return (
     <>
       <FontStyles />
-      {view}
-      <BottomNav screen="exercises" onNavigate={onNavigate} />
+      <div ref={bgRef}>
+        {view}
+        <BottomNav screen="exercises" onNavigate={onNavigate} />
+      </div>
+      {sheet && model.ok && <AtlasFilterSheet model={model} scope={scope} scopeLine={scopeLine} query={String(nav.query).trim()} selection={nav.selection} onChange={(sel) => patch({ selection: sel })} onClose={closeSheet} />}
     </>
   );
 }

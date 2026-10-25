@@ -91,17 +91,19 @@ describe("E01 „Ćwiczenia” (board Main / E01-Koniec / E01-Kafel)", () => {
     assert.equal(A.exercisesOverlayRef.current, null, "nothing to step back from on E01");
   });
 
-  test("transitional (I5.4 not yet): no search field, no „Filtry”, no sort control, no old AT2 entry", async () => {
+  test("I5.4: E01 and E03 carry the search field (P1), „Filtry” (P9) and on E03 the sort (P7) of the boards; no old AT2 entry", async () => {
     await boot();
     await toExercises();
-    assert.equal($$('[role="search"]').length, 0);
-    assert.equal($$("input").length, 0, "no input that would do nothing");
-    assert.equal(byTestId("atlas-filters-button"), null);
+    const field = $('[data-testid="atlas-search"] input');
+    assert.equal($('[data-testid="atlas-search"] label span').textContent, "Szukaj ćwiczenia");
+    assert.equal(field.getAttribute("placeholder"), "Szukaj po nazwie lub aliasie");
+    assert.equal(byTestId("atlas-filters-button").getAttribute("aria-label"), "Filtry", "D15: N = 0");
     assert.equal(byTestId("atlas-entry"), null, "the AT2 tile „Atlas ćwiczeń” is replaced");
-    await click(byTestId("atlas-all"));
+    await click(tile("chest"));
     await flush(5, 2);
-    assert.equal(byTestId("atlas-results-sort"), null);
-    assert.equal($$('[role="search"]').length, 0);
+    assert.equal($('[data-testid="atlas-search"] label span').textContent, "Szukaj w partii Klatka piersiowa");
+    assert.equal($('[data-testid="atlas-search"] input').getAttribute("placeholder"), "Szukaj w tej partii");
+    assert.equal(byTestId("atlas-results-sort").getAttribute("aria-label"), "Sortowanie: Nazwa A–Z. Zmień");
     assert.equal(byTestId("atlas-catalog"), null, "the AT2 list is replaced by E03");
   });
 });
@@ -230,6 +232,7 @@ describe("E03 lista (boards E03-Lista / E03-360 / E03-Koniec)", () => {
     assert.equal(name.textContent, longest.name, `full name (${longest.name.length} chars)`);
     assert.equal(name.style.overflowWrap, "anywhere");
     for (const el of $$("*", byTestId("atlas-list"))) {
+      if (el.style.position === "absolute" && el.style.width === "1px") continue; // visually hidden labels (P1)
       assert.notEqual(el.style.textOverflow, "ellipsis");
       assert.notEqual(el.style.whiteSpace, "nowrap", el.textContent);
     }

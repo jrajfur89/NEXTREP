@@ -46,6 +46,9 @@ const ADDED_BY_STAGE = {
     // I5.3: screens E01–E03, the module state (D06) and the browse screen
     "ATLAS_BROWSE_HOME", "ATLAS_GRID", "ATLAS_H1", "ATLAS_NOTE", "ATLAS_PAD_BOTTOM", "ATLAS_SCREEN_STYLE", "AtlasAllRow", "AtlasBackBar", "AtlasBrowseScreen",
     "AtlasCategoryView", "AtlasHomeView", "AtlasListView", "atlasBrowseMemory", "atlasBrowsePush", "atlasBrowseReset", "atlasHasSubregionScreen", "atlasScrollTo", "atlasSectionHead",
+    // I5.4: E04 sheet, E05 search, E07 states
+    "ATLAS_ALIAS_NOTE", "ATLAS_SHEET_EQUIPMENT_VISIBLE", "AtlasActiveFilters", "AtlasFilterSheet", "AtlasResults", "AtlasSearchRow", "atlasActiveFilters", "atlasEffectiveSort",
+    "atlasFiltersZeroText", "atlasFocusedSearch", "atlasKeyboardOpen", "atlasPruneSelection", "atlasScopePhrase", "atlasSelectionCount",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).
