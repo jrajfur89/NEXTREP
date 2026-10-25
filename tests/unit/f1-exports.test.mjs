@@ -37,6 +37,8 @@ const ADDED_BY_STAGE = {
     "awClockLabel", "awKg", "awMmSs", "awPendingText", "awPriorFor", "awRange", "awResultText", "awSetLabels", "awSetResult",
     "WCS_AMBER", "WCS_BODY", "WCS_METRICS", "WCS_SUB", "WCS_SYNC_LINES", "WCS_TITLE", "WcsButton", "WcsFinishSheet", "WcsMetricSheet", "WcsMetricTile", "WcsSaveFailed",
     "WcsSheet", "WcsSyncStatus", "WorkoutSummary", "wcsUnfilled",
+    "EXV_DIMENSION_LABELS", "EXV_HEAD", "EXV_ITEM_TEXT", "EXV_NUM", "EXV_TABS", "EXV_TOP", "ExvChart", "ExvDisclosure", "ExvExerciseTab", "ExvHistoryTab", "ExvSectionHead",
+    "ExvVariantsTab", "ExvYearTable", "exvCardio", "exvCell", "exvClearRestore", "exvDayMonth", "exvExecutions", "exvKg", "exvMemory", "exvMetric", "exvMmSs", "exvPoints",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).

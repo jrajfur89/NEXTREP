@@ -157,12 +157,15 @@ describe("AT2 screen: „Atlas ćwiczeń” opened from „Ćwiczenia”", () =>
     await click(items[at]);
     assert.ok(byTestId("atlas-detail"));
     assert.equal(byTestId("atlas-detail-name").textContent, ex.name);
+    // I4.6 (card v3): the metadata sits in the collapsed „Szczegóły ćwiczenia”
+    assert.equal(byTestId("atlas-detail-primary-equipment").textContent, `Podstawowy sprzęt: ${ex.equipment[0].label}`);
+    await click(byTestId("exv-details").querySelector("button"));
     assert.equal(byTestId("atlas-detail-aliases").textContent, ex.aliases.join(" · "));
-    assert.equal(byTestId("atlas-detail-equipment").textContent, ex.equipment.map((x) => x.label).join(""));
-    assert.equal(byTestId("atlas-detail-primary").textContent, ex.primaryMuscles.map((x) => x.label).join(""));
-    if (ex.secondaryMuscles.length) assert.equal(byTestId("atlas-detail-secondary").textContent, ex.secondaryMuscles.map((x) => x.label).join(""));
-    assert.match(byTestId("atlas-detail-model").textContent, new RegExp(ex.loadModel.label.replace(/[+]/g, "\\+")));
-    assert.match(byTestId("atlas-detail-model").textContent, new RegExp(ex.laterality.label));
+    assert.equal(byTestId("atlas-detail-equipment").textContent, ex.equipment.map((x) => x.label).join(" · "));
+    assert.equal(byTestId("atlas-detail-primary").textContent, ex.primaryMuscles.map((x) => x.label).join(", "));
+    if (ex.secondaryMuscles.length) assert.equal(byTestId("atlas-detail-secondary").textContent, ex.secondaryMuscles.map((x) => x.label).join(", "));
+    assert.equal(byTestId("atlas-detail-model").textContent, ex.loadModel.label);
+    assert.match(byTestId("atlas-detail-sides").textContent, new RegExp(ex.laterality.label));
     assert.equal(byTestId("atlas-detail-tips").textContent, ex.tips);
 
     // Back (hardware or on screen → popstate → exercisesOverlayRef): detail → list → „Ćwiczenia”

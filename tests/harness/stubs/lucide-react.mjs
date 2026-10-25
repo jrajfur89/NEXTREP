@@ -80,3 +80,7 @@ export const Play = icon("Play");
 export const Link = icon("Link");
 export const Smartphone = icon("Smartphone");
 export const Cloud = icon("Cloud");
+export const CircleSlash = icon("CircleSlash");
+export const Shield = icon("Shield");
+export const Lightbulb = icon("Lightbulb");
+export const Video = icon("Video");

@@ -11,14 +11,14 @@ function Stat({ label, value, small, wide, compact }) {
 /* Exercises Screen                                                        */
 /* ---------------------------------------------------------------------- */
 
-function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail }) {
+function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail, history = [], isPro = false, onOpenUnlock, onOpenSession }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Wszystkie");
   const [equipmentFilter, setEquipmentFilter] = useState("Wszystkie");
   const [sheet, setSheet] = useState(null); // 'category' | 'equipment' | null
   const [editing, setEditing] = useState(null); // exercise object or "new"
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [atlasOpen, setAtlasOpen] = useState(false); // AT2: read-only „Atlas ćwiczeń”
+  const [atlasOpen, setAtlasOpen] = useState(() => exvMemory.restore); // AT2: read-only „Atlas ćwiczeń” (I4.6 D7: reopened after a workout from the card)
 
   const searching = query.trim().length > 0;
   const browsing = !searching && categoryFilter === "Wszystkie";
@@ -72,7 +72,7 @@ function ExercisesScreen({ exercises, updateExercises, onNavigate, onOpenDetail 
     setAtlasOpen(true);
   };
   const closeAtlas = useCallback(() => setAtlasOpen(false), []);
-  if (atlasOpen) return <AtlasCatalogView onClose={closeAtlas} onNavigate={onNavigate} />;
+  if (atlasOpen) return <AtlasCatalogView onClose={closeAtlas} onNavigate={onNavigate} history={history} isPro={isPro} onOpenUnlock={onOpenUnlock} onOpenSession={onOpenSession} />;
 
   return (
     <div className="min-h-screen bg-app-depth font-body pb-28">

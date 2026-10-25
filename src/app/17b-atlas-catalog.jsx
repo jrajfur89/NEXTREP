@@ -66,6 +66,7 @@ function buildAtlasCatalog(atlas) {
   const equipment = byCode(d.equipment);
   const muscles = byCode(d.muscles);
   const families = new Map((Array.isArray(a.families) ? a.families : []).map((f) => [f.familyId, f]));
+  const variantAttrs = byCode(d.variantAttributes);
   const option = (code, labels) => ({ code: code ?? null, label: (code != null && labels[code]) || (code != null ? String(code) : "—") });
   const muscle = (code) => {
     const m = muscles.get(code);
@@ -82,7 +83,14 @@ function buildAtlasCatalog(atlas) {
         exerciseId: e.exerciseId,
         name: e.namePl,
         aliases: [...(e.aliasesPl || [])],
+        familyId: e.familyId ?? null,
         familyName: (families.get(e.familyId) || {}).namePl || "",
+        // I4.6 (card v3): the atlas's own card content and variant attributes, read as they are
+        variantAttributes: (e.variantAttributes || []).map((code) => ({ code, dimension: (variantAttrs.get(code) || {}).dimension || String(code).split(".")[0], label: (variantAttrs.get(code) || {}).labelPl || code })),
+        instructions: [...(e.instructionsPl || [])],
+        mistakes: [...(e.commonMistakesPl || [])],
+        safety: [...(e.safetyPl || [])],
+        videoUrl: e.videoUrl || null,
         equipment: (e.equipment || []).map((code) => ({ code, label: (equipment.get(code) || {}).labelPl || code })),
         primaryMuscles,
         secondaryMuscles: (e.secondaryMuscles || []).map(muscle),
@@ -122,47 +130,676 @@ function AtlasSection({ title, children }) {
   );
 }
 
-function AtlasExerciseDetail({ exercise, onBack, onNavigate }) {
+/* ---------------------------------------------------------------------- */
+/* I4.6 — exercise card „Compact Tabs v3” (master EXV3, canvas v76/v81)     */
+/* Ćwiczenie · Historia · Warianty. Read-only: the atlas release and the     */
+/* saved history are only read; nothing is written (D7 state lives in       */
+/* memory only).                                                             */
+/* ---------------------------------------------------------------------- */
+const EXV_DIMENSION_LABELS = { angle: "Kąt ławki", execution: "Wykonanie", grip: "Chwyt", laterality: "Strona", position: "Pozycja" };
+const EXV_NUM = "Inter, 'Barlow Condensed', sans-serif";
+const EXV_TOP = "calc(max(env(safe-area-inset-top, 0px), 12px) + 44px)"; // the pinned tabs sit under the pinned bar
+// D7: the card's history state kept while a workout opened from the table is shown (memory only).
+const exvMemory = { restore: false, exerciseId: null, tab: "ex", years: null, sel: null, scrollY: 0, hScroll: {} };
+function exvClearRestore() {
+  exvMemory.restore = false;
+}
+const exvKg = (v) => String(v).replace(".", ",");
+const exvDayMonth = (iso) => {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+const exvMmSs = (sec) => {
+  sec = Math.max(0, Math.round(Number(sec) || 0));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+};
+// Every execution of ONE exercise (no merging of variants): session + its exercise entry; stable
+// executionId = session id + entry id (or position), also for two entries in one session.
+function exvExecutions(history, exerciseId) {
+  const out = [];
+  for (const s of Array.isArray(history) ? history : []) {
+    (s.exercises || []).forEach((ex, i) => {
+      if (ex && ex.exerciseId === exerciseId) out.push({ executionId: `${s.id}:${ex.id || i}`, session: s, date: s.date, kind: ex.type, sets: ex.sets || [] });
+    });
+  }
+  return out.sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+// One cell of the table, by the exercise's existing model (values as saved).
+function exvCell(set, kind) {
+  if (!set) return null;
+  if (kind === "time") return { main: `${Number(set.duration) || 0} s` };
+  if (kind === "bodyweight") return { main: String(set.reps ?? "—") };
+  const hasW = set.weight !== "" && set.weight != null;
+  if (kind === "sets" && !set.reps) return { main: hasW ? `${exvKg(set.weight)} kg` : "✓" };
+  const w = hasW ? `${kind === "bodyweightPlus" ? "+" : ""}${exvKg(set.weight)}` : "—";
+  return { main: w, reps: `×${set.reps ?? "—"}` };
+}
+function exvCardio(set) {
+  const dur = Number(set && set.duration) || 0;
+  const dist = Number(String((set && set.distance) || "").replace(",", ".")) || 0;
+  const main = dur && dist ? `${exvMmSs(dur)} · ${dist.toFixed(2).replace(".", ",")} km` : dur ? exvMmSs(dur) : dist ? `— · ${dist.toFixed(2).replace(".", ",")} km` : "—";
+  const sub = dur && dist ? `${exvMmSs(dur / dist)} /km` : dur ? "bez dystansu" : dist ? "bez czasu" : "";
+  return { main, sub, pace: dur && dist ? dur / dist : null };
+}
+// D5 — the chart metric by the exercise's model (existing functions, no new algorithm).
+function exvMetric(kind) {
+  if (kind === "bodyweight") return { title: "Maksymalne powtórzenia", value: (e) => Math.max(0, ...e.sets.map((s) => Number(s.reps) || 0)), text: (v) => `${v} powt.` };
+  if (kind === "time") return { title: "Maksymalny czas", value: (e) => Math.max(0, ...e.sets.map((s) => Number(s.duration) || 0)), text: (v) => `${v} s` };
+  if (kind === "cardio") return { title: "Tempo", value: (e) => exvCardio(e.sets[0]).pace, text: (v) => `${exvMmSs(v)} /km` };
+  return { title: "Objętość", value: (e) => exerciseDetailVolume(e.sets), text: (v) => `${fmtThousands(v)} kg` };
+}
+
+const EXV_HEAD = { fontWeight: 500, fontSize: "15px", lineHeight: "18px", letterSpacing: ".03em", textTransform: "uppercase" };
+function ExvSectionHead({ icon: Icon, children, id }) {
   return (
-    <div className="min-h-screen bg-app-depth font-body pb-28" data-testid="atlas-detail">
-      <FontStyles />
-      <TopBar title="ATLAS ĆWICZEŃ" onBack={onBack} />
-      <div className="px-5 pt-4 space-y-3">
-        <div>
-          <h2 className="text-neutral-50 text-xl font-bold break-words" data-testid="atlas-detail-name">{exercise.name}</h2>
-          {exercise.familyName && <p className="text-neutral-500 text-sm mt-0.5">{exercise.familyName}</p>}
+    <h2 id={id} style={{ margin: 0, display: "flex" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+        <Icon aria-hidden="true" size={18} color={NR.warm} strokeWidth={2.25} style={{ flexShrink: 0 }} />
+        <span style={{ ...nrHeadText, ...EXV_HEAD }}>{children}</span>
+      </span>
+    </h2>
+  );
+}
+function ExvDisclosure({ id, icon: Icon, iconColor = NR.textSecondary, border = "#232325", title, sub, open, onToggle, children, testId }) {
+  return (
+    <section data-testid={testId} style={{ borderRadius: "14px", border: `1px solid ${border}`, background: "#0F0F10" }}>
+      <h2 style={{ margin: 0 }}>
+        <button type="button" aria-expanded={open} aria-controls={id} onClick={onToggle} style={{ width: "100%", minHeight: "52px", display: "flex", alignItems: "center", gap: "10px", padding: "4px 12px", border: 0, background: "transparent", textAlign: "left", cursor: "pointer" }}>
+          {Icon && <Icon aria-hidden="true" size={20} color={iconColor} style={{ flexShrink: 0 }} />}
+          <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "1px" }}>
+            <span style={{ fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" }}>{title}</span>
+            {sub && <span style={{ fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", color: "#9A9A9A" }}>{sub}</span>}
+          </span>
+          <span style={{ display: "flex", transform: open ? "rotate(180deg)" : "none" }}>
+            <ChevronDown aria-hidden="true" size={20} color="#9A9A9A" />
+          </span>
+        </button>
+      </h2>
+      {open && (
+        <div id={id} style={{ padding: "0 12px 12px" }}>
+          {children}
         </div>
-        {exercise.aliases.length > 0 && (
-          <AtlasSection title="Inne nazwy">
-            <p className="text-neutral-200 text-sm" data-testid="atlas-detail-aliases">{exercise.aliases.join(" · ")}</p>
-          </AtlasSection>
-        )}
-        <AtlasSection title="Sprzęt">
-          <AtlasChips items={exercise.equipment} testId="atlas-detail-equipment" />
-        </AtlasSection>
-        <AtlasSection title="Mięśnie">
-          <p className="text-neutral-400 text-xs mb-1.5">Główne</p>
-          <AtlasChips items={exercise.primaryMuscles} testId="atlas-detail-primary" />
-          {exercise.secondaryMuscles.length > 0 && (
-            <>
-              <p className="text-neutral-400 text-xs mt-3 mb-1.5">Pomocnicze</p>
-              <AtlasChips items={exercise.secondaryMuscles} testId="atlas-detail-secondary" />
-            </>
+      )}
+    </section>
+  );
+}
+const exvPoints = (n) => `${n} ${plWord(n, "punkt", "punkty", "punktów")}`;
+const EXV_ITEM_TEXT = { fontFamily: NR.font, fontSize: "18px", lineHeight: "23px", color: "#E8E8E8" };
+
+// „Ćwiczenie” — instruction, mistakes, safety, tips and the full metadata, only from the atlas.
+// AT3-D12: a section without data is not shown (no placeholder content).
+function ExvExerciseTab({ exercise }) {
+  const [allSteps, setAllSteps] = useState(false);
+  const [open, setOpen] = useState({ mi: false, sa: false, de: false });
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+  const steps = exercise.instructions || [];
+  const shown = allSteps ? steps : steps.slice(0, 3);
+  const row = (dt, dd, testId) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1px", padding: "8px 0", borderTop: "1px solid #1E1E20" }}>
+      <dt style={{ fontFamily: NR.font, fontSize: "14px", lineHeight: "17px", color: NR.textMuted }}>{dt}</dt>
+      <dd data-testid={testId} style={{ margin: 0, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", color: "#F0F0F0" }}>
+        {dd}
+      </dd>
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      {exercise.videoUrl && (
+        <section aria-label="Film" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "8px 8px 8px 12px", borderRadius: "14px", background: "#0F0F10", border: "1px solid #232325" }}>
+          <span aria-hidden="true" style={{ flexShrink: 0, width: "36px", height: "36px", borderRadius: "10px", background: "rgba(255,106,0,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Video size={20} color="#FF9A3D" />
+          </span>
+          <span style={{ flex: "1 1 140px", minWidth: 0, fontFamily: NR.font, fontSize: "18px", lineHeight: "21px", fontWeight: 600, color: NR.textDisplay }}>Film instruktażowy</span>
+          <a href={exercise.videoUrl} target="_blank" rel="noreferrer" aria-label="Zobacz film instruktażowy" style={{ minHeight: "44px", display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", borderRadius: "12px", background: "rgba(255,106,0,.12)", border: "1px solid rgba(255,133,27,.55)", color: "#FFB27A", fontFamily: NR.font, fontSize: "17px", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+            <PlayCircle aria-hidden="true" size={16} color="#FFB27A" /> Zobacz film
+          </a>
+        </section>
+      )}
+      {steps.length > 0 && (
+        <section aria-labelledby="exv-st-h" data-testid="exv-steps" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <ExvSectionHead icon={ListOrdered} id="exv-st-h">Sposób wykonania</ExvSectionHead>
+          <ol id="exv-steps-l" aria-label="Kroki wykonania" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "14px" }}>
+            {shown.map((t, i) => (
+              <li key={i} style={{ display: "grid", gridTemplateColumns: "30px minmax(0, 1fr)", gap: "12px", alignItems: "start" }}>
+                <span aria-hidden="true" style={{ width: "30px", height: "30px", borderRadius: "15px", background: "rgba(255,106,0,.14)", border: "1px solid rgba(255,133,27,.45)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: EXV_NUM, fontSize: "15px", lineHeight: "18px", fontWeight: 600, color: "#FFB27A" }}>
+                  {i + 1}
+                </span>
+                <span style={{ fontFamily: NR.font, fontSize: "19px", lineHeight: "25px", color: "#F2F2F2", paddingTop: "2px" }}>{t}</span>
+              </li>
+            ))}
+          </ol>
+          {steps.length > 3 && (
+            <button type="button" aria-expanded={allSteps} aria-controls="exv-steps-l" onClick={() => setAllSteps((v) => !v)} style={{ alignSelf: "flex-start", minHeight: "44px", padding: "0 2px", border: 0, background: "transparent", color: "#FF9A3D", fontFamily: NR.font, fontSize: "18px", lineHeight: "21px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              {allSteps ? "Pokaż mniej" : `Pokaż całą instrukcję (${steps.length} ${plWord(steps.length, "krok", "kroki", "kroków")})`}
+              <ChevronDown aria-hidden="true" size={18} color="#FF9A3D" style={{ transform: allSteps ? "rotate(180deg)" : "none" }} />
+            </button>
           )}
-        </AtlasSection>
-        <AtlasSection title="Model obciążenia">
-          <div className="space-y-1 text-sm" data-testid="atlas-detail-model">
-            <p className="text-neutral-100 font-semibold">{exercise.loadModel.label}</p>
-            <p className="text-neutral-400">
-              {exercise.measurementType.label} · {exercise.laterality.label} · {exercise.repsCounting.label}
-            </p>
-          </div>
-        </AtlasSection>
-        {exercise.tips && (
-          <AtlasSection title="Wskazówki">
-            <p className="text-neutral-200 text-sm leading-relaxed" data-testid="atlas-detail-tips">{exercise.tips}</p>
-          </AtlasSection>
+        </section>
+      )}
+      {(exercise.mistakes || []).length > 0 && (
+        <ExvDisclosure id="exv-mi" testId="exv-mistakes" icon={CircleSlash} iconColor="#D9A066" border="rgba(217,160,102,.30)" title="Najczęstsze błędy" sub={exvPoints(exercise.mistakes.length)} open={open.mi} onToggle={() => toggle("mi")}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {exercise.mistakes.map((t, i) => (
+              <li key={i} style={{ display: "grid", gridTemplateColumns: "20px minmax(0, 1fr)", gap: "10px", alignItems: "start" }}>
+                <CircleSlash aria-hidden="true" size={18} color="#D9A066" style={{ marginTop: "2px" }} />
+                <span style={EXV_ITEM_TEXT}>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </ExvDisclosure>
+      )}
+      {(exercise.safety || []).length > 0 && (
+        <ExvDisclosure id="exv-sa" testId="exv-safety" icon={Shield} title="Bezpieczeństwo" sub={exvPoints(exercise.safety.length)} open={open.sa} onToggle={() => toggle("sa")}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {exercise.safety.map((t, i) => (
+              <li key={i} style={{ display: "grid", gridTemplateColumns: "20px minmax(0, 1fr)", gap: "10px", alignItems: "start" }}>
+                <Check aria-hidden="true" size={18} color={NR.textSecondary} style={{ marginTop: "2px" }} />
+                <span style={EXV_ITEM_TEXT}>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </ExvDisclosure>
+      )}
+      {exercise.tips && (
+        <section aria-labelledby="exv-tp-h" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <ExvSectionHead icon={Lightbulb} id="exv-tp-h">Wskazówki treningowe</ExvSectionHead>
+          <p data-testid="atlas-detail-tips" style={{ margin: 0, ...EXV_ITEM_TEXT }}>{exercise.tips}</p>
+        </section>
+      )}
+      <ExvDisclosure id="exv-de" testId="exv-details" icon={Info} title="Szczegóły ćwiczenia" open={open.de} onToggle={() => toggle("de")}>
+        <dl style={{ margin: 0 }}>
+          {row("Mięśnie główne", exercise.primaryMuscles.map((m) => m.label).join(", "), "atlas-detail-primary")}
+          {exercise.secondaryMuscles.length > 0 && row("Mięśnie pomocnicze", exercise.secondaryMuscles.map((m) => m.label).join(", "), "atlas-detail-secondary")}
+          {exercise.statsGroups.length > 0 && row("Kategoria", exercise.statsGroups.map((g) => g.label).join(", "))}
+          {(exercise.variantAttributes || []).map((a) => (
+            <React.Fragment key={a.code}>{row(EXV_DIMENSION_LABELS[a.dimension] || a.dimension, a.label)}</React.Fragment>
+          ))}
+          {exercise.aliases.length > 0 && row("Inne nazwy", exercise.aliases.join(" · "), "atlas-detail-aliases")}
+          {row("Sposób zapisu", exercise.measurementType.label)}
+          {row("Obciążenie", exercise.loadModel.label, "atlas-detail-model")}
+          {row("Strony", `${exercise.laterality.label} · ${exercise.repsCounting.label.toLowerCase()}`, "atlas-detail-sides")}
+          {row("Sprzęt", exercise.equipment.map((e) => e.label).join(" · "), "atlas-detail-equipment")}
+        </dl>
+      </ExvDisclosure>
+    </div>
+  );
+}
+
+// PRO chart — the last 7 executions, equal spacing, real dates, year boundary dashed; a point is a
+// 44 × 44 radio (arrows / Home / End) selecting the whole row of that execution in the table.
+function ExvChart({ points, metric, selected, onSelect }) {
+  const n = points.length;
+  const W = 600;
+  const H = 110;
+  const xs = points.map((_, i) => (n === 1 ? W / 2 : 4 + (i * (W - 8)) / (n - 1)));
+  const vals = points.map((p) => p.value);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const span = hi - lo || Math.max(1, Math.abs(hi) || 1);
+  const ys = vals.map((v) => (hi === lo ? 55 : 10 + (1 - (v - lo) / span) * 80));
+  const pct = (x) => (x / W) * 100;
+  const line = xs.map((x, i) => `${i ? "L" : "M"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
+  const boundaries = [];
+  for (let i = 1; i < n; i++) {
+    const a = new Date(points[i - 1].date).getFullYear();
+    const b = new Date(points[i].date).getFullYear();
+    if (a !== b) boundaries.push({ x: (xs[i - 1] + xs[i]) / 2, before: a, after: b });
+  }
+  const sel = points.find((p) => p.executionId === selected) || points[n - 1];
+  const refs = useRef([]);
+  const onKey = (e, i) => {
+    const to = e.key === "ArrowRight" || e.key === "ArrowUp" ? Math.min(n - 1, i + 1) : e.key === "ArrowLeft" || e.key === "ArrowDown" ? Math.max(0, i - 1) : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+    if (to == null) return;
+    e.preventDefault();
+    onSelect(points[to].executionId);
+    const el = refs.current[to];
+    if (el && el.focus) el.focus();
+  };
+  return (
+    <section aria-labelledby="exv-ch-h" data-testid="exv-chart" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "10px 12px 8px", borderRadius: "14px", background: "#0E0E0F", border: "1px solid #232325" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
+        <h2 id="exv-ch-h" style={{ margin: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", fontWeight: 500, color: NR.textSecondary }}>
+          {metric.title} · ostatnie {n} {plWord(n, "wykonanie", "wykonania", "wykonań")}
+        </h2>
+        <span style={{ fontFamily: NR.font, fontSize: "12px", lineHeight: "15px", color: "#6E6E70" }}>PRO</span>
+      </div>
+      <p data-readout data-testid="exv-readout" aria-live="polite" style={{ margin: 0, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "2px 8px" }}>
+        <span style={{ fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", color: "#D9D9D9" }}>{fmtDate(sel.date)}</span>
+        <span style={{ fontFamily: EXV_NUM, fontSize: "18px", lineHeight: "22px", fontWeight: 600, color: NR.textDisplay, whiteSpace: "nowrap" }}>{metric.text(sel.value)}</span>
+      </p>
+      <div style={{ position: "relative", height: "110px", margin: "0 6px" }}>
+        <svg aria-hidden="true" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height="110" style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+          <defs>
+            <linearGradient id="exv-vg" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stopColor="#FF851B" stopOpacity=".22" />
+              <stop offset="1" stopColor="#FF851B" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {boundaries.map((b, i) => (
+            <line key={i} x1={b.x} x2={b.x} y1="0" y2={H} stroke="#3A3A3C" strokeWidth="1" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+          ))}
+          {n > 1 && <path d={`${line} L${xs[n - 1].toFixed(1)},${H} L${xs[0].toFixed(1)},${H} Z`} fill="url(#exv-vg)" />}
+          {n > 1 && <path d={line} fill="none" stroke="#FF851B" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />}
+        </svg>
+        {boundaries.map((b, i) => (
+          <React.Fragment key={i}>
+            <span style={{ position: "absolute", left: `calc(${pct(b.x)}% - 46px)`, top: 0, width: "40px", textAlign: "right", fontFamily: NR.font, fontSize: "11px", lineHeight: "13px", color: "#6E6E70" }}>{b.before}</span>
+            <span style={{ position: "absolute", left: `calc(${pct(b.x)}% + 6px)`, top: 0, fontFamily: NR.font, fontSize: "11px", lineHeight: "13px", color: "#6E6E70" }}>{b.after}</span>
+          </React.Fragment>
+        ))}
+        <div role="radiogroup" aria-label={`${metric.title} — wybierz wykonanie, aby zaznaczyć je w tabeli`} style={{ position: "absolute", inset: 0 }}>
+          {points.map((p, i) => {
+            const on = p.executionId === sel.executionId;
+            return (
+              <button
+                key={p.executionId}
+                ref={(el) => (refs.current[i] = el)}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                tabIndex={on ? 0 : -1}
+                data-pt={p.executionId}
+                data-testid="exv-point"
+                aria-label={`${fmtDate(p.date)}: ${metric.text(p.value)}`}
+                onClick={() => onSelect(p.executionId)}
+                onKeyDown={(e) => onKey(e, i)}
+                style={{ position: "absolute", left: `calc(${pct(xs[i])}% - 22px)`, top: `${ys[i] - 22}px`, width: "44px", height: "44px", border: 0, padding: 0, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <span style={{ display: "block", width: on ? "14px" : "10px", height: on ? "14px" : "10px", borderRadius: "50%", background: on ? NR.warm : "#151516", border: `2px solid ${NR.warm}`, boxShadow: on ? "0 0 0 4px rgba(255,133,27,.25)" : "none" }} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div aria-hidden="true" style={{ position: "relative", height: "16px", margin: "0 6px" }}>
+        {points.map((p, i) => {
+          const on = p.executionId === sel.executionId;
+          return (
+            <span key={p.executionId} style={{ position: "absolute", left: `${pct(xs[i])}%`, transform: "translateX(-50%)", fontFamily: NR.font, fontSize: "12px", lineHeight: "15px", color: on ? "#FFB27A" : NR.textMuted, fontWeight: on ? 600 : 400, whiteSpace: "nowrap" }}>
+              {exvDayMonth(p.date)}
+            </span>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// Table of one year: pinned date + Seria 1…N (scrolls sideways from 5 sets), 38 px rows (D1).
+function ExvYearTable({ year, rows, cardio, selected, onOpen, scrollRef }) {
+  const cols = cardio ? 1 : Math.max(1, ...rows.map((r) => r.sets.length));
+  const cellBase = { padding: "2px 1px 2px 4px", verticalAlign: "middle" };
+  const sameDay = {};
+  return (
+    <div data-hfit role="region" aria-label={`Rok ${year}, tabela`} ref={scrollRef} data-testid={`exv-table-${year}`} style={{ overflowX: "auto", borderRadius: "12px", border: "1px solid #232325", background: "#0F0F10" }}>
+      <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: "15px", tableLayout: "fixed", width: "100%", minWidth: `calc(3em + ${cols} * 2.9em)` }}>
+        <colgroup>
+          <col style={{ width: cardio ? "4em" : "3em" }} />
+          {Array.from({ length: cols }, (_, i) => (
+            <col key={i} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col" style={{ position: "sticky", left: 0, zIndex: 2, padding: "4px 1px 4px 4px", textAlign: "left", background: "#0F0F10", boxShadow: "1px 0 0 #2A2A2A", fontFamily: NR.font, fontSize: "13px", lineHeight: "16px", fontWeight: 500, color: NR.textMuted }}>Data</th>
+            {Array.from({ length: cols }, (_, i) => (
+              <th key={i} scope="col" style={{ padding: "4px 1px 4px 4px", textAlign: "left", fontFamily: NR.font, fontSize: "13px", lineHeight: "16px", fontWeight: 500, color: NR.textMuted }}>
+                {cardio ? "Wynik" : `Seria ${i + 1}`}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const on = r.executionId === selected;
+            const key = new Date(r.date).toDateString();
+            sameDay[key] = (sameDay[key] || 0) + 1;
+            const nth = rows.filter((x) => new Date(x.date).toDateString() === key).length > 1 ? ` (${sameDay[key]})` : "";
+            const border = on ? "1px solid rgba(255,133,27,.45)" : "1px solid #1E1E20";
+            const tdBg = on ? { background: "rgba(255,106,0,.13)" } : {};
+            let n = 0;
+            let d = 0;
+            return (
+              <tr key={r.executionId} data-exec={r.executionId} data-testid="exv-row" data-sel={on ? "" : undefined} onClick={() => onOpen(r)} style={{ height: "38px", cursor: "pointer", scrollMarginTop: "150px", scrollMarginBottom: "110px" }}>
+                <th scope="row" style={{ position: "sticky", left: 0, zIndex: 1, padding: 0, borderTop: border, background: on ? "#2A1708" : "#0F0F10", boxShadow: on ? "inset 3px 0 0 #FF851B, 1px 0 0 #2A2A2A" : "1px 0 0 #2A2A2A" }}>
+                  <button
+                    type="button"
+                    aria-label={`${fmtDate(r.date)}${nth} — ${on ? "wybrane na wykresie. " : ""}pokaż szczegóły treningu`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpen(r);
+                    }}
+                    style={{ width: "100%", minHeight: "37px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start", padding: "0 3px 0 7px", border: 0, background: "transparent", cursor: "pointer", textAlign: "left" }}
+                  >
+                    <span style={{ fontFamily: NR.font, fontSize: "15px", lineHeight: "17px", fontWeight: 600, color: on ? "#FFB27A" : NR.textDisplay, textDecoration: "underline", textDecorationColor: on ? NR.warm : "#5A5A5C", textUnderlineOffset: "3px" }}>{exvDayMonth(r.date)}</span>
+                  </button>
+                </th>
+                {cardio ? (
+                  (() => {
+                    const c = exvCardio(r.sets[0]);
+                    return (
+                      <td style={{ ...cellBase, borderTop: border, ...tdBg }}>
+                        <span style={{ fontFamily: EXV_NUM, fontSize: "14px", lineHeight: "18px", fontWeight: 500, letterSpacing: "-0.2px", color: NR.textPrimary, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{c.main}</span>
+                        {c.sub && <span style={{ display: "block", fontFamily: EXV_NUM, fontSize: "12px", lineHeight: "15px", color: "#A8A8A8" }}>{c.sub}</span>}
+                      </td>
+                    );
+                  })()
+                ) : (
+                  Array.from({ length: cols }, (_, i) => {
+                    const s = r.sets[i];
+                    if (!s)
+                      return (
+                        <td key={i} style={{ ...cellBase, borderTop: border, color: "#4A4A4A", fontFamily: EXV_NUM, fontSize: "14px", ...tdBg }}>
+                          <span aria-hidden="true">·</span>
+                          <span style={AW_SR}>brak serii</span>
+                        </td>
+                      );
+                    const drop = s.setType === "dropset";
+                    if (drop) d++;
+                    else n++;
+                    const c = exvCell(s, r.kind);
+                    return (
+                      <td key={i} style={{ ...cellBase, borderTop: border, ...tdBg }}>
+                        {drop && (
+                          <span aria-label="dropset" style={{ marginRight: "3px", fontFamily: NR.font, fontSize: "12px", lineHeight: "15px", fontWeight: 700, color: "#FF9A3D" }}>
+                            {d > 1 ? `D${d}` : "D"}
+                          </span>
+                        )}
+                        <span style={{ fontFamily: EXV_NUM, fontSize: "14px", lineHeight: "18px", fontWeight: 500, letterSpacing: "-0.2px", color: NR.textPrimary, fontVariantNumeric: "tabular-nums" }}>
+                          <span style={{ whiteSpace: "nowrap" }}>{c.main}</span>
+                          {c.reps && (
+                            <>
+                              <wbr />
+                              <span style={{ whiteSpace: "nowrap" }}>{c.reps}</span>
+                            </>
+                          )}
+                        </span>
+                      </td>
+                    );
+                  })
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// „Historia” — the full history of this exerciseId, FREE and PRO (table); PRO adds the chart.
+function ExvHistoryTab({ exercise, history, isPro, onOpenUnlock, onOpenSession, mem }) {
+  const execs = useMemo(() => exvExecutions(history, exercise.exerciseId), [history, exercise.exerciseId]);
+  const nowYear = new Date().getFullYear();
+  const byYear = useMemo(() => {
+    const m = new Map();
+    for (const e of execs) {
+      const y = new Date(e.date).getFullYear();
+      if (!m.has(y)) m.set(y, []);
+      m.get(y).push(e);
+    }
+    return m;
+  }, [execs]);
+  // D2 / D3: the current year always (expanded); other years only with executions, collapsed — the
+  // newest earlier year opens too when the current year has none.
+  const years = [...new Set([nowYear, ...byYear.keys()])].sort((a, b) => b - a);
+  const defaultOpen = () => {
+    const o = { [nowYear]: true };
+    if (!byYear.has(nowYear)) {
+      const prev = years.find((y) => y < nowYear && byYear.has(y));
+      if (prev) o[prev] = true;
+    }
+    return o;
+  };
+  const [openYears, setOpenYears] = useState(() => (mem && mem.years) || defaultOpen());
+  const kind = execs[0] ? execs[0].kind : null;
+  const cardio = kind === "cardio";
+  const metric = exvMetric(kind);
+  const points = execs
+    .slice()
+    .reverse()
+    .map((e) => ({ executionId: e.executionId, date: e.date, value: metric.value(e) }))
+    .filter((p) => p.value != null && Number.isFinite(p.value))
+    .slice(-7);
+  const [selected, setSelected] = useState(() => (mem && mem.sel) || (points.length ? points[points.length - 1].executionId : null));
+  const [notice, setNotice] = useState(null);
+  const scrollRefs = useRef({});
+  useEffect(() => {
+    // D7: horizontal positions of the year tables come back too
+    if (!mem || !mem.hScroll) return;
+    for (const [y, x] of Object.entries(mem.hScroll)) {
+      const el = scrollRefs.current[y];
+      if (el) el.scrollLeft = x;
+    }
+  }, []);
+  const select = (id) => {
+    setSelected(id);
+    const e = execs.find((x) => x.executionId === id);
+    if (!e) return;
+    const y = new Date(e.date).getFullYear();
+    if (!openYears[y]) {
+      setOpenYears((o) => ({ ...o, [y]: true }));
+      setNotice({ year: y, text: `Rozwinięto rok ${y}, aby pokazać wybrane wykonanie.` });
+    } else setNotice(null);
+    setTimeout(() => {
+      const row = document.querySelector(`[data-exec="${typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id}"]`);
+      if (row && row.scrollIntoView) {
+        try {
+          row.scrollIntoView({ block: "nearest" });
+        } catch {}
+      }
+    }, 0);
+  };
+  const open = (r) => {
+    exvMemory.restore = true;
+    exvMemory.exerciseId = exercise.exerciseId;
+    exvMemory.tab = "hist";
+    exvMemory.years = openYears;
+    exvMemory.sel = selected;
+    exvMemory.scrollY = typeof window !== "undefined" ? window.scrollY : 0;
+    exvMemory.hScroll = Object.fromEntries(Object.entries(scrollRefs.current).filter(([, el]) => el).map(([y, el]) => [y, el.scrollLeft]));
+    onOpenSession && onOpenSession(r.session, r.executionId);
+  };
+  const unilateral = exercise.repsCounting.code === "per_side";
+  const legend =
+    kind === "cardio" ? (
+      "czas · dystans · tempo (wyliczane)"
+    ) : (
+      <>
+        {kind === "time" ? "czas serii · " : kind === "bodyweight" ? `powt.${unilateral ? " na stronę" : ""} · ` : `kg × powt.${unilateral ? " na stronę" : ""} · `}
+        {kind !== "time" && (
+          <>
+            <span style={{ color: "#FF9A3D", fontWeight: 700 }}>D</span> = dropset ·{" "}
+          </>
         )}
+        <span style={{ color: "#6E6E70" }}>·</span> = brak serii
+      </>
+    );
+
+  if (execs.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <p style={{ margin: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: NR.textMuted }}>Tylko to ćwiczenie — warianty mają osobną historię.</p>
+        <div data-testid="exv-no-history" style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "12px", borderRadius: "12px", background: "#0E0E0F", border: "1px dashed #2E2E30" }}>
+          <HistoryIcon aria-hidden="true" size={20} color={NR.textSecondary} style={{ flexShrink: 0 }} />
+          <span style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+            <span style={{ fontFamily: NR.font, fontSize: "18px", lineHeight: "21px", fontWeight: 600, color: NR.textDisplay }}>Brak historii</span>
+            <span style={{ fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: "#C8C8C8" }}>To ćwiczenie nie pojawiło się jeszcze w żadnym treningu.</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <p style={{ margin: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: NR.textMuted }}>Wszystkie wykonania tego ćwiczenia (warianty mają osobną historię). Dotknij daty, aby otworzyć trening.</p>
+      {isPro ? (
+        points.length > 0 && <ExvChart points={points} metric={metric} selected={selected} onSelect={select} />
+      ) : (
+        <div data-testid="exv-pro-line" style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", padding: "4px 4px 4px 10px", borderRadius: "12px", border: "1px solid rgba(255,133,27,.22)", background: "#0E0E0F" }}>
+          <Lock aria-hidden="true" size={15} color={NR.warm} />
+          <span style={{ flex: "1 1 150px", minWidth: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: "#C8C8C8" }}>Wykres progresji tego ćwiczenia — NEXTREP PRO</span>
+          <button type="button" onClick={onOpenUnlock} style={{ flexShrink: 0, minHeight: "44px", display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", borderRadius: "12px", background: "#141415", border: "1px solid #2E2E30", color: NR.textPrimary, fontFamily: NR.font, fontSize: "17px", lineHeight: "20px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+            Poznaj PRO
+          </button>
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+        <ExvSectionHead icon={HistoryIcon}>Historia wykonań</ExvSectionHead>
+        <p style={{ margin: 0, fontFamily: NR.font, fontSize: "14px", lineHeight: "17px", color: "#9A9A9A" }}>{legend}</p>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {years.map((y) => {
+          const rows = byYear.get(y) || [];
+          const isOpen = !!openYears[y];
+          return (
+            <section key={y} data-yeargroup={y} style={{ display: "flex", flexDirection: "column", gap: "6px", paddingBottom: isOpen ? "8px" : 0, borderBottom: "1px solid #1E1E20" }}>
+              <h3 style={{ margin: 0 }}>
+                <button type="button" data-year={y} data-testid={`exv-year-${y}`} aria-expanded={isOpen} aria-controls={`exv-yr-${y}`} onClick={() => setOpenYears((o) => ({ ...o, [y]: !o[y] }))} style={{ width: "100%", minHeight: "48px", display: "flex", alignItems: "center", gap: "10px", padding: "0 4px", border: 0, background: "transparent", cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ fontFamily: NR.font, fontSize: "20px", lineHeight: "24px", fontWeight: 600, color: NR.textDisplay }}>{y}</span>
+                  <span style={{ flex: "1 1 auto", fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", color: "#9A9A9A" }}>
+                    {rows.length} {plWord(rows.length, "wykonanie", "wykonania", "wykonań")}
+                  </span>
+                  <span style={{ display: "flex", transform: isOpen ? "rotate(180deg)" : "none" }}>
+                    <ChevronDown aria-hidden="true" size={20} color={NR.textSecondary} />
+                  </span>
+                </button>
+              </h3>
+              {isOpen && (
+                <div id={`exv-yr-${y}`}>
+                  {notice && notice.year === y && (
+                    <p role="status" style={{ margin: "0 0 4px", fontFamily: NR.font, fontSize: "14px", lineHeight: "17px", color: "#FFB27A" }}>
+                      {notice.text}
+                    </p>
+                  )}
+                  {rows.length === 0 ? (
+                    <p style={{ margin: "0 4px 4px", fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textMuted }}>Brak wykonań w tym roku</p>
+                  ) : (
+                    <ExvYearTable year={y} rows={rows} cardio={cardio} selected={isPro ? selected : null} onOpen={open} scrollRef={(el) => (scrollRefs.current[y] = el)} />
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// „Warianty” — the family's exercises; each opens its own card (never an automatic replacement).
+function ExvVariantsTab({ exercise, onOpenVariant }) {
+  const family = ATLAS_CATALOG.exercises.filter((e) => e.familyId && e.familyId === exercise.familyId);
+  const desc = (e) => [...(e.variantAttributes || []).map((a) => a.label), `Sprzęt: ${e.equipment.map((q) => q.label).join(", ")}`].join(" · ");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <p style={{ margin: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "19px", color: NR.textMuted }}>
+        {exercise.familyName ? `Rodzina: ${exercise.familyName}. ` : ""}Każdy wariant to osobne ćwiczenie z własną historią — nie są automatycznymi zamiennikami.
+      </p>
+      <ul aria-label="Warianty" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "6px" }}>
+        {family.map((e) =>
+          e.exerciseId === exercise.exerciseId ? (
+            <li key={e.exerciseId} data-testid="exv-variant-current" style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "52px", padding: "6px 12px", borderRadius: "12px", border: "1px solid rgba(255,133,27,.45)", background: "rgba(255,106,0,.06)" }}>
+              <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "1px" }}>
+                <span style={{ fontFamily: NR.font, fontSize: "17px", lineHeight: "20px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" }}>{e.name}</span>
+                <span style={{ fontFamily: NR.font, fontSize: "14px", lineHeight: "18px", color: NR.textSecondary }}>{desc(e)}</span>
+              </span>
+              <span style={{ flexShrink: 0, fontFamily: NR.font, fontSize: "14px", lineHeight: "18px", fontWeight: 600, color: "#FF9A3D" }}>To ćwiczenie</span>
+            </li>
+          ) : (
+            <li key={e.exerciseId}>
+              <button type="button" data-testid="exv-variant" onClick={() => onOpenVariant(e.exerciseId)} style={{ width: "100%", display: "flex", alignItems: "center", gap: "10px", minHeight: "52px", boxSizing: "border-box", padding: "6px 8px 6px 12px", borderRadius: "12px", border: "1px solid #232325", background: "#111112", textAlign: "left", cursor: "pointer" }}>
+                <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "1px" }}>
+                  <span style={{ fontFamily: NR.font, fontSize: "17px", lineHeight: "20px", fontWeight: 500, color: NR.textPrimary, overflowWrap: "anywhere" }}>{e.name}</span>
+                  <span style={{ fontFamily: NR.font, fontSize: "14px", lineHeight: "18px", color: NR.textSecondary }}>{desc(e)}</span>
+                </span>
+                <ChevronRight aria-hidden="true" size={20} color="#9A9A9A" style={{ flexShrink: 0 }} />
+              </button>
+            </li>
+          )
+        )}
+      </ul>
+    </div>
+  );
+}
+
+const EXV_TABS = [
+  ["ex", "Ćwiczenie"],
+  ["hist", "Historia"],
+  ["var", "Warianty"],
+];
+function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro = false, onOpenUnlock, onOpenSession, onOpenVariant }) {
+  const mem = exvMemory.restore && exvMemory.exerciseId === exercise.exerciseId ? { ...exvMemory } : null;
+  const [tab, setTab] = useState(() => (mem ? mem.tab : "ex"));
+  const tabRefs = useRef({});
+  useEffect(() => {
+    if (!mem) return;
+    exvClearRestore();
+    const y = mem.scrollY || 0;
+    setTimeout(() => {
+      try {
+        window.scrollTo(0, y);
+      } catch {}
+    }, 0);
+  }, []);
+  const onTabKey = (e, i) => {
+    const to = e.key === "ArrowRight" ? (i + 1) % 3 : e.key === "ArrowLeft" ? (i + 2) % 3 : e.key === "Home" ? 0 : e.key === "End" ? 2 : null;
+    if (to == null) return;
+    e.preventDefault();
+    setTab(EXV_TABS[to][0]);
+    const el = tabRefs.current[EXV_TABS[to][0]];
+    if (el && el.focus) el.focus();
+  };
+  return (
+    <div data-testid="atlas-detail" data-screen="exercise-detail" style={{ minHeight: "100vh", boxSizing: "border-box", position: "relative", overflowX: "clip", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, padding: "0 12px calc(var(--nr-nav-h, 71px) + 16px)", display: "flex", flexDirection: "column", gap: "12px" }}>
+      <FontStyles />
+      <div data-pin="bar" style={{ position: "sticky", top: 0, zIndex: 7, margin: "0 -12px", padding: "max(env(safe-area-inset-top, 0px), 12px) 6px 0 2px", background: NR.bg }}>
+        <header style={{ display: "flex", alignItems: "center", gap: "2px", minHeight: "44px" }}>
+          <button type="button" aria-label="Wróć do Atlasu ćwiczeń" data-testid="atlas-detail-back" onClick={onBack} style={{ ...AW_ICON_BTN, borderRadius: "22px" }}>
+            <ChevronLeft aria-hidden="true" size={22} color={NR.textPrimary} />
+          </button>
+          <span style={{ flex: "1 1 auto", minWidth: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", fontWeight: 500, letterSpacing: ".06em", textTransform: "uppercase", color: NR.textSecondary, overflowWrap: "anywhere" }}>Atlas ćwiczeń</span>
+        </header>
+      </div>
+      <section aria-labelledby="exv-h" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "2px 2px 4px" }}>
+        <h1 id="exv-h" data-testid="atlas-detail-name" style={{ margin: 0, fontFamily: NR.font, fontSize: "32px", lineHeight: "35px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" }}>{exercise.name}</h1>
+        {exercise.equipment[0] && (
+          <p data-testid="atlas-detail-primary-equipment" style={{ margin: 0, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", color: NR.textSecondary }}>
+            <span style={AW_SR}>Podstawowy sprzęt: </span>
+            {exercise.equipment[0].label}
+          </p>
+        )}
+      </section>
+      <div data-pin="tabs" style={{ position: "sticky", top: EXV_TOP, zIndex: 6, margin: "0 -12px", padding: "0 12px", background: NR.bg, borderBottom: "1px solid #222224" }}>
+        <div role="tablist" aria-label="Sekcje ćwiczenia" style={{ display: "flex" }}>
+          {EXV_TABS.map(([k, label], i) => {
+            const on = tab === k;
+            return (
+              <button
+                key={k}
+                ref={(el) => (tabRefs.current[k] = el)}
+                type="button"
+                role="tab"
+                id={`exv-tab-${k}`}
+                aria-controls={`exv-panel-${k}`}
+                aria-selected={on}
+                tabIndex={on ? 0 : -1}
+                data-testid={`exv-tab-${k}`}
+                onClick={() => setTab(k)}
+                onKeyDown={(e) => onTabKey(e, i)}
+                style={{ position: "relative", flex: "1 1 0", minWidth: 0, minHeight: "48px", border: 0, background: "transparent", cursor: "pointer", padding: "0 4px", fontFamily: NR.font, fontSize: "18px", lineHeight: "21px", fontWeight: on ? 600 : 500, color: on ? NR.textDisplay : "#9A9A9A" }}
+              >
+                {label}
+                {on && <span aria-hidden="true" style={{ position: "absolute", left: "18%", right: "18%", bottom: 0, height: "3px", borderRadius: "2px 2px 0 0", background: "linear-gradient(90deg, #FF9A3D, #FF6A00)" }} />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div role="tabpanel" id={`exv-panel-${tab}`} aria-labelledby={`exv-tab-${tab}`} tabIndex={0} style={{ paddingTop: "6px", outline: "none" }}>
+        {tab === "ex" && <ExvExerciseTab exercise={exercise} />}
+        {tab === "hist" && <ExvHistoryTab exercise={exercise} history={history} isPro={isPro} onOpenUnlock={onOpenUnlock} onOpenSession={onOpenSession} mem={mem} />}
+        {tab === "var" && <ExvVariantsTab exercise={exercise} onOpenVariant={(id) => onOpenVariant && onOpenVariant(id)} />}
       </div>
       <BottomNav screen="exercises" onNavigate={onNavigate} />
     </div>
@@ -171,8 +808,9 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate }) {
 
 // The catalog screen, opened from „Ćwiczenia”. Back (on screen or hardware) steps detail → list →
 // „Ćwiczenia” through exercisesOverlayRef, like the category view of that screen.
-function AtlasCatalogView({ onClose, onNavigate }) {
-  const [selectedId, setSelectedId] = useState(null);
+function AtlasCatalogView({ onClose, onNavigate, history = [], isPro = false, onOpenUnlock, onOpenSession }) {
+  // I4.6 D7: back from a workout opened in the card's history → the same card again
+  const [selectedId, setSelectedId] = useState(() => (exvMemory.restore ? exvMemory.exerciseId : null));
   const selected = selectedId ? ATLAS_CATALOG.exercises.find((e) => e.exerciseId === selectedId) || null : null;
 
   useEffect(() => {
@@ -195,7 +833,26 @@ function AtlasCatalogView({ onClose, onNavigate }) {
   // handler calls exercisesOverlayRef (one step)
   const stepBack = () => window.history.back();
 
-  if (selected) return <AtlasExerciseDetail exercise={selected} onBack={stepBack} onNavigate={onNavigate} />;
+  if (selected)
+    return (
+      <AtlasExerciseDetail
+        key={selected.exerciseId}
+        exercise={selected}
+        onBack={stepBack}
+        onNavigate={onNavigate}
+        history={history}
+        isPro={isPro}
+        onOpenUnlock={onOpenUnlock}
+        onOpenSession={onOpenSession}
+        // a variant opens its own card in place of this one (Back → the atlas list)
+        onOpenVariant={(id) => {
+          setSelectedId(id);
+          try {
+            window.scrollTo(0, 0);
+          } catch {}
+        }}
+      />
+    );
 
   return (
     <div className="min-h-screen bg-app-depth font-body pb-28" data-testid="atlas-catalog">

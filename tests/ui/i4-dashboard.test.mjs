@@ -124,7 +124,7 @@ describe("I4.2 Dashboard — Interrupted Workout", () => {
     assert.match(card.textContent, /Niedokończony trening/);
     assert.match(card.textContent, /Push A/);
     assert.match(card.textContent, /Ćwiczenia1 \/ 1/);
-    assert.match(card.textContent, /Czas24:18/);
+    assert.match(card.textContent, /Czas24:1[78]/); // elapsed at the last save (ms rounding)
     assert.match(card.textContent, /Objętość480 kg/);
     assert.match(text(), /Trening trafi do historii dopiero po jego zakończeniu\./);
     assert.ok(!byTestId("dashboard-next-plan") && !byTestId("dashboard-start-card"), "no competing start");

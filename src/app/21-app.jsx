@@ -76,6 +76,7 @@ function App() {
   // loop and never step back to a random previous screen. (A live workout replaces the whole UI,
   // so the bottom panel isn't reachable there; its Back protection is untouched.)
   const goToScreen = (target) => {
+    exvClearRestore(); // I4.6 D7: the card's state is restored only on Back from the workout it opened
     setExerciseDetail(null);
     setHistoryDetail(null);
     setWorkoutSummary(null);
@@ -1548,6 +1549,14 @@ function App() {
           exercises={exercises}
           updateExercises={updateExercises}
           onNavigate={goToScreen}
+          history={history}
+          isPro={isProEffective}
+          onOpenUnlock={() => setProModalOpen(true)}
+          // I4.6 D6: a row of the card's history opens that workout in the History area
+          onOpenSession={(session) => {
+            pushNavMarker();
+            setHistoryDetail(session);
+          }}
           onOpenDetail={(ex) => {
             pushNavMarker();
             setExerciseDetail(ex);
