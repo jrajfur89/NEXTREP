@@ -41,6 +41,8 @@ const ADDED_BY_STAGE = {
     "ExvVariantsTab", "ExvYearTable", "exvCardio", "exvCell", "exvClearRestore", "exvDayMonth", "exvExecutions", "exvKg", "exvMemory", "exvMetric", "exvMmSs", "exvPoints",
     "ATLAS_PLURALS", "ATLAS_ROW_CHIP_DIMENSIONS", "ATLAS_SHEET_DIMENSIONS", "atlasBrowseFreeze", "atlasBrowseMemo", "atlasBrowseModel", "atlasBrowseRetry", "atlasScopeKey",
     "createAtlasBrowse", "plPlural", "shortLoadModelLabel",
+    "ATLAS_MESSAGES", "ATLAS_PROPOSED_DS", "ATLAS_SORT_LABELS", "ATLAS_SR", "ATLAS_UI", "AtlasActiveFilterChip", "AtlasCategoryTile", "AtlasExerciseRow", "AtlasFilterChip",
+    "AtlasFiltersButton", "AtlasMessage", "AtlasNum", "AtlasResultsBar", "AtlasSearchField", "AtlasSubregionTile", "atlasRowProps",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).

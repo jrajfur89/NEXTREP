@@ -379,7 +379,9 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     // I5: one more line — the navigation and the atlas search / hierarchy engines for the browse model
     const i5Engines = "// I5 (ATLAS-UX-01): navigation hierarchy and the atlas search / hierarchy engines — used ONLY by the browse adapter (17c-atlas-browse.jsx)\n" +
       'import { ATLAS_NAVIGATION, buildAtlasIndex, ATLAS_FACET_DIMENSIONS, buildHierarchyIndex, validateHierarchy } from "@nextrep-engine";\n';
-    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines);
+    // I5.2: icons of the components P1–P9, from lucide-react only
+    const i5Icons = "// I5.2 (ATLAS-UX-01): icons of the components P1–P9 not imported above\n" + 'import { SlidersHorizontal, XCircle, RefreshCcw } from "lucide-react";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
     assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx", "src/app/17c-atlas-browse.jsx"]);

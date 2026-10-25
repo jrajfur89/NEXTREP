@@ -84,3 +84,6 @@ export const CircleSlash = icon("CircleSlash");
 export const Shield = icon("Shield");
 export const Lightbulb = icon("Lightbulb");
 export const Video = icon("Video");
+export const SlidersHorizontal = icon("SlidersHorizontal");
+export const XCircle = icon("XCircle");
+export const RefreshCcw = icon("RefreshCcw");

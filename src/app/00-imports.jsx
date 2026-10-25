@@ -101,3 +101,5 @@ import {
 import { Flag, ListOrdered, PauseCircle, Info, Calendar, CalendarCheck, ArrowRight, CloudOff, Trophy, ListChecks, Hourglass, Sigma, Sparkles, Pause, Play, RotateCcw, Smartphone, Cloud, CircleSlash, Shield, Lightbulb, Video, Link as LinkIcon } from "lucide-react";
 // I5 (ATLAS-UX-01): navigation hierarchy and the atlas search / hierarchy engines — used ONLY by the browse adapter (17c-atlas-browse.jsx)
 import { ATLAS_NAVIGATION, buildAtlasIndex, ATLAS_FACET_DIMENSIONS, buildHierarchyIndex, validateHierarchy } from "@nextrep-engine";
+// I5.2 (ATLAS-UX-01): icons of the components P1–P9 not imported above
+import { SlidersHorizontal, XCircle, RefreshCcw } from "lucide-react";
