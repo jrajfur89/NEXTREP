@@ -4,7 +4,7 @@
 import { describe, test, after } from "node:test";
 import assert from "node:assert/strict";
 import { useS1Profile, resetStorage } from "../harness/load-app.mjs";
-import { React, mount, unmount, flush, act, click, $$, byTestId, loadApp } from "../harness/ui.mjs";
+import { React, mount, unmount, flush, act, click, $$, byTestId, loadApp, workoutSetShown } from "../harness/ui.mjs";
 
 useS1Profile();
 const K = (n) => `nextrep1_guest_${n}_v1`;
@@ -151,6 +151,6 @@ describe("I4.2 Dashboard — Interrupted Workout", () => {
     await click(byTestId("dashboard-resume"));
     await flush(10, 3);
     assert.ok(!dash());
-    assert.ok($$("input").some((i) => i.value === "60"));
+    assert.ok(workoutSetShown(60));
   });
 });

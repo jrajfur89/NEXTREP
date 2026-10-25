@@ -33,6 +33,8 @@ const ADDED_BY_STAGE = {
     "DashLastWorkoutCard", "DashProgressCard", "DashStat", "dashLastSession",
     "TEF_FOCUS", "TefAlert", "TefBullets", "TefChoice", "TefConfirmSheet", "TefDraftCard", "TefHeader", "TefInfo", "TefStatus",
     "deleteActiveWorkoutDraft", "readActiveWorkoutDraftState", "tefCardLink", "tefWideButton",
+    "AW_LABEL", "AW_ICON_BTN", "AW_NUM", "AW_SR", "AwCardToggle", "AwField", "AwMenuItem", "AwProgress", "AwRestRing", "AwSetDone", "AwSetPending", "AwSupersetBar",
+    "awClockLabel", "awKg", "awMmSs", "awPendingText", "awPriorFor", "awRange", "awResultText", "awSetLabels", "awSetResult",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).

@@ -283,6 +283,198 @@ function itemHasEnteredData(item) {
   );
 }
 
+/* ---------------------------------------------------------------------- */
+/* I4.4 — Active Workout after the approved master (AWM v1, canvas v81)   */
+/* Visual layer only: the series, their values, the completion rule        */
+/* (isSetPerformed), the rest timer, the draft and finishing are unchanged.*/
+/* ---------------------------------------------------------------------- */
+const AW_NUM = "Inter, 'Barlow Condensed', sans-serif";
+const AW_LABEL = { fontFamily: NR.font, fontSize: "14px", lineHeight: "16px", fontWeight: 500, letterSpacing: ".05em", textTransform: "uppercase", color: "#9A9A9A" };
+const AW_SR = { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" };
+const awKg = (w) => String(w).replace(".", ",");
+const awRange = (t) => String(t).replace(/-/g, "–");
+// 01:12 — the rest countdown of the master (zero-padded minutes)
+function awMmSs(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+}
+// "Czas treningu 24 minuty 18 sekund" — the spoken form of the elapsed clock
+function awClockLabel(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const parts = [];
+  if (h) parts.push(`${h} ${plWord(h, "godzina", "godziny", "godzin")}`);
+  parts.push(`${m} ${plWord(m, "minuta", "minuty", "minut")}`);
+  parts.push(`${s} ${plWord(s, "sekunda", "sekundy", "sekund")}`);
+  return `Czas treningu ${parts.join(" ")}`;
+}
+// The result of one set as the master writes it: "80 kg × 8" + "RIR 1–2" (values as they were entered).
+function awSetResult(s, kind) {
+  const rir = formatRir(s.rir) ? `RIR ${formatRir(s.rir)}` : null;
+  let main;
+  if (kind === "time") main = `${s.duration} s`;
+  else if (kind === "cardio") {
+    const parts = [`${s.duration || 0} s`];
+    if (s.speed) parts.push(`${s.speed} km/h`);
+    if (s.incline) parts.push(`${s.incline}%`);
+    main = parts.join(" · ");
+  } else if (kind === "sets") main = s.weight !== "" && s.weight != null ? `${awKg(s.weight)} kg` : "Wykonana";
+  else if (kind === "bodyweight") main = `${s.reps} powt.`;
+  else if (kind === "bodyweightPlus") main = `MW + ${awKg(s.weight || 0)} kg × ${s.reps}`;
+  else main = `${awKg(s.weight === "" || s.weight == null ? 0 : s.weight)} kg × ${s.reps}`;
+  return { main, rir: kind === "cardio" ? null : rir };
+}
+const awResultText = (s, kind) => {
+  const r = awSetResult(s, kind);
+  return r.rir ? `${r.main} · ${r.rir}` : r.main;
+};
+const awPendingText = (kind) => (kind === "bodyweight" ? "— powt." : kind === "time" ? "— s" : kind === "sets" ? "—" : "— kg × —");
+// "Seria 2" / "Dropset" (a second dropset: "Dropset 2") — numbering as in production (dropsets apart)
+function awSetLabels(sets) {
+  let n = 0;
+  let d = 0;
+  return sets.map((s) => (s.setType === "dropset" ? (++d > 1 ? `Dropset ${d}` : "Dropset") : `Seria ${++n}`));
+}
+// The set of the previous workout at the same position (n-th normal set / n-th dropset).
+function awPriorFor(sets, i, priorSets) {
+  const isDrop = sets[i].setType === "dropset";
+  const nth = sets.slice(0, i + 1).filter((x) => (x.setType === "dropset") === isDrop).length;
+  const same = (priorSets || []).filter((x) => (x.setType === "dropset") === isDrop);
+  return same[nth - 1] || null;
+}
+
+// Circular progress of the docked rest timer.
+function AwRestRing({ remaining, target }) {
+  const c = 2 * Math.PI * 18;
+  const frac = target > 0 ? Math.max(0, Math.min(1, remaining / target)) : 0;
+  return (
+    <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <circle cx="24" cy="24" r="18" fill="none" stroke="#1E2A33" strokeWidth="4" />
+      <circle cx="24" cy="24" r="18" fill="none" stroke="#5EC2FF" strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} transform="rotate(-90 24 24)" />
+    </svg>
+  );
+}
+const AW_ICON_BTN = { flexShrink: 0, width: "44px", height: "44px", boxSizing: "border-box", background: "transparent", border: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 };
+
+// Completed set: "Seria 1 · 80 kg × 8 · RIR 1–2" + pencil (production completion rule).
+function AwSetDone({ label, set, kind, onEdit }) {
+  const r = awSetResult(set, kind);
+  const drop = set.setType === "dropset";
+  return (
+    <li data-set="done" data-testid="aw-set-done" style={{ listStyle: "none", position: "relative", display: "flex", alignItems: "center", gap: "10px", minHeight: "56px", boxSizing: "border-box", padding: "6px 4px 6px 16px", borderRadius: "14px", background: "#0D0E0D", border: "1px solid rgba(66,201,138,.28)", overflow: "hidden" }}>
+      <span aria-hidden="true" style={{ position: "absolute", left: 0, top: "10px", bottom: "10px", width: "3px", borderRadius: "0 2px 2px 0", background: NR.success }} />
+      <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "2px 12px" }}>
+        <span style={{ fontFamily: NR.font, fontSize: "17px", lineHeight: "20px", fontWeight: 500, color: drop ? "#FF9A3D" : "#D0D0D0", minWidth: "58px" }}>{label}</span>
+        <span style={{ fontFamily: AW_NUM, fontSize: "19px", lineHeight: "24px", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: NR.textDisplay, whiteSpace: "nowrap" }}>{r.main}</span>
+        {r.rir && <span style={{ fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary, whiteSpace: "nowrap" }}>{r.rir}</span>}
+      </span>
+      <button type="button" aria-label={`Edytuj ${label}`} onClick={onEdit} style={{ ...AW_ICON_BTN, width: "auto", minWidth: "44px", minHeight: "44px", height: "auto" }}>
+        <Pencil aria-hidden="true" size={18} color="#9A9A9A" />
+      </button>
+    </li>
+  );
+}
+// Set still to do: "Seria 4 · Do wykonania · — kg × —" + "Wpisz".
+function AwSetPending({ label, kind, onEdit }) {
+  return (
+    <li data-set="pending" data-testid="aw-set-pending" style={{ listStyle: "none", display: "flex", alignItems: "center", gap: "10px", minHeight: "56px", boxSizing: "border-box", padding: "6px 4px 6px 16px", borderRadius: "14px", background: NR.card, border: "1px dashed #2E2E30" }}>
+      <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "2px 12px" }}>
+        <span style={{ fontFamily: NR.font, fontSize: "17px", lineHeight: "20px", fontWeight: 500, color: "#D0D0D0", minWidth: "58px" }}>{label}</span>
+        <span style={{ fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textMuted }}>Do wykonania</span>
+        <span aria-hidden="true" style={{ fontFamily: AW_NUM, fontSize: "17px", lineHeight: "22px", fontWeight: 500, color: "#5E5E5E", whiteSpace: "nowrap" }}>{awPendingText(kind)}</span>
+      </span>
+      <button type="button" aria-label={`Wpisz wyniki: ${label}`} onClick={onEdit} style={{ flexShrink: 0, minWidth: "44px", minHeight: "44px", padding: "0 10px", border: 0, background: "transparent", color: NR.textSecondary, fontFamily: NR.font, fontSize: "16px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+        <Pencil aria-hidden="true" size={16} color="#9A9A9A" />
+        Wpisz
+      </button>
+    </li>
+  );
+}
+// Labelled field of the expanded set card (visible label above, full spoken label for readers).
+function AwField({ label, srLabel, flex, minWidth, fontSize = "24px", children }) {
+  return (
+    <div style={{ flex, display: "flex", flexDirection: "column", gap: "6px" }}>
+      <span aria-hidden="true" style={AW_LABEL}>{label}</span>
+      <label style={{ position: "relative", display: "block", minWidth, fontSize }}>
+        <span style={AW_SR}>{srLabel}</span>
+        {children}
+      </label>
+    </div>
+  );
+}
+// Collapsible card of the master ("Zalecenie na dziś" — warm, "Zobacz poprzednie wykonanie" — neutral).
+function AwCardToggle({ open, onToggle, icon: Icon, warm, title, testId }) {
+  return (
+    <button type="button" aria-expanded={open} onClick={onToggle} data-testid={testId} style={{ width: "100%", minHeight: "52px", boxSizing: "border-box", padding: "8px 12px 8px 14px", border: 0, background: "transparent", display: "flex", alignItems: "center", gap: "10px", textAlign: "left", cursor: "pointer" }}>
+      <Icon aria-hidden="true" size={18} color={NR.warm} strokeWidth={2.25} style={{ flexShrink: 0 }} />
+      <span style={{ flex: "1 1 auto", minWidth: 0 }}>
+        {warm ? <span style={nrHeadText}>{title}</span> : <span style={{ fontFamily: NR.font, fontSize: "17px", lineHeight: "20px", fontWeight: 500, color: NR.textPrimary }}>{title}</span>}
+      </span>
+      <span style={{ display: "flex", transform: open ? "rotate(180deg)" : "none" }}>
+        <ChevronDown aria-hidden="true" size={18} color={NR.textSecondary} />
+      </span>
+    </button>
+  );
+}
+// Menu row of the ⋮ sheet: icon, title and (optional) explanation.
+function AwMenuItem({ icon: Icon, color = NR.textSecondary, title, sub, onClick, href, testId }) {
+  const style = { width: "100%", minHeight: "56px", boxSizing: "border-box", padding: "8px 12px", border: 0, borderRadius: "12px", background: "transparent", display: "flex", alignItems: "center", gap: "14px", textAlign: "left", cursor: "pointer", textDecoration: "none" };
+  const body = (
+    <>
+      <Icon aria-hidden="true" size={21} color={color} style={{ flexShrink: 0 }} />
+      <span style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+        <span style={{ fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 500, color: NR.textPrimary }}>{title}</span>
+        {sub && <span style={{ fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", color: "#9A9A9A" }}>{sub}</span>}
+      </span>
+    </>
+  );
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" onClick={onClick} data-testid={testId} style={style}>
+      {body}
+    </a>
+  ) : (
+    <button type="button" onClick={onClick} data-testid={testId} style={style}>
+      {body}
+    </button>
+  );
+}
+// Superset bar: green label + A/B/C capsules (44 × 44 targets). Switching only changes the view.
+function AwSupersetBar({ items, subIdx, onPick }) {
+  return (
+    <div data-testid="aw-superset" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "4px 8px", margin: "2px 0 -4px" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#A3E635" }}>
+        <LinkIcon aria-hidden="true" size={15} color="#A3E635" strokeWidth={2.25} />
+        Superseria · ćwiczenie {subIdx + 1} z {items.length}
+      </span>
+      <div role="tablist" aria-label="Ćwiczenia superserii" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end" }}>
+        {items.map((it, i) => {
+          const active = i === subIdx;
+          const letter = String.fromCharCode(65 + i);
+          return (
+            <button key={it.id || it.planItemId} type="button" role="tab" aria-selected={active} aria-label={`${letter}: ${it.name}`} title={it.name} onClick={() => onPick(i)} style={{ minWidth: "44px", minHeight: "44px", padding: "0 2px", border: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <span style={{ minWidth: "34px", height: "30px", boxSizing: "border-box", padding: "0 10px", borderRadius: "15px", background: active ? NR.warm : "rgba(9,9,9,.6)", border: `1px solid ${active ? NR.warm : "#4A4A4A"}`, color: active ? NR.bg : "#D0D0D0", boxShadow: active ? "0 0 10px rgba(255,133,27,.45)" : "none", fontFamily: AW_NUM, fontSize: "15px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {letter}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+// Segmented progress of the workout (blocks): done = warm, current = 45 %, rest = #2A2A2A.
+function AwProgress({ count, idx }) {
+  return (
+    <div role="progressbar" aria-label={`Ćwiczenie ${idx + 1} z ${count}`} aria-valuenow={idx + 1} aria-valuemin={1} aria-valuemax={count} style={{ display: "flex", gap: "4px" }}>
+      {Array.from({ length: count }, (_, i) => (
+        <span key={i} style={{ flex: "1 1 0", height: "4px", borderRadius: "2px", background: i < idx ? NR.warm : i === idx ? "rgba(255,133,27,.45)" : NR.hairline, boxShadow: i < idx ? "0 0 6px rgba(255,133,27,.45)" : "none" }} />
+      ))}
+    </div>
+  );
+}
+
 function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession, resumeDraft, onFinish, onSaveEdit, onCancel, onInterrupt, onCreateExercise, isPro = false, onOpenUnlock }) {
   // App-update guard: while a workout is open its state exists only in memory, so the update
   // checker in index.html must never reload the page now — it applies the update afterwards.
@@ -587,6 +779,87 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   const currentBlock = blocks[blockIdx];
   const currentEx = currentBlock?.items[subIdx];
 
+  // I4.4 (AWM v1) — view state only. The expanded set card: null = the first set not performed yet
+  // (production completion rule); a tap on "Wpisz" / the pencil, or typing in a card, pins it.
+  const [editSetId, setEditSetId] = useState(null);
+  const [focusKey, setFocusKey] = useState(null);
+  // the two cards collapse once when set editing begins (their content is kept)
+  const cardsCollapsedRef = useRef(false);
+  useEffect(() => {
+    setEditSetId(null);
+    cardsCollapsedRef.current = false;
+  }, [blockIdx, subIdx]);
+  const beginEdit = (setId, key) => {
+    if (editSetId !== setId) setEditSetId(setId);
+    if (key) setFocusKey(key);
+    if (!cardsCollapsedRef.current) {
+      cardsCollapsedRef.current = true;
+      setShowRecommendation(false);
+      setShowPriorDetail(false);
+    }
+  };
+  // Keyboard open (a text field focused and the visual viewport clearly shorter than without it):
+  // the rest dock and Poprzednie/Następne are hidden, a running rest shows as a chip by the clock.
+  const awRootRef = useRef(null);
+  const awHeaderRef = useRef(null);
+  const awDockRef = useRef(null);
+  const awFooterRef = useRef(null);
+  const [kbOpen, setKbOpen] = useState(false);
+  const kbOpenRef = useRef(false);
+  kbOpenRef.current = kbOpen;
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    let base = vv.height;
+    const check = () => {
+      const a = document.activeElement;
+      const typing = Boolean(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && awRootRef.current && awRootRef.current.contains(a));
+      if (!typing) base = Math.max(base, vv.height);
+      const open = typing && vv.height < base - 120;
+      setKbOpen(open);
+      if (open && a && a.scrollIntoView) {
+        try {
+          a.scrollIntoView({ block: "center" });
+        } catch {}
+      }
+    };
+    const later = () => setTimeout(check, 0);
+    vv.addEventListener("resize", check);
+    document.addEventListener("focusin", later);
+    document.addEventListener("focusout", later);
+    return () => {
+      vv.removeEventListener("resize", check);
+      document.removeEventListener("focusin", later);
+      document.removeEventListener("focusout", later);
+    };
+  }, []);
+  // Compact header when the working area left by the photo header, the dock and the footer is
+  // under 280 px (constrained height / large text) — the threshold of the master's tests.
+  const [compactHeader, setCompactHeader] = useState(false);
+  const compactRef = useRef(false);
+  compactRef.current = compactHeader;
+  const photoHeaderH = useRef(0);
+  useEffect(() => {
+    const measure = () => {
+      if (kbOpenRef.current || !awRootRef.current) return;
+      const H = awRootRef.current.clientHeight;
+      if (!H) return;
+      const hh = awHeaderRef.current ? awHeaderRef.current.offsetHeight : 0;
+      if (!compactRef.current) photoHeaderH.current = hh;
+      const used = photoHeaderH.current + (awDockRef.current ? awDockRef.current.offsetHeight : 0) + (awFooterRef.current ? awFooterRef.current.offsetHeight : 0);
+      const next = H - used < 280;
+      if (next !== compactRef.current) setCompactHeader(next);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const ro = typeof ResizeObserver !== "undefined" && awRootRef.current ? new ResizeObserver(measure) : null;
+    if (ro) ro.observe(awRootRef.current);
+    return () => {
+      window.removeEventListener("resize", measure);
+      if (ro) ro.disconnect();
+    };
+  }, [blockIdx, subIdx, restActive]);
+
   useEffect(() => {
     setTimerRowId(null);
     setTimerRunning(false);
@@ -634,12 +907,14 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   };
 
   const addDropset = () => {
+    const dropId = newUuid();
+    setEditSetId(dropId); // I4.4: the new dropset opens as the expanded set card
     setBlocks((prev) => {
       const next = prev.map((b) => ({ ...b, items: b.items.map((it) => ({ ...it, sets: [...it.sets] })) }));
       const item = next[blockIdx].items[subIdx];
       item.sets = [
         ...item.sets,
-        { id: newUuid(), weight: "", reps: "", duration: "", rir: "0", note: "", setType: "dropset", done: false, fromSuggestion: false },
+        { id: dropId, weight: "", reps: "", duration: "", rir: "0", note: "", setType: "dropset", done: false, fromSuggestion: false },
       ];
       return next;
     });
@@ -913,579 +1188,428 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   }
 
   const priorSets = currentEx.priorSets || [];
+  // date of the previous workout shown in "Zobacz poprzednie wykonanie" (read from the history, the
+  // same lookup that produced priorSets)
+  const priorDate = priorSets.length ? (findMatchingSessions(history, { exerciseId: currentEx.exerciseId, beforeDate: nowDate })[0] || {}).date || null : null;
+  const kind = currentEx.type;
+  const setLabels = awSetLabels(currentEx.sets);
+  const autoSetId = (currentEx.sets.find((s) => !isSetPerformed(s, kind)) || {}).id || null;
+  const currentSetId = editSetId && currentEx.sets.some((s) => s.id === editSetId) ? editSetId : autoSetId;
+  const isSuperset = currentBlock.items.length > 1;
+  const showDock = !kbOpen;
+  const planLine = editingSession ? editName.trim() : plan?.name || "";
 
-  const formatPriorSet = (s) => {
-    const rirTag = formatRir(s.rir) ? ` · RIR ${formatRir(s.rir)}` : "";
-    if (currentEx.type === "time") return `${s.duration}s${rirTag}`;
-    if (currentEx.type === "cardio") {
-      const parts = [`${s.duration || 0}s`];
-      if (s.speed) parts.push(`${s.speed}km/h`);
-      if (s.incline) parts.push(`${s.incline}%`);
-      return parts.join(" · ");
-    }
-    if (currentEx.type === "sets") return s.weight != null ? `${s.weight}kg` : "seria wykonana";
-    if (currentEx.type === "bodyweight") return `${s.reps} powt.${rirTag}`;
-    if (currentEx.type === "bodyweightPlus") return `MW+${s.weight || 0}kg × ${s.reps}${rirTag}`;
-    return `${s.weight}kg × ${s.reps}${rirTag}`;
+  const startRest = () => {
+    const secs = currentEx.restSeconds || 90;
+    clearRestAutoReset();
+    restSignal.unlock(); // inside this tap: lets the end signal play later
+    restTargetRef.current = secs;
+    setRestTarget(secs);
+    setRestRemaining(secs);
+    setRestActive(true);
+    setRestRunning(true);
+  };
+  const toggleRest = () => {
+    clearRestAutoReset();
+    restSignal.unlock();
+    if (!restRunning && restRemaining <= 0) setRestRemaining(restTarget);
+    setRestRunning((r) => !r);
+  };
+  const resetRest = () => {
+    clearRestAutoReset();
+    setRestRemaining(restTarget);
+    setRestRunning(false);
+  };
+  const closeRest = () => {
+    clearRestAutoReset();
+    setRestRunning(false);
+    setRestActive(false);
+  };
+
+  const clockChip = !editingSession && !backfillInfo && (
+    <span data-clock role="timer" aria-label={awClockLabel(elapsed)} data-testid="aw-clock" style={{ display: "inline-flex", alignItems: "center", gap: "6px", minHeight: "32px", boxSizing: "border-box", padding: "2px 10px", borderRadius: "16px", background: "rgba(9,9,9,.5)", border: "1px solid rgba(255,255,255,.12)", fontFamily: AW_NUM, fontSize: "15px", fontWeight: 500, fontVariantNumeric: "tabular-nums", color: "#D0D0D0" }}>
+      <Clock aria-hidden="true" size={14} color={NR.textSecondary} />
+      {fmtClock(elapsed)}
+    </span>
+  );
+  const restChip = kbOpen && restActive && (
+    <span data-testid="aw-rest-chip" style={{ display: "inline-flex", alignItems: "center", gap: "5px", minHeight: "32px", boxSizing: "border-box", padding: "2px 10px", borderRadius: "16px", background: "rgba(9,9,9,.6)", border: "1px solid rgba(94,194,255,.35)", fontFamily: AW_NUM, fontSize: "15px", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: NR.textDisplay }}>
+      <TimerIcon aria-hidden="true" size={14} color="#5EC2FF" />
+      {awMmSs(restRemaining)}
+      <span style={AW_SR}>{restRunning ? "przerwa trwa" : "przerwa wstrzymana"}</span>
+    </span>
+  );
+  // back-filled / edited workout: its date (and duration) fields take the place of the clock
+  const dateControls = editingSession ? (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: NR.textSecondary, fontSize: "14px" }}>
+      <Pencil aria-hidden="true" size={13} color={NR.warm} />
+      <DateField value={editDate || ""} onChange={setEditDate} max={toLocalDateStr(new Date())} testId="edit-date" wrapperClassName="flex-shrink-0" inputClassName="w-[6.6rem] bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-neutral-200 text-xs" />
+    </span>
+  ) : backfillInfo ? (
+    <span style={{ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: "4px 8px", color: NR.textSecondary, fontSize: "14px" }}>
+      <CalendarPlus aria-hidden="true" size={14} color={NR.warm} />
+      <DateField value={backfillDate || ""} onChange={setBackfillDate} max={toLocalDateStr(new Date())} testId="backfill-date" wrapperClassName="flex-shrink-0" inputClassName="w-[6.6rem] bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-neutral-200 text-xs" />
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+        <input type="number" min={0} value={manualDuration} onChange={(e) => setManualDuration(Number(e.target.value))} aria-label="Czas trwania treningu w minutach" className="w-12 bg-neutral-900 border border-neutral-800 rounded-lg px-1.5 py-1 text-neutral-200 text-xs text-center" />
+        <span>min</span>
+      </span>
+    </span>
+  ) : null;
+  const menuButton = (photo) => (
+    <button type="button" data-menu onClick={openMenu} aria-label="Menu treningu: dodaj, zamień, zakończ lub przerwij trening" data-testid="aw-menu" style={{ ...AW_ICON_BTN, background: photo ? "rgba(9,9,9,.55)" : "transparent", border: photo ? "1px solid rgba(255,255,255,.14)" : 0, borderRadius: "22px" }}>
+      <MoreVertical aria-hidden="true" size={22} color={NR.textPrimary} />
+    </button>
+  );
+
+  const header = compactHeader ? (
+    <header ref={awHeaderRef} data-header data-mode="compact" style={{ flex: "none", position: "relative", padding: "max(env(safe-area-inset-top, 0px), 12px) 4px 10px 12px", background: "radial-gradient(180px 90px at 0 0, rgba(255,133,27,.10), rgba(255,133,27,0) 70%), #0B0B0C", borderBottom: "1px solid #1E1E20", display: "flex", flexDirection: "column", gap: "6px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", minWidth: 0 }}>
+          {clockChip}
+          {dateControls}
+          {restChip}
+        </div>
+        <div style={{ flex: "1 1 auto", minWidth: "48px" }}>
+          <AwProgress count={blocks.length} idx={blockIdx} />
+        </div>
+        {menuButton(false)}
+      </div>
+      <h1 data-exname style={{ margin: 0, paddingRight: "8px", fontFamily: NR.font, fontSize: "23px", lineHeight: "27px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "anywhere" }}>{currentEx.name}</h1>
+    </header>
+  ) : (
+    <header ref={awHeaderRef} data-header data-mode="photo" style={{ flex: "none", position: "relative", overflow: "hidden", padding: "max(env(safe-area-inset-top, 0px), 12px) 12px 14px", background: NR.bg }}>
+      <img src={WELCOME_BG_IMAGE} alt="" data-photo="temporary" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "62% 40%" }} />
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "radial-gradient(60% 70% at 78% 30%, rgba(255,133,27,.22), rgba(255,133,27,0) 70%)", mixBlendMode: "screen" }} />
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(9,9,9,.55) 0%, rgba(9,9,9,.25) 30%, rgba(9,9,9,.80) 70%, #090909 100%)" }} />
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(9,9,9,.85) 0%, rgba(9,9,9,.35) 55%, rgba(9,9,9,0) 80%)" }} />
+      <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginRight: "-4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", minWidth: 0 }}>
+            {clockChip}
+            {dateControls}
+            {restChip}
+          </div>
+          {menuButton(true)}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "14px" }}>
+          <span style={{ fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", fontWeight: 500, letterSpacing: ".04em", textTransform: "uppercase", color: "#D0D0D0" }}>
+            {planLine && <span style={nrHeadText}>{planLine}</span>}
+            {planLine ? " · " : ""}Ćwiczenie {blockIdx + 1} z {blocks.length}
+          </span>
+          {isSuperset && <AwSupersetBar items={currentBlock.items} subIdx={subIdx} onPick={setSubIdx} />}
+          <h1 data-exname style={{ margin: 0, fontFamily: NR.font, fontSize: "30px", lineHeight: "34px", fontWeight: 500, color: NR.textDisplay, maxWidth: "330px", overflowWrap: "anywhere" }}>{currentEx.name}</h1>
+        </div>
+        <AwProgress count={blocks.length} idx={blockIdx} />
+      </div>
+    </header>
+  );
+
+  const inputStyle = (key, dim) => ({
+    width: "100%",
+    height: "56px",
+    boxSizing: "border-box",
+    padding: "0 8px",
+    borderRadius: "10px",
+    border: focusKey === key ? `2px solid ${NR.warm}` : "1px solid #2E2E30",
+    boxShadow: focusKey === key ? "0 0 0 3px rgba(255,133,27,.18)" : "none",
+    background: "#121213",
+    color: dim ? "#BDBDBD" : NR.textDisplay,
+    fontFamily: AW_NUM,
+    fontSize: "24px",
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
+    textAlign: "center",
+    outline: "none",
+    WebkitAppearance: "none",
+    appearance: "none",
+  });
+  const fieldProps = (s, key) => ({
+    onFocus: () => beginEdit(s.id, `${s.id}:${key}`),
+    onBlur: () => setFocusKey((k) => (k === `${s.id}:${key}` ? null : k)),
+    "data-field": key,
+  });
+
+  const renderCurrentSet = (s, i) => {
+    const isDrop = s.setType === "dropset";
+    const label = setLabels[i];
+    const detail = !isDrop ? currentEx.setsDetail.find((d) => d.id === (s.detailId ?? s.id)) : null;
+    const targetText = detail && (detail.target || formatRir(detail.rir))
+      ? [detail.target ? `Cel: ${awRange(detail.target)}${kind === "time" ? " s" : ""}` : null, formatRir(detail.rir) ? `RIR ${formatRir(detail.rir)}` : null].filter(Boolean).join(" · ")
+      : null;
+    const prior = awPriorFor(currentEx.sets, i, priorSets);
+    const noteOpen = openNoteId === s.id;
+    const prefilled = Boolean(s.fromSuggestion) && s.weight !== "" && s.weight != null;
+    const patch = (p) => {
+      beginEdit(s.id);
+      patchSet(s.id, p);
+    };
+    const weightField = (labelText, placeholder) => (
+      <AwField label={labelText} srLabel={`${labelText.replace(" kg", "")}, ${label}${prefilled ? " (wstępnie wpisany z ostatniego treningu)" : ""}`} flex="1.15 1 0" minWidth="3.3em">
+        <input type="text" inputMode="decimal" value={s.weight} placeholder={placeholder} {...fieldProps(s, "kg")} onChange={(e) => patch({ weight: e.target.value, fromSuggestion: false })} style={inputStyle(`${s.id}:kg`, prefilled)} />
+        {prefilled && (
+          <span aria-hidden="true" data-testid="aw-weight-last" style={{ position: "absolute", right: "6px", top: "4px", fontFamily: NR.font, fontSize: "12px", lineHeight: "13px", fontWeight: 500, color: NR.textSecondary, background: "#1E1E20", borderRadius: "4px", padding: "1px 4px" }}>
+            ostatnio
+          </span>
+        )}
+      </AwField>
+    );
+    return (
+      <li key={s.id} data-set="current" data-testid="aw-set-current" style={{ listStyle: "none", position: "relative", borderRadius: "16px", overflow: "hidden", border: "1px solid transparent", background: `linear-gradient(${isDrop ? "#140D08, #140D08" : "#0B0B0C, #0B0B0C"}) padding-box, linear-gradient(160deg, #FF9A3D 0%, rgba(255,133,27,.85) 20%, rgba(255,106,0,.45) 55%, rgba(255,106,0,.25) 100%) border-box`, boxShadow: "0 12px 28px -8px rgba(0,0,0,.85)" }}>
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: "15px", overflow: "hidden", pointerEvents: "none" }}>
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(150px 110px at 0 0, rgba(255,154,61,.30) 0%, rgba(255,106,0,.10) 45%, rgba(255,106,0,0) 100%)" }} />
+        </div>
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: "10px", padding: "8px 6px 14px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+              <span style={{ fontFamily: NR.font, fontSize: "23px", lineHeight: "26px", fontWeight: 500, color: isDrop ? "#FF9A3D" : NR.textDisplay }}>{label}</span>
+              {targetText && <span style={{ fontFamily: NR.font, fontSize: "16px", lineHeight: "19px", color: NR.textSecondary }}>{targetText}</span>}
+            </span>
+            <button type="button" aria-label="Komentarz do serii" aria-expanded={noteOpen} onClick={() => setOpenNoteId(noteOpen ? null : s.id)} style={AW_ICON_BTN}>
+              <MessageSquare aria-hidden="true" size={20} color={noteOpen || s.note ? NR.warm : NR.textSecondary} />
+            </button>
+            {isDrop && (
+              <button type="button" aria-label={`Usuń ${label.toLowerCase()}`} onClick={() => removeDropset(s.id)} data-testid="aw-remove-dropset" style={AW_ICON_BTN}>
+                <X aria-hidden="true" size={18} color={NR.textSecondary} />
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingRight: "8px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {(kind === "weight" || kind === "sets") && weightField("Ciężar kg", "—")}
+              {kind === "bodyweightPlus" && weightField("MW + kg", "+ kg")}
+              {kind === "time" ? (
+                <AwField label="Czas s" srLabel={`Czas w sekundach, ${label}`} flex="1.4 1 0" minWidth="3.3em">
+                  <span style={{ display: "flex", gap: "6px" }}>
+                    <input type="number" inputMode="numeric" min={0} value={s.duration} placeholder="—" {...fieldProps(s, "dur")} onChange={(e) => patch({ duration: e.target.value })} style={inputStyle(`${s.id}:dur`, false)} />
+                    <button type="button" aria-label="Stoper serii" aria-expanded={timerRowId === s.id} onClick={() => openTimerForRow(s.id, s.duration)} style={{ ...AW_ICON_BTN, width: "56px", height: "56px", borderRadius: "10px", border: `1px solid ${timerRowId === s.id ? "rgba(94,194,255,.45)" : "#2E2E30"}`, background: timerRowId === s.id ? "rgba(94,194,255,.12)" : "#121213" }}>
+                      <TimerIcon aria-hidden="true" size={20} color={timerRowId === s.id ? "#5EC2FF" : NR.textSecondary} />
+                    </button>
+                  </span>
+                </AwField>
+              ) : kind === "sets" ? (
+                <div style={{ flex: "1 1 0", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span aria-hidden="true" style={AW_LABEL}>Seria</span>
+                  <button type="button" aria-pressed={Boolean(s.done)} onClick={() => patch({ done: !s.done })} style={{ height: "56px", borderRadius: "10px", border: `1px solid ${s.done ? "rgba(66,201,138,.5)" : "#2E2E30"}`, background: s.done ? "rgba(66,201,138,.12)" : "#121213", color: s.done ? NR.success : NR.textSecondary, fontFamily: NR.font, fontSize: "18px", fontWeight: 500, cursor: "pointer" }}>
+                    {s.done ? "Wykonano ✓" : "Zaznacz"}
+                  </button>
+                </div>
+              ) : (
+                <AwField label="Powtórzenia" srLabel={`Powtórzenia, ${label}`} flex="1 1 0" minWidth="2.9em">
+                  <input type="number" inputMode="numeric" min={0} value={s.reps} placeholder="—" {...fieldProps(s, "reps")} onChange={(e) => patch({ reps: e.target.value })} style={inputStyle(`${s.id}:reps`, false)} />
+                </AwField>
+              )}
+              <AwField label="RIR" srLabel={`RIR, ${label}`} flex="0.95 1 0" minWidth="3.4em" fontSize="20px">
+                <select value={s.rir} {...fieldProps(s, "rir")} onChange={(e) => patch({ rir: e.target.value })} style={{ ...inputStyle(`${s.id}:rir`, false), padding: "0 22px 0 8px", fontSize: "20px", color: s.rir ? NR.textDisplay : "#7A7A7A" }}>
+                  <option value="">–</option>
+                  {RIR_OPTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {formatRir(r)}
+                    </option>
+                  ))}
+                </select>
+                <span aria-hidden="true" style={{ position: "absolute", right: "6px", top: "50%", marginTop: "-8px", display: "flex", pointerEvents: "none" }}>
+                  <ChevronDown size={16} color={NR.textSecondary} />
+                </span>
+              </AwField>
+            </div>
+            {noteOpen && (
+              <label style={{ display: "block" }}>
+                <span style={AW_SR}>Komentarz do serii</span>
+                <textarea rows={2} value={s.note} {...fieldProps(s, "note")} onChange={(e) => patch({ note: e.target.value })} placeholder="Komentarz do tej serii (np. „ból nadgarstka”, „ciężar za duży”)…" style={{ width: "100%", boxSizing: "border-box", minHeight: "64px", resize: "none", padding: "10px 12px", borderRadius: "10px", border: `${focusKey === `${s.id}:note` ? 2 : 1}px solid ${focusKey === `${s.id}:note` ? NR.warm : "#2E2E30"}`, background: "#121213", color: NR.textPrimary, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", outline: "none" }} />
+              </label>
+            )}
+            {timerRowId === s.id && (
+              <div data-testid="aw-stopwatch" style={{ borderRadius: "12px", border: "1px solid rgba(94,194,255,.30)", background: "#0E1114", padding: "10px" }}>
+                <div role="timer" style={{ textAlign: "center", fontFamily: AW_NUM, fontSize: "40px", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: NR.textDisplay }}>{fmtClock(timerSec)}</div>
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  <button type="button" onClick={() => setTimerRunning((r) => !r)} style={{ flex: 1, minHeight: "44px", borderRadius: "10px", border: 0, background: "#5EC2FF", color: NR.bg, fontFamily: NR.font, fontSize: "17px", fontWeight: 600, cursor: "pointer" }}>
+                    {timerRunning ? "Pauza" : "Start"}
+                  </button>
+                  <button type="button" onClick={() => setTimerSec(0)} style={{ minHeight: "44px", padding: "0 14px", borderRadius: "10px", border: 0, background: "#1A1A1B", color: NR.textPrimary, fontFamily: NR.font, fontSize: "17px", cursor: "pointer" }}>
+                    Reset
+                  </button>
+                  <button type="button" onClick={saveTimerToRow} style={{ minHeight: "44px", padding: "0 14px", borderRadius: "10px", border: 0, background: NR.ctaFill, color: NR.bg, fontFamily: NR.font, fontSize: "17px", fontWeight: 600, cursor: "pointer" }}>
+                    Zapisz
+                  </button>
+                </div>
+              </div>
+            )}
+            {prior && (
+              <p style={{ margin: 0, fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
+                Poprzednio: <span style={{ fontFamily: AW_NUM, fontWeight: 500, color: NR.textPrimary, fontVariantNumeric: "tabular-nums" }}>{awResultText(prior, kind)}</span>
+              </p>
+            )}
+          </div>
+        </div>
+      </li>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-app-depth font-body flex flex-col">
+    <div ref={awRootRef} data-testid="active-workout" data-screen="active-workout" style={{ position: "fixed", inset: 0, overflow: "hidden", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, display: "flex", flexDirection: "column" }}>
       <FontStyles />
       {safetyBanner}
-      <div className="px-4 pt-4 pb-2 grid grid-cols-3 items-center gap-2">
-        {/* back-filled workout: the date + duration fields use the (otherwise empty) clock column too */}
-        <div className={`min-w-0 ${editingSession || backfillInfo ? "col-span-2" : ""}`}>
-          {editingSession ? (
-            <div className="flex items-center gap-1.5 text-neutral-400 text-xs min-w-0">
-              <Pencil size={13} className="text-orange-400 flex-shrink-0" />
-              <DateField
-                value={editDate || ""}
-                onChange={setEditDate}
-                max={toLocalDateStr(new Date())}
-                testId="edit-date"
-                wrapperClassName="flex-shrink-0"
-                inputClassName="w-[6.6rem] bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-neutral-200 text-xs"
-              />
-            </div>
-          ) : backfillInfo ? (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-neutral-400 text-xs">
-              <CalendarPlus size={14} className="text-orange-400 flex-shrink-0" />
-              <DateField
-                value={backfillDate || ""}
-                onChange={setBackfillDate}
-                max={toLocalDateStr(new Date())}
-                testId="backfill-date"
-                wrapperClassName="flex-shrink-0"
-                inputClassName="w-[6.6rem] bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-neutral-200 text-xs"
-              />
-              <span className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-neutral-700">•</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={manualDuration}
-                  onChange={(e) => setManualDuration(Number(e.target.value))}
-                  className="w-12 bg-neutral-900 border border-neutral-800 rounded-lg px-1.5 py-1 text-neutral-200 text-xs text-center"
-                />
-                <span>min</span>
-              </span>
-            </div>
-          ) : null}
-        </div>
+      {header}
 
-        <div className={editingSession || backfillInfo ? "hidden" : "flex justify-center"}>
-          {!editingSession && !backfillInfo && (
-            <div className="flex items-center gap-1.5 text-neutral-100 font-display text-2xl tracking-wide tabular-nums">
-              <Clock size={16} className="text-orange-400" /> {fmtClock(elapsed)}
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end">
-          <button onClick={openMenu} className="p-1.5 -mr-1.5 text-neutral-400 active:text-orange-500 flex-shrink-0">
-            <MoreVertical size={22} />
-          </button>
-        </div>
-      </div>
-
-      {editingSession && (
-        <div className="px-4 pb-2">
-          <input
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            placeholder="Nazwa treningu (opcjonalnie)"
-            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-neutral-100 text-sm outline-none focus:border-orange-500"
-          />
-        </div>
-      )}
-
-      <div className="px-4 pb-1">
-        <div className="flex gap-1">
-          {blocks.map((b, i) => (
-            <div key={b.id} className={`h-1 flex-1 rounded-full ${i < blockIdx ? "bg-orange-500" : i === blockIdx ? "bg-orange-500/50" : "bg-neutral-800"}`} />
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-4">
-        {currentBlock.items.length > 1 ? (
-          <>
-            {/* Superset: label + letter capsules (A, B, C, D…) for ANY number of exercises in THIS
-                block only — the next exercise/superset renders its own view. Capsules are small
-                visually, but each tap target is at least 40 px. Switching only changes which
-                exercise is shown; the A → B → … → rest execution order is untouched. */}
-            <div className="flex items-center justify-between gap-2 mt-2">
-              <div className="flex items-center gap-1.5 text-lime-400 text-xs font-semibold min-w-0">
-                <Link2 size={13} className="flex-shrink-0" /> <span className="truncate">SUPERSERIA · Ćwiczenie {subIdx + 1} z {currentBlock.items.length}</span>
-              </div>
-              <div className="flex flex-wrap justify-end" role="tablist" aria-label="Ćwiczenia superserii">
-                {currentBlock.items.map((it, i) => {
-                  const active = i === subIdx;
-                  const letter = String.fromCharCode(65 + i);
-                  return (
-                    <button
-                      key={it.id || it.planItemId}
-                      role="tab"
-                      aria-selected={active}
-                      aria-label={`${letter}: ${it.name}`}
-                      title={it.name}
-                      onClick={() => setSubIdx(i)}
-                      className="min-w-[40px] min-h-[40px] px-0.5 flex items-center justify-center"
-                    >
-                      <span
-                        className={`min-w-[32px] h-7 px-2.5 rounded-full border text-xs font-bold flex items-center justify-center ${
-                          active ? "bg-orange-500 border-orange-500 text-neutral-950 shadow-brand-glow" : "bg-neutral-900 border-neutral-700 text-neutral-300"
-                        }`}
-                      >
-                        {letter}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <h1 className="font-display text-3xl text-neutral-50 tracking-wide leading-tight mt-2">{currentBlock.items[subIdx]?.name}</h1>
-          </>
-        ) : (
-          <h1 className="font-display text-3xl text-neutral-50 tracking-wide leading-tight mt-3">{currentBlock.items[0]?.name}</h1>
-        )}
-
+      <main className="no-scrollbar" data-main style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "4px 12px 16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        {compactHeader && isSuperset && <AwSupersetBar items={currentBlock.items} subIdx={subIdx} onPick={setSubIdx} />}
         {editingSession && (
-          <div className="flex items-center justify-end mt-2">
-            <button
-              onClick={() => removeExerciseBlock(blockIdx)}
-              className="p-2 text-neutral-600 active:text-red-500 flex-shrink-0"
-              title="Usuń to ćwiczenie z treningu"
-            >
-              <Trash2 size={18} />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nazwa treningu (opcjonalnie)" aria-label="Nazwa treningu" style={{ flex: 1, minWidth: 0, minHeight: "44px", boxSizing: "border-box", padding: "0 12px", borderRadius: "10px", border: "1px solid #2E2E30", background: "#121213", color: NR.textPrimary, fontFamily: NR.font, fontSize: "17px", outline: "none" }} />
+            <button type="button" onClick={() => removeExerciseBlock(blockIdx)} title="Usuń to ćwiczenie z treningu" aria-label="Usuń to ćwiczenie z treningu" style={AW_ICON_BTN}>
+              <Trash2 aria-hidden="true" size={18} color={NR.textSecondary} />
             </button>
           </div>
         )}
 
         {priorSets.length > 0 && (
-          <div className="mt-3">
-            {/* "Zalecenie na dzisiejszy trening" is the engine's reading of the history → PRO only.
-                Free keeps "Poprzednie wykonanie" (the raw previous sets) below. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {/* "Zalecenie na dziś" is the engine's reading of the history → PRO only (expanded by
+                default, no status label). Free keeps the production lock card. */}
             {currentEx.priorMessage && !isPro && (
-              <button
-                onClick={() => onOpenUnlock && onOpenUnlock()}
-                className="w-full flex items-center justify-between gap-2 bg-neutral-900 border border-orange-500/30 rounded-xl px-3 py-2.5 text-left"
-                data-testid="pro-recommendation-lock"
-              >
-                <span className="min-w-0">
-                  <span className="flex items-center gap-1.5 text-orange-400 text-xs font-bold uppercase tracking-wide">
-                    <Lock size={12} className="flex-shrink-0" /> Zalecenia treningowe — PRO
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <button type="button" onClick={() => onOpenUnlock && onOpenUnlock()} data-testid="pro-recommendation-lock" style={{ width: "100%", minHeight: "56px", boxSizing: "border-box", padding: "8px 10px 8px 14px", borderRadius: "16px", border: "1px solid rgba(255,133,27,.30)", background: NR.cardSurface, boxShadow: NR.cardShadow, display: "flex", alignItems: "center", gap: "10px", textAlign: "left", cursor: "pointer" }}>
+                  <Lock aria-hidden="true" size={18} color={NR.warm} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span style={nrHeadText}>Zalecenia treningowe — PRO</span>
+                    <span style={{ fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", color: NR.textSecondary }}>Zobacz, co wynika z Twojej historii</span>
                   </span>
-                  <span className="block text-neutral-400 text-xs mt-0.5">Zobacz, co wynika z Twojej historii</span>
-                </span>
-                <span className="text-neutral-950 bg-orange-500 rounded-full px-2.5 py-1 text-[11px] font-bold flex-shrink-0">Poznaj NEXTREP PRO</span>
-              </button>
-            )}
-            {currentEx.priorMessage && isPro && (
-              <>
-                <button
-                  onClick={() => setShowRecommendation((v) => !v)}
-                  aria-expanded={showRecommendation}
-                  className="w-full flex items-center justify-between gap-2 bg-neutral-900 border border-orange-500/30 rounded-xl px-3 py-2.5"
-                >
-                  <span className="flex items-center gap-2 text-orange-400 text-xs font-bold uppercase tracking-wide" style={{ letterSpacing: "0.06em" }}>
-                    {currentEx.priorStatus && <span className="flex-shrink-0">{STATUS_META[currentEx.priorStatus]?.icon}</span>}
-                    Zalecenie na dzisiejszy trening
-                  </span>
-                  <ChevronDown size={15} className={`text-neutral-500 flex-shrink-0 transition-transform ${showRecommendation ? "rotate-180" : ""}`} />
+                  <span style={{ flexShrink: 0, padding: "6px 10px", borderRadius: "14px", background: NR.warm, color: NR.bg, fontFamily: NR.font, fontSize: "14px", fontWeight: 600, whiteSpace: "nowrap" }}>Poznaj PRO</span>
                 </button>
-                {showRecommendation && (
-                  <div className="bg-neutral-900 border border-orange-500/30 border-t-0 rounded-b-xl -mt-2 pt-4 px-3 pb-3">
-                    <p className="text-neutral-300 text-xs leading-relaxed">{currentEx.priorMessage}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            <button
-              onClick={() => setShowPriorDetail((v) => !v)}
-              aria-expanded={showPriorDetail}
-              className="w-full mt-2 flex items-center justify-between gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2.5"
-            >
-              <span className="flex items-center gap-2 text-neutral-200 text-xs font-semibold">
-                <HistoryIcon size={15} className="text-orange-400 flex-shrink-0" />
-                {showPriorDetail ? "Ukryj" : "Zobacz"} poprzednie wykonanie treningu
-              </span>
-              <ChevronDown size={15} className={`text-neutral-500 flex-shrink-0 transition-transform ${showPriorDetail ? "rotate-180" : ""}`} />
-            </button>
-
-            {showPriorDetail && (
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-3">
-                <p className="text-neutral-500 text-xs uppercase font-semibold mb-2">Poprzednie wykonanie tego ćwiczenia — wyniki wg serii</p>
-                <div className="space-y-1">
-                  {priorSets.map((s, i) => {
-                    const isDrop = s.setType === "dropset";
-                    const normalCount = priorSets.slice(0, i + 1).filter((x) => x.setType !== "dropset").length;
-                    const dropCount = priorSets.slice(0, i + 1).filter((x) => x.setType === "dropset").length;
-                    const rowLabel = isDrop ? (dropCount > 1 ? `D${dropCount}` : "D") : String(normalCount);
-                    return (
-                      <div
-                        key={i}
-                        className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs ${isDrop ? "bg-orange-500/10" : "bg-neutral-950"}`}
-                      >
-                        <span className={`w-5 font-display text-sm flex-shrink-0 ${isDrop ? "text-orange-400" : "text-neutral-500"}`}>{rowLabel}</span>
-                        <span className={`flex-1 font-display tracking-wide ${isDrop ? "text-orange-300" : "text-neutral-200"}`}>{formatPriorSet(s)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             )}
+            {currentEx.priorMessage && isPro && (
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <section data-testid="aw-recommendation" style={{ position: "relative", borderRadius: "16px", background: NR.cardSurface, boxShadow: NR.cardShadow }}>
+                  <AwCardToggle open={showRecommendation} onToggle={() => setShowRecommendation((v) => !v)} icon={Sparkles} warm title="Zalecenie na dziś" />
+                  {showRecommendation && <p style={{ margin: 0, padding: "0 14px 14px 42px", fontFamily: NR.font, fontSize: "16px", lineHeight: "21px", color: "#D9D9D9" }}>{currentEx.priorMessage}</p>}
+                </section>
+                {showRecommendation && <NrFadeBorder alpha={0.5} />}
+              </div>
+            )}
+            <section data-testid="aw-prior" style={{ flexShrink: 0, borderRadius: "16px", border: "1px solid #222224", background: "linear-gradient(180deg, #121213, #0D0D0E)" }}>
+              <AwCardToggle open={showPriorDetail} onToggle={() => setShowPriorDetail((v) => !v)} icon={HistoryIcon} title="Zobacz poprzednie wykonanie treningu" />
+              {showPriorDetail && (
+                <div style={{ padding: "0 12px 12px 14px" }}>
+                  <p style={{ margin: "0 0 8px", fontFamily: NR.font, fontSize: "14px", letterSpacing: ".04em", textTransform: "uppercase", color: NR.textMuted }}>
+                    {priorDate ? `${fmtDate(priorDate)} · ` : ""}wyniki wg serii
+                  </p>
+                  <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "4px" }}>
+                    {awSetLabels(priorSets).map((lbl, i) => (
+                      <li key={i} style={{ display: "flex", gap: "10px", alignItems: "baseline", padding: "6px 10px", borderRadius: "8px", background: NR.card }}>
+                        <span style={{ width: "52px", flexShrink: 0, fontFamily: NR.font, fontSize: "15px", color: priorSets[i].setType === "dropset" ? "#FF9A3D" : NR.textMuted }}>{lbl}</span>
+                        <span style={{ fontFamily: AW_NUM, fontSize: "16px", fontWeight: 500, fontVariantNumeric: "tabular-nums", color: NR.textPrimary }}>{awResultText(priorSets[i], kind)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </section>
           </div>
         )}
 
-        {currentEx.type === "bodyweightPlus" && (
-          <p className="text-orange-400/80 text-xs mt-3 flex items-center gap-1.5">
-            <Layers size={12} /> Ćwiczenie na masie własnej — wpisz dodatkowy ciężar doczepiony do ciała
+        {kind === "bodyweightPlus" && (
+          <p style={{ margin: 0, display: "flex", alignItems: "center", gap: "6px", fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", color: "#FF9A3D" }}>
+            <Layers aria-hidden="true" size={13} /> Ćwiczenie na masie własnej — wpisz dodatkowy ciężar doczepiony do ciała
           </p>
         )}
-        {currentEx.loadSnapshot && currentEx.type !== "bodyweightPlus" && atlasLoadHint(currentEx.loadSnapshot) && (
-          <p className="text-neutral-400 text-xs mt-3 flex items-center gap-1.5" data-testid="atlas-load-hint">
-            <Layers size={12} /> {atlasLoadHint(currentEx.loadSnapshot)}
+        {currentEx.loadSnapshot && kind !== "bodyweightPlus" && atlasLoadHint(currentEx.loadSnapshot) && (
+          <p data-testid="atlas-load-hint" style={{ margin: 0, display: "flex", alignItems: "center", gap: "6px", fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", color: NR.textSecondary }}>
+            <Layers aria-hidden="true" size={13} /> {atlasLoadHint(currentEx.loadSnapshot)}
           </p>
         )}
 
-        {/* Table — exactly the plan's series, editable inline; only a dropset can add a row */}
-        {currentEx.type !== "cardio" && (
-        <>
-        <div className="mt-4">
-          <div className="flex items-center gap-1.5 px-1 mb-1">
-            <span className="w-7 text-neutral-600 text-xs uppercase font-semibold flex-shrink-0">S.</span>
-            {currentEx.type === "cardio" ? (
+        {/* Series — exactly the plan's series; only a dropset can add a row (appended at the end) */}
+        {kind !== "cardio" && (
+          <>
+            <ol aria-label="Serie" style={{ margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {currentEx.sets.map((s, i) =>
+                s.id === currentSetId ? (
+                  renderCurrentSet(s, i)
+                ) : isSetPerformed(s, kind) ? (
+                  <AwSetDone key={s.id} label={setLabels[i]} set={s} kind={kind} onEdit={() => setEditSetId(s.id)} />
+                ) : (
+                  <AwSetPending key={s.id} label={setLabels[i]} kind={kind} onEdit={() => setEditSetId(s.id)} />
+                )
+              )}
+            </ol>
+            {kind !== "time" && kind !== "sets" && (
+              <button type="button" onClick={addDropset} data-testid="aw-add-dropset" style={{ width: "100%", minHeight: "48px", flexShrink: 0, borderRadius: "12px", border: "1px dashed rgba(255,133,27,.45)", background: "transparent", color: "#FF9A3D", fontFamily: NR.font, fontSize: "17px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" }}>
+                <Layers aria-hidden="true" size={17} color="#FF9A3D" /> + Dropset
+              </button>
+            )}
+          </>
+        )}
+
+        {kind === "cardio" && <CardioEntryPanel key={currentEx.planItemId} set={currentEx.sets[0]} deviceType={currentEx.deviceType || "Inne"} onPatch={(patch) => patchSet(currentEx.sets[0].id, patch)} />}
+      </main>
+
+      {/* Rest — docked above the footer; manual Start / Pause / Reset / Close; one shared value per
+          superset; keeps running while sets are edited. Hidden (chip by the clock) while typing. */}
+      {kind !== "cardio" && showDock && (
+        <div ref={awDockRef} data-rest style={{ flex: "none", padding: "0 12px 8px" }}>
+          {!restActive ? (
+            <button type="button" onClick={startRest} data-testid="aw-rest-start" style={{ width: "100%", minHeight: "48px", boxSizing: "border-box", padding: "6px 12px", borderRadius: "14px", border: "1px solid rgba(94,194,255,.30)", background: "#0E1114", color: "#5EC2FF", fontFamily: NR.font, fontSize: "18px", lineHeight: "21px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" }}>
+              <TimerIcon aria-hidden="true" size={18} color="#5EC2FF" />
+              <span>
+                Start przerwy ({currentEx.restSeconds || 90} s){isSuperset ? " — cała superseria" : ""}
+              </span>
+            </button>
+          ) : (
+            <section role="region" aria-label="Przerwa" data-testid="aw-rest" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0 10px", minHeight: "64px", boxSizing: "border-box", padding: "8px 6px 8px 10px", borderRadius: "16px", background: "linear-gradient(180deg, rgba(22,28,33,.96), rgba(12,15,18,.96))", border: "1px solid rgba(94,194,255,.30)", boxShadow: "0 10px 24px -8px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.05)" }}>
+              <AwRestRing remaining={restRemaining} target={restTarget} />
+              <span style={{ display: "flex", flexDirection: "column", minWidth: "max-content", flex: "1 1 auto" }}>
+                <span style={{ fontFamily: NR.font, fontSize: "14px", lineHeight: "16px", letterSpacing: ".04em", textTransform: "uppercase", color: "#5EC2FF" }}>Przerwa</span>
+                <span role="timer" data-testid="aw-rest-time" style={{ fontFamily: AW_NUM, fontSize: "25px", lineHeight: "28px", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: NR.textDisplay }}>{awMmSs(restRemaining)}</span>
+              </span>
+              <button type="button" aria-label={restRunning ? "Pauza przerwy" : "Start przerwy"} onClick={toggleRest} style={AW_ICON_BTN}>
+                {restRunning ? <Pause aria-hidden="true" size={18} color={NR.textPrimary} /> : <Play aria-hidden="true" size={18} color={NR.textPrimary} />}
+              </button>
+              <button type="button" aria-label="Resetuj przerwę" onClick={resetRest} style={AW_ICON_BTN}>
+                <RotateCcw aria-hidden="true" size={18} color={NR.textSecondary} />
+              </button>
+              <button type="button" aria-label="Zamknij przerwę" onClick={closeRest} style={AW_ICON_BTN}>
+                <X aria-hidden="true" size={18} color={NR.textSecondary} />
+              </button>
+            </section>
+          )}
+        </div>
+      )}
+
+      {showDock && (
+        <footer ref={awFooterRef} data-footer style={{ flex: "none", display: "flex", flexWrap: "wrap", gap: "10px", padding: "10px 12px max(env(safe-area-inset-bottom, 0px), 12px)", background: NR.bg, borderTop: "1px solid #1C1C1D" }}>
+          <button type="button" data-act="prev" onClick={goPrev} disabled={!canGoPrev} style={{ flex: "1 1 0", minWidth: "max-content", padding: "0 12px", minHeight: "52px", borderRadius: "10px", border: `1px solid ${NR.hairline}`, background: "#121213", color: NR.textPrimary, fontFamily: NR.font, fontSize: "19px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", cursor: canGoPrev ? "pointer" : "default", opacity: canGoPrev ? 1 : 0.35 }}>
+            <ChevronLeft aria-hidden="true" size={20} color={NR.textPrimary} />
+            Poprzednie
+          </button>
+          <button
+            type="button"
+            data-act={isLastExercise ? "finish" : "next"}
+            onClick={
+              isLastExercise
+                ? () => {
+                    try {
+                      window.history.pushState({ trainapp: true }, "", "");
+                    } catch {}
+                    setConfirmFinish("finish");
+                  }
+                : goNext
+            }
+            disabled={!isLastExercise && !canGoNext}
+            style={{ flex: "1.35 1 0", minWidth: "max-content", padding: "0 14px", minHeight: "52px", border: 0, borderRadius: "10px", background: NR.ctaFill, boxShadow: NR.ctaShadow, color: NR.bg, fontFamily: NR.font, fontWeight: 600, fontSize: "20px", lineHeight: "22px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", cursor: "pointer" }}
+          >
+            {isLastExercise ? (
               <>
-                <span className="flex-1 text-neutral-600 text-xs uppercase font-semibold">Czas</span>
-                <span className="flex-1 text-neutral-600 text-xs uppercase font-semibold">Prędkość</span>
-                <span className="w-16 text-neutral-600 text-xs uppercase font-semibold flex-shrink-0">Nachyl.</span>
+                <Check aria-hidden="true" size={20} strokeWidth={2.5} color={NR.bg} /> Zakończ
               </>
             ) : (
               <>
-                {currentEx.type !== "time" && (
-                  <span className="flex-1 text-neutral-600 text-xs uppercase font-semibold">
-                    {currentEx.type === "bodyweightPlus" ? "MW + kg" : "Ciężar"}
-                  </span>
-                )}
-                <span className="flex-1 text-neutral-600 text-xs uppercase font-semibold">
-                  {currentEx.type === "time" ? "Czas" : currentEx.type === "sets" ? "" : "Powt."}
-                </span>
-                <span className="w-14 text-neutral-600 text-xs uppercase font-semibold flex-shrink-0">RIR</span>
+                Następne <ChevronRight aria-hidden="true" size={20} strokeWidth={2.5} color={NR.bg} />
               </>
             )}
-            <span className="w-14 flex-shrink-0" />
-          </div>
-
-          <div className="space-y-1.5">
-            {currentEx.sets.map((s, i) => {
-              const isDrop = s.setType === "dropset";
-              const normalCount = currentEx.sets.slice(0, i + 1).filter((x) => x.setType !== "dropset").length;
-              const dropCount = currentEx.sets.slice(0, i + 1).filter((x) => x.setType === "dropset").length;
-              const label = isDrop ? (dropCount > 1 ? `D${dropCount}` : "D") : String(normalCount);
-              const detail = !isDrop ? currentEx.setsDetail.find((d) => d.id === (s.detailId ?? s.id)) : null;
-
-              return (
-                <div key={s.id}>
-                  <div className={`flex items-center gap-1.5 rounded-xl px-2 py-2 border ${isDrop ? "bg-orange-500/10 border-orange-500/30" : "bg-neutral-900 border-neutral-800"}`}>
-                    <span className={`w-7 flex-shrink-0 font-display text-lg ${isDrop ? "text-orange-400" : "text-neutral-100"}`}>{label}</span>
-
-                    {currentEx.type === "bodyweight" && <span className="flex-1 text-neutral-400 text-xs">MW</span>}
-
-                    {currentEx.type === "cardio" && (
-                      <>
-                        <div className="flex-1 flex items-center gap-1 min-w-0">
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            value={s.duration}
-                            placeholder="s"
-                            onChange={(e) => patchSet(s.id, { duration: e.target.value })}
-                            className="flex-1 min-w-0 bg-neutral-950 border border-neutral-800 rounded-lg px-1.5 py-1.5 text-neutral-100 text-sm"
-                          />
-                          <button
-                            onClick={() => openTimerForRow(s.id, s.duration)}
-                            className={`p-1.5 rounded-lg border flex-shrink-0 ${
-                              timerRowId === s.id ? "bg-sky-500/20 border-sky-500/40 text-sky-400" : "bg-neutral-950 border-neutral-800 text-neutral-500"
-                            }`}
-                          >
-                            <TimerIcon size={15} />
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={s.speed}
-                          placeholder="km/h"
-                          onChange={(e) => patchSet(s.id, { speed: e.target.value })}
-                          className="flex-1 min-w-0 bg-neutral-950 border border-neutral-800 rounded-lg px-1.5 py-1.5 text-neutral-100 text-sm"
-                        />
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={s.incline}
-                          placeholder="%"
-                          onChange={(e) => patchSet(s.id, { incline: e.target.value })}
-                          className="w-16 flex-shrink-0 bg-neutral-950 border border-neutral-800 rounded-lg px-1.5 py-1.5 text-neutral-100 text-sm"
-                        />
-                      </>
-                    )}
-
-                    {currentEx.type === "bodyweightPlus" && (
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={s.weight}
-                        placeholder="+ kg"
-                        onChange={(e) => patchSet(s.id, { weight: e.target.value, fromSuggestion: false })}
-                        className="flex-1 min-w-0 bg-neutral-950 border border-orange-500/40 rounded-lg px-1.5 py-1.5 text-neutral-100 text-sm font-semibold"
-                      />
-                    )}
-
-                    {(currentEx.type === "weight" || currentEx.type === "sets") && (
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={s.weight}
-                        placeholder="kg"
-                        onChange={(e) => patchSet(s.id, { weight: e.target.value, fromSuggestion: false })}
-                        className="flex-1 min-w-0 bg-neutral-950 border border-neutral-800 rounded-lg px-1.5 py-1.5 text-neutral-100 text-sm"
-                      />
-                    )}
-
-                    {currentEx.type === "time" ? (
-                      <div className="flex-1 flex items-center gap-1 min-w-0">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          value={s.duration}
-                          placeholder="s"
-                          onChange={(e) => patchSet(s.id, { duration: e.target.value })}
-                          className="flex-1 min-w-0 bg-neutral-950 border border-neutral-800 rounded-lg px-1.5 py-1.5 text-neutral-100 text-sm"
-                        />
-                        <button
-                          onClick={() => openTimerForRow(s.id, s.duration)}
-                          className={`p-1.5 rounded-lg border flex-shrink-0 ${
-                            timerRowId === s.id ? "bg-sky-500/20 border-sky-500/40 text-sky-400" : "bg-neutral-950 border-neutral-800 text-neutral-500"
-                          }`}
-                        >
-                          <TimerIcon size={15} />
-                        </button>
-                      </div>
-                    ) : currentEx.type === "sets" ? (
-                      <button
-                        onClick={() => patchSet(s.id, { done: !s.done })}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border ${
-                          s.done ? "bg-lime-500/20 border-lime-500/40 text-lime-400" : "bg-neutral-950 border-neutral-800 text-neutral-500"
-                        }`}
-                      >
-                        {s.done ? "Wykonano ✓" : "Zaznacz"}
-                      </button>
-                    ) : currentEx.type === "cardio" ? null : (
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        value={s.reps}
-                        placeholder="0"
-                        onChange={(e) => patchSet(s.id, { reps: e.target.value })}
-                        className="flex-1 min-w-0 bg-neutral-950 border border-neutral-800 rounded-lg px-1.5 py-1.5 text-neutral-100 text-sm"
-                      />
-                    )}
-
-                    {currentEx.type !== "cardio" && (
-                      <select
-                        value={s.rir}
-                        onChange={(e) => patchSet(s.id, { rir: e.target.value })}
-                        className="w-14 flex-shrink-0 bg-neutral-950 border border-neutral-800 rounded-lg px-0.5 py-1.5 text-neutral-100 text-xs"
-                      >
-                        <option value="">–</option>
-                        {RIR_OPTIONS.map((r) => (
-                          <option key={r} value={r}>
-                            {formatRir(r)}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-
-                    <div className="w-14 flex-shrink-0 flex items-center justify-end gap-2">
-                      <button onClick={() => setOpenNoteId(openNoteId === s.id ? null : s.id)} className={openNoteId === s.id ? "text-orange-400" : "text-neutral-600"}>
-                        <MessageSquare size={15} />
-                      </button>
-                      {isDrop && (
-                        <button onClick={() => removeDropset(s.id)} className="text-neutral-600 active:text-red-500">
-                          <X size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {detail && (detail.target || detail.rir) && (
-                    <p className="text-neutral-600 text-xs mt-0.5 ml-1">
-                      cel: {detail.target || "—"}
-                      {currentEx.type === "time" ? "s" : ""}
-                      {formatRir(detail.rir) ? ` · RIR ${formatRir(detail.rir)}` : ""}
-                    </p>
-                  )}
-
-                  {openNoteId === s.id && (
-                    <input
-                      value={s.note}
-                      onChange={(e) => patchSet(s.id, { note: e.target.value })}
-                      placeholder="Notatka do tej serii (np. „ból nadgarstka”, „ciężar za duży”)..."
-                      className="w-full mt-1 bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-neutral-200 text-xs outline-none focus:border-orange-500"
-                    />
-                  )}
-
-                  {timerRowId === s.id && (
-                    <div className="mt-1.5 bg-neutral-950 border border-sky-500/30 rounded-xl p-3">
-                      <div className="flex items-center justify-center py-1">
-                        <span className="font-display text-5xl tracking-wide text-neutral-50">{fmtClock(timerSec)}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setTimerRunning((r) => !r)}
-                          className="flex-1 py-2.5 rounded-xl bg-sky-500 text-neutral-950 font-bold text-sm flex items-center justify-center gap-1.5"
-                        >
-                          <TimerIcon size={15} /> {timerRunning ? "Pauza" : "Start"}
-                        </button>
-                        <button onClick={() => setTimerSec(0)} className="px-3 py-2.5 rounded-xl bg-neutral-800 text-neutral-300 font-semibold text-xs">
-                          Reset
-                        </button>
-                        <button onClick={saveTimerToRow} className="px-4 py-2.5 rounded-xl bg-orange-500 text-neutral-950 font-bold text-xs">
-                          Zapisz
-                        </button>
-                      </div>
-                      <p className="text-neutral-600 text-xs text-center mt-2">
-                        {timerRunning ? "Ekran nie zgaśnie, dopóki stoper działa." : "Zapisany czas będzie można później ręcznie poprawić."}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {currentEx.type !== "time" && currentEx.type !== "sets" && currentEx.type !== "cardio" && (
-            <button
-              onClick={addDropset}
-              className="w-full mt-2 py-2 rounded-xl border-2 border-dashed border-orange-500/30 text-orange-400 text-xs font-semibold flex items-center justify-center gap-1.5"
-            >
-              <Layers size={14} /> + Dropset
-            </button>
-          )}
-        </div>
-
-        <div className="mt-4 bg-neutral-900 border border-sky-500/30 rounded-2xl p-3">
-          {!restActive ? (
-            <button
-              onClick={() => {
-                const secs = currentEx.restSeconds || 90;
-                clearRestAutoReset();
-                restTargetRef.current = secs;
-                setRestTarget(secs);
-                setRestRemaining(secs);
-                setRestActive(true);
-                setRestRunning(false);
-              }}
-              className="w-full py-2.5 rounded-xl bg-sky-500/15 text-sky-400 font-semibold text-sm flex items-center justify-center gap-2"
-            >
-              <TimerIcon size={16} /> Start przerwy ({currentEx.restSeconds || 90}s){currentBlock.items.length > 1 ? " — cała superseria" : ""}
-            </button>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-1">
-                <span className="flex items-center gap-1.5 text-sky-400 text-xs font-bold uppercase tracking-wide">
-                  <TimerIcon size={14} /> Przerwa
-                </span>
-                <button onClick={() => setRestActive(false)} className="text-neutral-500 text-xs font-semibold">
-                  Zamknij
-                </button>
-              </div>
-              <div className="flex items-center justify-center py-2">
-                <span className="font-display text-6xl tracking-wide text-neutral-50">{fmtClock(restRemaining)}</span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    clearRestAutoReset();
-                    restSignal.unlock(); // inside this tap: lets the end signal play later
-                    if (!restRunning && restRemaining <= 0) setRestRemaining(restTarget);
-                    setRestRunning((r) => !r);
-                  }}
-                  className="flex-1 py-3 rounded-xl bg-sky-500 text-neutral-950 font-bold flex items-center justify-center gap-2"
-                >
-                  <TimerIcon size={16} /> {restRunning ? "Pauza" : "Start"}
-                </button>
-                <button
-                  onClick={() => {
-                    clearRestAutoReset();
-                    setRestRemaining(restTarget);
-                    setRestRunning(false);
-                  }}
-                  className="px-4 py-3 rounded-xl bg-neutral-800 text-neutral-300 font-semibold text-sm"
-                >
-                  Reset
-                </button>
-              </div>
-              <p className="text-neutral-600 text-xs text-center mt-2">
-                {restRunning ? "Ekran nie zgaśnie, dopóki trwa odliczanie." : "Uruchom, żeby zapobiec wygaszeniu ekranu."}
-              </p>
-            </>
-          )}
-        </div>
-        </>
-        )}
-
-        {currentEx.type === "cardio" && (
-          <CardioEntryPanel
-            key={currentEx.planItemId}
-            set={currentEx.sets[0]}
-            deviceType={currentEx.deviceType || "Inne"}
-            onPatch={(patch) => patchSet(currentEx.sets[0].id, patch)}
-          />
-        )}
-      </div>
-
-      <div className="px-4 pb-6 pt-2 flex gap-3 border-t border-neutral-900">
-        <button
-          onClick={goPrev}
-          disabled={!canGoPrev}
-          className="flex-1 py-3.5 rounded-xl bg-neutral-900 border border-neutral-800 disabled:opacity-30 text-neutral-300 font-semibold flex items-center justify-center gap-1"
-        >
-          <ChevronLeft size={18} /> Poprzednie
-        </button>
-        <button
-          onClick={
-            isLastExercise
-              ? () => {
-                  try {
-                    window.history.pushState({ trainapp: true }, "", "");
-                  } catch {}
-                  setConfirmFinish("finish");
-                }
-              : goNext
-          }
-          disabled={!isLastExercise && !canGoNext}
-          className={`flex-1 py-3.5 rounded-xl disabled:opacity-30 font-bold flex items-center justify-center gap-1 ${
-            isLastExercise ? "bg-gradient-to-br from-[#FF5A00] via-orange-500 to-orange-400 text-neutral-950 shadow-brand-glow" : "bg-orange-500 text-neutral-950"
-          }`}
-        >
-          {isLastExercise ? (
-            <>
-              <Check size={18} /> Zakończ
-            </>
-          ) : (
-            <>
-              Następne <ChevronRight size={18} />
-            </>
-          )}
-        </button>
-      </div>
+          </button>
+        </footer>
+      )}
 
       {addPickerOpen && <ExercisePickerModal exercises={exercises} onPick={addExerciseAdHoc} onClose={() => setAddPickerOpen(false)} onCreateExercise={onCreateExercise} />}
       {replaceFlow && replaceFlow.step === "pick" && (
@@ -1555,82 +1679,50 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
       })()}
 
       {menuOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 flex items-end" onClick={() => setMenuOpen(false)}>
-          <div className="w-full bg-neutral-900 border-t border-neutral-800 rounded-t-3xl p-3 pb-6" onClick={(e) => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-neutral-700 rounded-full mx-auto mb-3" />
-
-            <button
+        <NrSheet menu onClose={() => setMenuOpen(false)} ariaLabel="Menu treningu" testId="aw-menu-sheet">
+          <AwMenuItem
+            icon={Plus}
+            title="Dodaj kolejne ćwiczenie do treningu"
+            onClick={() => {
+              setMenuOpen(false);
+              setAddPickerOpen(true); // reuses the history entry already pushed when the menu opened — no second push here
+            }}
+          />
+          {blocks.length > 0 && (
+            <AwMenuItem
+              icon={Repeat}
+              title="Zamień ćwiczenie"
               onClick={() => {
                 setMenuOpen(false);
-                setAddPickerOpen(true); // reuses the history entry already pushed when the menu opened — no second push here
+                // reuses the menu's history entry, like "Dodaj kolejne ćwiczenie"
+                const total = blocks.reduce((n, b) => n + b.items.length, 0);
+                setReplaceFlow(total === 1 ? { step: "pick", bi: 0, ii: 0 } : { step: "target" });
               }}
-              className="w-full flex items-center gap-3 px-3 py-3.5 text-left active:bg-neutral-800 rounded-xl"
-            >
-              <Plus size={19} className="text-neutral-400 flex-shrink-0" />
-              <span className="text-neutral-100 font-medium text-sm">Dodaj kolejne ćwiczenie do treningu</span>
-            </button>
-
-            {blocks.length > 0 && (
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  // reuses the menu's history entry, like "Dodaj kolejne ćwiczenie"
-                  const total = blocks.reduce((n, b) => n + b.items.length, 0);
-                  setReplaceFlow(total === 1 ? { step: "pick", bi: 0, ii: 0 } : { step: "target" });
-                }}
-                className="w-full flex items-center gap-3 px-3 py-3.5 text-left active:bg-neutral-800 rounded-xl"
-              >
-                <Repeat size={19} className="text-neutral-400 flex-shrink-0" />
-                <span className="text-neutral-100 font-medium text-sm">Zamień ćwiczenie</span>
-              </button>
-            )}
-
-            {currentEx.videoUrl && (
-              <a
-                href={currentEx.videoUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => setMenuOpen(false)}
-                className="w-full flex items-center gap-3 px-3 py-3.5 text-left active:bg-neutral-800 rounded-xl"
-              >
-                <PlayCircle size={19} className="text-sky-400 flex-shrink-0" />
-                <span className="text-neutral-100 font-medium text-sm">Zobacz film instruktażowy — {currentEx.name}</span>
-              </a>
-            )}
-
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                setConfirmFinish("finish");
-              }}
-              className="w-full flex items-center gap-3 px-3 py-3.5 text-left active:bg-neutral-800 rounded-xl"
-            >
-              <Check size={19} className="text-orange-400 flex-shrink-0" />
-              <span className="min-w-0">
-                <span className="block text-neutral-100 font-medium text-sm">{editingSession ? "Zapisz trening" : "Zakończ trening"}</span>
-                <span className="block text-neutral-500 text-[11px] font-normal mt-0.5">
-                  {editingSession ? "Zapisany wcześniej trening zostanie zaktualizowany." : "Bieżące wyniki zostaną zapisane i trening zostanie zakończony."}
-                </span>
-              </span>
-            </button>
-
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                setConfirmFinish("cancel");
-              }}
-              className="w-full flex items-center gap-3 px-3 py-3.5 text-left active:bg-neutral-800 rounded-xl"
-            >
-              <X size={19} className="text-red-400 flex-shrink-0" />
-              <span className="min-w-0">
-                <span className="block text-neutral-100 font-medium text-sm">{editingSession ? "Odrzuć zmiany" : "Przerwij trening"}</span>
-                <span className="block text-neutral-500 text-[11px] font-normal mt-0.5">
-                  {editingSession ? "Wprowadzone zmiany nie zostaną zapisane." : "Postęp zostanie zapisany — wrócisz do treningu z ekranu Start."}
-                </span>
-              </span>
-            </button>
-          </div>
-        </div>
+            />
+          )}
+          {currentEx.videoUrl && <AwMenuItem icon={PlayCircle} color="#5EC2FF" title="Zobacz film instruktażowy" href={currentEx.videoUrl} onClick={() => setMenuOpen(false)} />}
+          <div aria-hidden="true" style={{ height: "1px", background: "#232325", margin: "4px 12px" }} />
+          <AwMenuItem
+            icon={Check}
+            color={NR.warm}
+            title={editingSession ? "Zapisz trening" : "Zakończ trening"}
+            sub={editingSession ? "Zapisany wcześniej trening zostanie zaktualizowany." : "Bieżące wyniki zostaną zapisane i trening zostanie zakończony."}
+            onClick={() => {
+              setMenuOpen(false);
+              setConfirmFinish("finish");
+            }}
+          />
+          <AwMenuItem
+            icon={X}
+            color={NR.dangerText}
+            title={editingSession ? "Odrzuć zmiany" : "Przerwij trening"}
+            sub={editingSession ? "Wprowadzone zmiany nie zostaną zapisane." : "Postęp zostanie zapisany — wrócisz do treningu z ekranu Start."}
+            onClick={() => {
+              setMenuOpen(false);
+              setConfirmFinish("cancel");
+            }}
+          />
+        </NrSheet>
       )}
 
       {confirmFinish && (

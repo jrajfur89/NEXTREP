@@ -58,3 +58,18 @@ export async function flush(ms = 0, rounds = 3) {
   for (let i = 0; i < rounds; i++) await act(async () => new Promise((r) => setTimeout(r, ms)));
 }
 export { loadApp };
+
+// I4.4 (Active Workout master): a performed set is a row ("100 kg × 8" + pencil); only the set being
+// entered shows fields. These helpers find a set by its weight in either form.
+export const workoutSetShown = (kg) =>
+  $$("input").some((i) => i.value === String(kg)) || $$('[data-testid="aw-set-done"]').some((r) => r.textContent.includes(`${kg} kg`));
+export async function workoutSetInput(kg) {
+  const direct = $$("input").find((i) => i.value === String(kg));
+  if (direct) return direct;
+  const row = $$('[data-testid="aw-set-done"]').find((r) => r.textContent.includes(`${kg} kg`));
+  if (!row) return undefined;
+  await click(row.querySelector("button"));
+  await flush(5, 2);
+  return $$("input").find((i) => i.value === String(kg));
+}
+export const activeWorkoutOpen = () => Boolean(byTestId("active-workout"));

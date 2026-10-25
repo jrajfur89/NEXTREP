@@ -4,7 +4,7 @@
 // regression of the 4A.4 path (upload → normal sync → reload → sync without duplicates).
 import { test, describe, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { unmount, byTestId, click, flush, act, $$ } from "../harness/ui.mjs";
+import { unmount, byTestId, click, flush, act, $$, activeWorkoutOpen } from "../harness/ui.mjs";
 import { bootApp, restoreOnline } from "../harness/app-boot.mjs";
 import { loadApp } from "../harness/load-app.mjs";
 import { quiet } from "../harness/fixtures.mjs";
@@ -258,7 +258,7 @@ describe("abandon after a partial upload that included the guest's EDITED built-
 });
 
 describe("active guest workout: never migrated mid-session", () => {
-  const workoutOpen = () => !$$("[data-testid]").some((e) => /^dashboard-/.test(e.dataset.testid)) && $$("input").length > 0;
+  const workoutOpen = () => !$$("[data-testid]").some((e) => /^dashboard-/.test(e.dataset.testid)) && activeWorkoutOpen();
   const buttonText = (t) => $$("button").filter((b) => b.textContent.trim() === t);
   async function realDraft() {
     const A = await loadApp();

@@ -5,7 +5,7 @@
 // F/G/H: A → logout → B → logout → A: data, draft and local PRO stay with their own account.
 import { test, describe, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { unmount, byTestId, click, flush, act, $$ } from "../harness/ui.mjs";
+import { unmount, byTestId, click, flush, act, $$, activeWorkoutOpen } from "../harness/ui.mjs";
 import { bootApp, restoreOnline } from "../harness/app-boot.mjs";
 import { loadApp } from "../harness/load-app.mjs";
 import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
@@ -31,7 +31,7 @@ async function realDraft(planName) {
   return { version: 1, savedAt: new Date(Date.now() - 60000).toISOString(), plan, backfillInfo: null, nowDate, startTime: Date.now() - 600000, blocks, blockIdx: 0, subIdx: 0, manualDuration: 45 };
 }
 const cloudWrites = (S) => S.calls.filter((c) => c.kind === "table" && ["insert", "update", "upsert", "delete"].includes(c.op)).length;
-const workoutOpen = () => !$$("[data-testid]").some((e) => /^dashboard-/.test(e.dataset.testid)) && $$("input").length > 0;
+const workoutOpen = () => !$$("[data-testid]").some((e) => /^dashboard-/.test(e.dataset.testid)) && activeWorkoutOpen();
 const buttonText = (t) => $$("button").filter((b) => b.textContent.trim() === t);
 async function emit(S, event, sess) {
   await act(async () => S.emitAuth(event, sess));

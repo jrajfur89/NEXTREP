@@ -2,7 +2,7 @@
 // The real <App/> from index.html boots past the intro video with seeded guest data.
 import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
-import { unmount, byTestId, click, flush, $$ } from "../harness/ui.mjs";
+import { unmount, byTestId, click, flush, $$, workoutSetShown } from "../harness/ui.mjs";
 import { bootGuestApp } from "../harness/app-boot.mjs";
 import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
 
@@ -75,7 +75,7 @@ describe("Dashboard unfinished workout card", () => {
     await click(byTestId("dashboard-resume"));
     await flush(10, 3);
     assert.ok(!byTestId("dashboard-active-workout"), "workout opened");
-    assert.ok($$("input").some((i) => i.value === "100"), "the performed set (100 kg) is restored as it was left");
+    assert.ok(workoutSetShown(100), "the performed set (100 kg) is restored as it was left");
     assert.ok(localStorage.getItem("nextrep_guest_active_workout_draft_v1"), "resuming never deletes the draft");
   });
 });

@@ -55,8 +55,8 @@ const STEPS = [
       await p.getByRole("button", { name: "Zapisz", exact: true }).last().click();
       await click(p, "Wyciskanie sztangi leżąc na ławce poziomej");
     }
-    await p.locator('input[placeholder="kg"]').first().fill("60");
-    await p.locator('input[placeholder="0"]').first().fill("8");
+    await p.locator('input[data-field="kg"], input[placeholder="kg"]').first().fill("60");
+    await p.locator('input[data-field="reps"], input[placeholder="0"]').first().fill("8");
     await p.locator("body").click({ position: { x: 5, y: 300 } });
   }],
   ["09-leave-dialog", async (p) => { await p.evaluate(() => history.back()); }],
@@ -88,9 +88,6 @@ const STEPS = [
 const INTENDED = {
   "17-exercises": { stage: "AT2", selector: '[data-testid="atlas-entry"]' }, // tile „Atlas ćwiczeń”
   // I3: the load-model hint under an atlas exercise (also behind the two dialogs over the workout)
-  "08-active-workout": { stage: "I3", selector: '[data-testid="atlas-load-hint"]' },
-  "09-leave-dialog": { stage: "I3", selector: '[data-testid="atlas-load-hint"]' },
-  "11-finish-confirm": { stage: "I3", selector: '[data-testid="atlas-load-hint"]' },
 };
 // Screens whose CONTENT an approved stage changed on purpose (not only an added element). They are not
 // compared with the reference; both images go to e2e/.out/<name>.ref.png / .cur.png for review. Every
@@ -99,8 +96,10 @@ const CHANGED = {
   "04-dashboard-empty": "I4.2: Dashboard — New User master (no plan, no workout)",
   "05-start-workout": "I4.3: Training Entry Flow master — selection",
   "06-ready-plans": "I2: every ready-made template is „Wkrótce” (badge, inactive, no chevron)",
+  "08-active-workout": "I4.4: Active Workout master (photo header, set cards, rest dock, footer); the I3 load hint stays",
+  "09-leave-dialog": "I4.4: the leave dialog over the Active Workout master",
   "10-dashboard-resume": "I4.2: Dashboard — Interrupted Workout master",
-  "11-finish-confirm": "I4.1: the RIR select glyph under the dialog sits 1 px higher (22 px); the screen is replaced by the AW / WCS masters later in I4",
+  "11-finish-confirm": "I4.4: the finish confirmation over the Active Workout master (the confirmation itself: WCS master, I4.5)",
   "12-history-detail": "I3: an atlas exercise has no link to the old exercise screen (no chevron by its name)",
   "15-backup": "I3 walk: the reference build saves its own exercise first — one more automatic local copy listed",
   "16-account": "I2: accounts and sync temporarily off — the calm „not configured” state",

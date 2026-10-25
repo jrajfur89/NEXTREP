@@ -4,7 +4,7 @@
 // visible and can be retried). Full <App/> in jsdom, isolated test storage, no network.
 import { test, describe, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { React, mount, unmount, byTestId, click, flush, act, $$, type } from "../harness/ui.mjs";
+import { React, mount, unmount, byTestId, click, flush, act, $$, type, workoutSetShown, workoutSetInput, activeWorkoutOpen } from "../harness/ui.mjs";
 import { bootGuestApp, bootApp, restoreOnline } from "../harness/app-boot.mjs";
 import { loadApp } from "../harness/load-app.mjs";
 import { LEGACY_DEFAULT_EXERCISES } from "../fixtures/legacy/default-exercises.mjs"; // I2: the old list is test data now
@@ -22,7 +22,7 @@ const read = (key) => {
   const raw = localStorage.getItem(key);
   return raw ? JSON.parse(raw) : null;
 };
-const workoutOpen = () => !$$("[data-testid]").some((e) => /^dashboard-/.test(e.dataset.testid)) && $$("input").length > 0;
+const workoutOpen = () => !$$("[data-testid]").some((e) => /^dashboard-/.test(e.dataset.testid)) && activeWorkoutOpen();
 const btn = (re) => $$("button").find((b) => re.test(b.textContent.trim()));
 
 // ---- storage fault injection (test storage only) ----
@@ -115,7 +115,7 @@ describe("P0-1 — a new workout never replaces an unfinished one silently", () 
     await click(byTestId("tef-resume"));
     await flush(10, 4);
     assert.ok(workoutOpen());
-    assert.ok($$("input").some((i) => i.value === "100"), "the 100 kg set is restored");
+    assert.ok(workoutSetShown(100), "the 100 kg set is restored");
     assert.ok(draftHasPushDay());
   });
 
@@ -221,7 +221,7 @@ describe("P0-1 — a new workout never replaces an unfinished one silently", () 
     await click(byTestId("dashboard-resume"));
     await flush(10, 4);
     assert.ok(workoutOpen());
-    assert.ok($$("input").some((i) => i.value === "100"));
+    assert.ok(workoutSetShown(100));
     const d = read(GUEST("active_workout_draft"));
     assert.ok(d.workoutInstanceId, "the instance id is added on the first save");
     assert.equal(d.sessionId, null, "the session id appears only with the first finish attempt");
@@ -361,7 +361,7 @@ describe("P1-A — a failed draft write is visible", () => {
     assert.ok(!byTestId("draft-save-warning"));
     const before = localStorage.getItem(GUEST("active_workout_draft"));
     const undo = failWrites((k) => k === GUEST("active_workout_draft"));
-    const input = $$("input").find((i) => i.value === "100");
+    const input = await workoutSetInput(100);
     await type(input, "105");
     await flush(10, 3);
     assert.ok(byTestId("draft-save-warning"), "warning shown");
@@ -391,7 +391,7 @@ describe("P1-A — a failed draft write is visible", () => {
     await click(byTestId("dashboard-resume"));
     await flush(10, 4);
     failWrites((k) => k === GUEST("active_workout_draft"));
-    await type($$("input").find((i) => i.value === "100"), "110");
+    await type(await workoutSetInput(100), "110");
     await flush(10, 3);
     await act(async () => window.dispatchEvent(new Event("popstate"))); // Android Back
     await flush(10, 3);

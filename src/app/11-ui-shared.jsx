@@ -880,7 +880,7 @@ function NrScreen({ children, testId, screen }) {
 }
 // Bottom sheet dialog of the masters (IWM options, TEFM confirmations): dark gradient, warm top
 // edge, grab handle, role=dialog + aria-modal, Escape closes, focus moves into the sheet and back.
-function NrSheet({ children, onClose, labelledBy, testId }) {
+function NrSheet({ children, onClose, labelledBy, testId, ariaLabel, menu = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const prev = typeof document !== "undefined" ? document.activeElement : null;
@@ -918,6 +918,7 @@ function NrSheet({ children, onClose, labelledBy, testId }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
+        aria-label={ariaLabel}
         data-testid={testId}
         style={{
           position: "absolute",
@@ -925,7 +926,7 @@ function NrSheet({ children, onClose, labelledBy, testId }) {
           right: 0,
           bottom: 0,
           boxSizing: "border-box",
-          padding: "10px 16px max(env(safe-area-inset-bottom, 0px), 8px)",
+          padding: menu ? "10px 8px max(env(safe-area-inset-bottom, 0px), 12px)" : "10px 16px max(env(safe-area-inset-bottom, 0px), 8px)",
           borderRadius: "20px 20px 0 0",
           background: "linear-gradient(180deg, #151515 0%, #0F0F10 100%)",
           borderTop: "1px solid rgba(255,133,27,.35)",
@@ -934,14 +935,14 @@ function NrSheet({ children, onClose, labelledBy, testId }) {
           overflowY: "auto",
         }}
       >
-        <div aria-hidden="true" style={{ width: "40px", height: "4px", borderRadius: "2px", background: "#3A3A3A", margin: "0 auto 16px" }} />
-        <div style={{ paddingBottom: "16px" }}>{children}</div>
+        <div aria-hidden="true" style={{ width: "40px", height: "4px", borderRadius: "2px", background: "#3A3A3A", margin: menu ? "0 auto 10px" : "0 auto 16px" }} />
+        <div style={{ paddingBottom: menu ? "8px" : "16px" }}>{children}</div>
       </div>
     </div>
   );
 }
 // Buttons of the sheets: primary (orange gradient), neutral, danger text, danger fill.
-function NrSheetButton({ variant = "neutral", children, onClick, testId, disabled }) {
+function NrSheetButton({ variant = "neutral", children, onClick, testId, disabled, noRearm = false }) {
   const base = { minHeight: "48px", width: "100%", border: 0, borderRadius: "10px", fontFamily: NR.font, fontSize: "19px", fontWeight: 600, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1 };
   const v =
     variant === "primary"
@@ -954,7 +955,7 @@ function NrSheetButton({ variant = "neutral", children, onClick, testId, disable
       ? { background: "transparent", color: NR.dangerText, border: `1px solid ${NR.danger}`, fontWeight: 500 }
       : { background: "#1A1A1B", color: NR.textPrimary, fontWeight: 500 };
   return (
-    <button type="button" onClick={onClick} disabled={disabled} data-testid={testId} className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]" style={{ ...base, ...v }}>
+    <button type="button" onClick={onClick} disabled={disabled} data-testid={testId} data-no-rearm={noRearm ? "" : undefined} className="focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF851B]" style={{ ...base, ...v }}>
       {children}
     </button>
   );

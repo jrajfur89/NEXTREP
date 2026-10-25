@@ -74,3 +74,7 @@ export const Trophy = icon("Trophy");
 export const ListChecks = icon("ListChecks");
 export const Hourglass = icon("Hourglass");
 export const Sigma = icon("Sigma");
+export const Sparkles = icon("Sparkles");
+export const Pause = icon("Pause");
+export const Play = icon("Play");
+export const Link = icon("Link");

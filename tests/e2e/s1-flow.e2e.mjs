@@ -77,11 +77,11 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await page.locator('[data-testid="atlas-picker-item"]').first().click();
     await page.waitForTimeout(600);
     await cov();
-    await page.locator('input[placeholder="kg"]').first().fill("60");
-    await page.locator('input[placeholder="0"]').first().fill("8");
-    assert.match(await bodyText(page), /WYCISKANIE SZTANGI LEŻĄC NA ŁAWCE POZIOMEJ/);
+    await page.locator('input[data-field="kg"]').first().fill("60");
+    await page.locator('input[data-field="reps"]').first().fill("8");
+    assert.match(await bodyText(page), /Wyciskanie sztangi leżąc na ławce poziomej/i);
     assert.match(await bodyText(page), /Sztanga — wpisujesz ciężar całkowity/);
-    assert.equal(await page.locator('input[placeholder="kg"]').first().inputValue(), "60");
+    assert.equal(await page.locator('input[data-field="kg"]').first().inputValue(), "60");
   });
 
   test("C1 rest countdown keeps counting while the page is hidden (browser; Android screen-off signal = NR-S1-02, open)", async () => {
@@ -106,7 +106,7 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     assert.match(await bodyText(page), /opuszczasz aktywny trening/i);
     await page.getByText("Wróć do treningu").first().click();
     await page.waitForTimeout(500);
-    assert.equal(await page.locator('input[placeholder="kg"]').first().inputValue(), "60");
+    assert.equal(await page.locator('input[data-field="kg"]').first().inputValue(), "60");
   });
 
   test("E1 workout draft survives a killed/reloaded app", async () => {
@@ -123,7 +123,8 @@ describe("S1 flow on the built app (offline)", { concurrency: false }, () => {
     await cov();
     await page.getByTestId("tef-resume").click();
     await page.waitForTimeout(800);
-    assert.equal(await page.locator('input[placeholder="kg"]').first().inputValue(), "60");
+    // I4.4: the performed set is a row of the Active Workout master ("60 kg × 8")
+    assert.match(await page.getByTestId("aw-set-done").first().innerText(), /60 kg × 8/);
   });
 
   let saved;

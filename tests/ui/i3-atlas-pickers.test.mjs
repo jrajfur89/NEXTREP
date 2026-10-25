@@ -120,8 +120,8 @@ describe("I3: workouts on atlas exercises (whole app, S1)", () => {
     ]);
     for (const i of items) assert.deepEqual(validateLoadSnapshot(i.loadSnapshot), []);
     assert.ok(byTestId("atlas-load-hint"), "the load-model hint is shown");
-    await type(document.querySelector('input[placeholder="kg"]'), "60");
-    await type(document.querySelector('input[placeholder="0"]'), "8");
+    await type(document.querySelector('input[data-field="kg"]'), "60");
+    await type(document.querySelector('input[data-field="reps"]'), "8");
     await flush(5, 3);
     await finishWorkout();
     const history = read(K("history"));
