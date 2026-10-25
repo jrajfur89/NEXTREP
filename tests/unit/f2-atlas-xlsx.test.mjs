@@ -226,8 +226,13 @@ describe("the repository atlas", () => {
     };
     // AT2: atlas.json enters the app through one engine module only (the nr1 build reads it separately)
     assert.deepEqual(grep(["atlas.json", "src/atlas"], ["src/app", "src/engine"]), ["src/engine/atlas-release.js"]);
-    // the app does not use the validator, the hierarchy or the muscle statistics yet (later stages)
-    assert.deepEqual(grep(["atlas-validate", "muscle-work", "muscle-stats", "hierarchy", "navigation.json"], ["src/app", "src/engine/index.js"]), []);
+    // the app does not use the validator or the muscle statistics; navigation.json is read only by the
+    // release module (I5, ATLAS-UX-01: the hierarchy reaches the app through named engine exports)
+    assert.deepEqual(grep(["atlas-validate", "muscle-work", "muscle-stats", "navigation.json"], ["src/app", "src/engine/index.js"]), []);
+    assert.deepEqual(grep(['navigation.json"'], ["src/app", "src/engine"]), ["src/engine/atlas-release.js"], "one import of navigation.json");
+    // I5: the hierarchy module is re-exported by the engine entry only; app files use its exported names
+    assert.deepEqual(grep(["hierarchy.js", "atlas-index.js"], ["src/app", "src/engine/index.js"]), ["src/engine/index.js"]);
+    assert.deepEqual(grep(["buildHierarchyIndex", "validateHierarchy", "buildAtlasIndex", "ATLAS_NAVIGATION"], ["src/app"]), ["src/app/00-imports.jsx", "src/app/17c-atlas-browse.jsx"]);
     // I3: the snapshot module reaches the app only through the engine entry (validateLoadSnapshot) and
     // the nr1 builder; no app file names it
     assert.deepEqual(grep(["load-snapshot"], ["src/app", "src/engine/index.js"]), ["src/engine/index.js"]);

@@ -10,3 +10,7 @@ export { validateLoadSnapshot } from "./load-snapshot.js";
 export { planItemSnapshot } from "../nr1/domain/workout-from-plan.js";
 export { resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS } from "../nr1/contracts/plan-load-model.js";
 export { validateRefMatchesSnapshot } from "../nr1/contracts/exercise-ref.js";
+// I5 (ATLAS-UX-01): the existing atlas search / facets and hierarchy engines for the module „Ćwiczenia”
+// (used as they are — no second implementation).
+export { buildAtlasIndex, ATLAS_FACET_DIMENSIONS } from "./atlas-index.js";
+export { buildHierarchyIndex, validateHierarchy } from "./hierarchy.js";

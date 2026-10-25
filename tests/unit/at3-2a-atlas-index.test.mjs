@@ -272,11 +272,13 @@ describe("AT3.2a — synthetic atlas of 390 exercises", () => {
 });
 
 describe("AT3.2a — scope", () => {
-  test("atlas-index.js is pure: no file, storage or atlas.json import; not exported to the app yet", () => {
+  test("atlas-index.js is pure: no file, storage or atlas.json import; reaches the app only as named engine exports (I5)", () => {
     const src = readFileSync(resolve(ROOT, "src/engine/atlas-index.js"), "utf8");
     const imports = [...src.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
     assert.deepEqual(imports, ["./atlas-schema.js"]);
     assert.doesNotMatch(src, /localStorage|indexedDB|fetch\(|readFile|atlas\.json/);
-    assert.doesNotMatch(readFileSync(resolve(ROOT, "src/engine/index.js"), "utf8"), /atlas-index/);
+    // I5 (ATLAS-UX-01): the module „Ćwiczenia” uses it unchanged — exactly these two names, no `export *`
+    const entry = readFileSync(resolve(ROOT, "src/engine/index.js"), "utf8");
+    assert.deepEqual([...entry.matchAll(/^.*atlas-index.*$/gm)].map((m) => m[0]), ['export { buildAtlasIndex, ATLAS_FACET_DIMENSIONS } from "./atlas-index.js";']);
   });
 });

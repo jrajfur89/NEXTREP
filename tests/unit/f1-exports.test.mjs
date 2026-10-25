@@ -39,6 +39,8 @@ const ADDED_BY_STAGE = {
     "WcsSheet", "WcsSyncStatus", "WorkoutSummary", "wcsUnfilled",
     "EXV_DIMENSION_LABELS", "EXV_HEAD", "EXV_ITEM_TEXT", "EXV_NUM", "EXV_TABS", "EXV_TOP", "ExvChart", "ExvDisclosure", "ExvExerciseTab", "ExvHistoryTab", "ExvSectionHead",
     "ExvVariantsTab", "ExvYearTable", "exvCardio", "exvCell", "exvClearRestore", "exvDayMonth", "exvExecutions", "exvKg", "exvMemory", "exvMetric", "exvMmSs", "exvPoints",
+    "ATLAS_PLURALS", "ATLAS_ROW_CHIP_DIMENSIONS", "ATLAS_SHEET_DIMENSIONS", "atlasBrowseFreeze", "atlasBrowseMemo", "atlasBrowseModel", "atlasBrowseRetry", "atlasScopeKey",
+    "createAtlasBrowse", "plPlural", "shortLoadModelLabel",
   ],
 };
 // Baseline names an approved stage removed on purpose (and only these).

@@ -328,6 +328,9 @@ const I3_APP_FILES = ["src/app/13-account-ui.jsx"];
 // Summary, Atlas Compact Tabs v3. Beyond the files already listed above exactly these; checked by
 // tests/ui/i4-*.test.mjs and the visual walk.
 const I4_APP_FILES = ["src/app/11-ui-shared.jsx", "src/app/16-dashboard.jsx"];
+// I5 (25.10.2026, ATLAS-UX-01 approved by the product owner): the module „Ćwiczenia” — its view model
+// (I5.1) in one new file after the atlas catalog; checked by tests/unit/i5-atlas-browse-model.test.mjs.
+const I5_APP_FILES = ["src/app/17c-atlas-browse.jsx"];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
@@ -350,18 +353,19 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     assert.equal(diff.trim(), "", diff);
   });
 
-  test(`AT2 / SEC-HF-01 / I2 / I3 / I4 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files, the three SEC-HF-01 files and the I2 / I3 / I4 files`, () => {
+  test(`AT2 / SEC-HF-01 / I2 / I3 / I4 / I5 scope: since ${AT1_REF} src/app/ changes only in the atlas catalog files, the three SEC-HF-01 files and the I2 / I3 / I4 / I5 files`, () => {
     const changed = execFileSync("git", ["diff", "--name-only", AT1_REF, "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
-    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f) && !I2_APP_FILES.includes(f) && !I3_APP_FILES.includes(f) && !I4_APP_FILES.includes(f));
-    assert.deepEqual(outside, [], "src/app files changed outside AT2, SEC-HF-01, I2, I3 and I4");
-    // ORDER.json: the old order plus exactly one new file after 17-exercises-plans.jsx
+    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f) && !I2_APP_FILES.includes(f) && !I3_APP_FILES.includes(f) && !I4_APP_FILES.includes(f) && !I5_APP_FILES.includes(f));
+    assert.deepEqual(outside, [], "src/app files changed outside AT2, SEC-HF-01, I2, I3, I4 and I5");
+    // ORDER.json: the old order plus the atlas catalog after 17-exercises-plans.jsx (AT2) and the
+    // browse model right after it (I5)
     const before = JSON.parse(execFileSync("git", ["show", `${AT1_REF}:src/app/ORDER.json`], { cwd: ROOT, encoding: "utf8" }));
     const now = JSON.parse(readFileSync(resolve(ROOT, "src/app/ORDER.json"), "utf8"));
     const i = before.indexOf("17-exercises-plans.jsx");
-    assert.deepEqual(now, [...before.slice(0, i + 1), "17b-atlas-catalog.jsx", ...before.slice(i + 1)]);
+    assert.deepEqual(now, [...before.slice(0, i + 1), "17b-atlas-catalog.jsx", "17c-atlas-browse.jsx", ...before.slice(i + 1)]);
     // 00-imports.jsx: only the one import of the atlas release (AT2) and the one import of the nr1
     // contracts used by the atlas adapter (I3) are added
     const imports0 = execFileSync("git", ["show", `${AT1_REF}:src/app/00-imports.jsx`], { cwd: ROOT, encoding: "utf8" });
@@ -372,16 +376,19 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     // I4: one more import line at the end — icons of the approved masters, from lucide-react only
     const i4Icons = "// I4: icons used by the approved UI masters (canvas v81) and not imported above\n" +
       'import { Flag, ListOrdered, PauseCircle, Info, Calendar, CalendarCheck, ArrowRight, CloudOff, Trophy, ListChecks, Hourglass, Sigma, Sparkles, Pause, Play, RotateCcw, Smartphone, Cloud, CircleSlash, Shield, Lightbulb, Video, Link as LinkIcon } from "lucide-react";\n';
-    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons);
+    // I5: one more line — the navigation and the atlas search / hierarchy engines for the browse model
+    const i5Engines = "// I5 (ATLAS-UX-01): navigation hierarchy and the atlas search / hierarchy engines — used ONLY by the browse adapter (17c-atlas-browse.jsx)\n" +
+      'import { ATLAS_NAVIGATION, buildAtlasIndex, ATLAS_FACET_DIMENSIONS, buildHierarchyIndex, validateHierarchy } from "@nextrep-engine";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
-    assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx"]);
+    assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx", "src/app/17c-atlas-browse.jsx"]);
     // I3: the nr1 contracts are used only by the atlas adapter
     const nr1Users = execFileSync("git", ["grep", "--untracked", "-l", "-E", "planItemSnapshot|resolvePlanItemLoadModel|validateLoadSnapshot|validateRefMatchesSnapshot", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
     assert.deepEqual(nr1Users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx"]);
   });
 
-  test(`src/engine/index.js = ${FREEZE_REF} plus only the AT2 re-export of the atlas release and the I3 named re-exports`, () => {
+  test(`src/engine/index.js = ${FREEZE_REF} plus only the AT2 re-export of the atlas release, the I3 and the I5 named re-exports`, () => {
     const frozen = execFileSync("git", ["show", `${FREEZE_REF}:src/engine/index.js`], { cwd: ROOT, encoding: "utf8" });
     const expected = frozen + '// AT2: the approved atlas release (read-only), shown by the catalog „Atlas ćwiczeń”.\nexport * from "./atlas-release.js";\n' +
       // I3: exactly these named re-exports (no load.js, no volume of the new engine — A5 stays closed)
@@ -390,7 +397,12 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       'export { validateLoadSnapshot } from "./load-snapshot.js";\n' +
       'export { planItemSnapshot } from "../nr1/domain/workout-from-plan.js";\n' +
       'export { resolvePlanItemLoadModel, LOAD_MODEL_CHOICE_LABELS } from "../nr1/contracts/plan-load-model.js";\n' +
-      'export { validateRefMatchesSnapshot } from "../nr1/contracts/exercise-ref.js";\n';
+      'export { validateRefMatchesSnapshot } from "../nr1/contracts/exercise-ref.js";\n' +
+      // I5 (ATLAS-UX-01): exactly the existing atlas search / facets and hierarchy engines
+      "// I5 (ATLAS-UX-01): the existing atlas search / facets and hierarchy engines for the module „Ćwiczenia”\n" +
+      "// (used as they are — no second implementation).\n" +
+      'export { buildAtlasIndex, ATLAS_FACET_DIMENSIONS } from "./atlas-index.js";\n' +
+      'export { buildHierarchyIndex, validateHierarchy } from "./hierarchy.js";\n';
     assert.equal(readFileSync(resolve(ROOT, "src/engine/index.js"), "utf8"), expected);
   });
 
