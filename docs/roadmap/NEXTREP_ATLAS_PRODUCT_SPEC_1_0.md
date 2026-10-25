@@ -112,7 +112,10 @@ są prezentowane oddzielnie. Kody węzłów są propozycją do potwierdzenia w S
 
 Wszystkie 19 kodów Batch 01 mają dokładnie jedną podpartię. Cztery kody zaplanowane dodaje Standaryzacja w
 partii atlasu (treść słownika, bez zmiany schematu; każdy ma pasującą wartość `statsGroup`); w tym
-zleceniu nie są dodawane. Podpartia bez mięśni jest ukryta w UI i daje zero w statystykach.
+zleceniu nie są dodawane. Podpartia bez mięśni albo bez ćwiczeń w bieżącym wydaniu atlasu **pozostaje widoczna**
+w nawigacji katalogu jako nieaktywny kafel z licznikiem 0; tak samo kategoria bez ćwiczeń, np. „Cardio i kondycja”
+(ATLAS-UX-01, decyzje D02 i D03, zatwierdzone 25.10.2026 — zastępuje wcześniejsze „ukryta w UI”). W statystykach
+taki węzeł daje zero; sposób jego pokazania na ekranach statystyk ustala AT3.7.
 
 **Cardio w hierarchii (O-30, O-33).** Ćwiczenie należy do kategorii „Cardio i kondycja” wtedy i tylko
 wtedy, gdy ma `measurementType: cardio` — systemowe i prywatne tak samo. Kategoria nie ma podpartii w 1.0;
@@ -402,7 +405,7 @@ Pełny harmonogram: `NEXTREP_1_0_MASTER_PLAN.md` §K.3–K.4.
 
 | Ekran / element | Potrzebny przed |
 | --- | --- |
-| Ćwiczenia — wejście: kafle 7 kategorii (z „Cardio i kondycja” bez podpartii), podpartie jako chipy, wyszukiwarka, filtry (w cardio: sprzęt i rodzaj aktywności), ulubione, ostatnio używane, moje | AT3.6a |
+| Ćwiczenia — wejście: kafle 7 kategorii (z „Cardio i kondycja” bez podpartii), podpartie jako kafle w dwóch kolumnach (ATLAS-UX-01; puste kategorie i podpartie jako nieaktywne kafle z 0), wyszukiwarka, filtry (w cardio: sprzęt i rodzaj aktywności), ulubione, ostatnio używane, moje | AT3.6a |
 | Lista wyników i kafelek ćwiczenia (nazwa, mięśnie główne, sprzęt, oznaczenia wariantu) | AT3.6a |
 | Arkusz filtrów (wiele wymiarów, czyszczenie, liczby wyników) | AT3.6a |
 | Karta szczegółów, z miejscem na sekcje zależne od danych (instrukcja, błędy, zdjęcie, wideo) | AT3.6b |
