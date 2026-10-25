@@ -28,7 +28,7 @@ Approximate visual balance:
 - primary: #FF6A00
 - warm-highlight: #FF851B (approved 2026-10-11; accent of the approved masters: section headings, icons, active navigation, card edge light, focus ring)
 - light: #FF8A2A
-- bright: #FF9A3D
+- bright: #FF9A3D (also the colour of text links in the atlas module: „Anuluj”, „Wyczyść…”, „Pokaż wszystkie”; 8.65–9.43:1 on #090909 / #121213 / #151515) — DS-SYNC ATLAS-UX-01, approved 2026-10-25
 - dark: #CC4F00
 - gradient-end: #D94F00
 
@@ -39,7 +39,9 @@ Approximate visual balance:
 ### Surface
 - default: #151515
 - secondary: #1B1B1D
-- tertiary: #222224
+- tertiary: #222224 (also the chip surface: fill of atlas row chips and fill + 1 px border of the default filter chip — decision D16)
+- control: #121213 (surface-control: fill of inputs, selects, the atlas search field and the „Filtry” button; the field boundary comes from border control) — approved 2026-10-25
+- control-hover: #1A1A1B (surface-control-hover: secondary-button fills, icon wells and rows on #151515 sheets, the atlas message button and error icon well) — approved 2026-10-25; see the role note below
 
 ### Border
 - default: #2A2A2A
@@ -53,6 +55,7 @@ Approximate visual balance:
 - tertiary: #9A9A9A (labels, column headers)
 - muted: #8E8E8E (captions, de-emphasised hints, empty field values; replaces #777777)
 - disabled: #4A4A4A (disabled controls only; never for information)
+- chip: #D9D9D9 (text-chip: text of atlas row chips, count on a category tile with a photo; 11.25:1 on #222224) — approved 2026-10-25
 
 ### Rest timer
 - rest: #5EC2FF (rest-timer accent from the approved Active Workout master: dock label, icon and progress; dock fill #0E1114, border rgba(94,194,255,.30); 9.59:1 on #0E1114) — decision G02-CLOSEOUT 2026-10-24
@@ -80,10 +83,12 @@ The values below appear in approved masters but their name, role or accessibilit
 | Proposed name | Value | Observed role in masters | Open point |
 |---|---|---|---|
 | card-deep | #0B0B0C | card and list fills; stop of the bottom-navigation gradient | name and role |
-| surface-control | #121213 | input, select and secondary-button fills | name and role (field boundary is provided by border control) |
 | surface-tile | #141415 | metric tiles and tile buttons | name and role |
-| surface-on-sheet | #1A1A1B | rows, icon wells and secondary buttons on #151515 sheets | name and role |
 | border-card | #232325 | table regions, sections, metric tiles | name and role |
+
+Role note (DS-SYNC ATLAS-UX-01, 2026-10-25): every observed use of surface-control-hover #1A1A1B is a static fill (secondary buttons, icon wells, list rows, the atlas message button); none is the hover or pressed state of a surface-control field. The value is approved as is; the name/role mismatch is reported as an open point.
+
+Chips: fill surface-tertiary #222224; the default filter chip (DS-C18) has a 1 px border in the same #222224 (decision D16, board E04, 2026-10-25) and needs no 3:1 boundary (it is identified by its label). border-control is for fields and the „Filtry” button, not for chips.
 
 ## 3. Typography
 
@@ -356,11 +361,21 @@ Status: see SCREENS.md (Active workout). Visual approval is not implementation.
 - Set comment: as in the master, an inline field inside the set card, opened from the comment icon — decision 2026-10-24.
 - Deferred to implementation: compact-header threshold and hysteresis, iOS exit path without back gesture.
 
-## 20. Bottom navigation B2 — approved (2026-10-14)
+## 20. Bottom navigation B2 — approved (2026-10-14); Compact B2 (v2) approved 2026-10-25, MASTER READY
 
 Status: see COMPONENTS.md, DS-C04. Visual approval is not implementation.
 
 - 7 destinations from production, unchanged order and targets: Start · Ćwiczenia · Plany · Trening · Statystyki · Historia · Więcej (Lucide icons).
 - Normal text: 7 icons + 7 labels in one row. Enlarged text: 7 icons in one row without visible labels; names in aria-label, aria-current and visible keyboard focus kept.
-- Detailed values (row 62 px, icon 24 px, label 13/15, gradient #121213 → #0B0B0C → #090909, separator rgba(255,133,27,.45), active #FF851B, inactive #B8B8B8, indicator 28 × 2 px, safe area max(env(safe-area-inset-bottom), 8px), content padding = bar height + 16 px): project document claude/bottom-navigation-b2-master-v1.md.
+- v2 Compact (master NAV-B2 v2, project document claude/bottom-navigation-b2-master-v2.md; ATLAS-UX-01 v2 §6): row 56 px in both modes, icon 22 px, icon–label gap 2 px, label 13/15, bottom padding env(safe-area-inset-bottom, 0px) (bar = 1 + 56 + inset), --nr-nav-h fallback 57 px, touch targets 55.7 × 56 (390) / 51.4 × 56 (360) ≥ 48 × 48 dp, content padding = bar height + 16 px. Gradient, separator, colours, indicator, glow and aria-current unchanged.
+- Hidden on every screen while the soft keyboard is open (a text field focused and the visual viewport more than 120 px shorter than without the keyboard): display none, --nr-nav-h 0; one shared detector with the Active Workout.
+- v1 values (row 62 px, icon 24 px, gap 4 px, safe area max(env(safe-area-inset-bottom), 8px)): claude/bottom-navigation-b2-master-v1.md — superseded by v2, kept as history.
 - Not adopted: 2-row layout, "Active Label Only".
+
+## 21. Atlas module „Ćwiczenia” — ATLAS-UX-01 v2 (approved 2026-10-25; MASTER READY)
+
+Status: see COMPONENTS.md, DS-C17–DS-C25. Screens E01–E07: project document claude/atlas-ux-01-design-package-v2.md §2.
+
+- Components P1–P9 (DS-C17–DS-C25): search field, filter chip, active filter chip, category tile 3:2, exercise row, sub-region tile, results bar, message, „Filtry” button. Specification: project document claude/atlas-ux-01-design-package-v2.md §4.
+- Category tile with a future photograph (DS-C20, photo variant approved 2026-10-25; release 1.0 ships without photos): photo layer always present (empty in 1.0, no NR-01 photos), object-fit cover with a focus point, alt="", lazy; scrim only with a photo (rgba(9,9,9,0) 35% → .88 at the bottom); text ≥ 4.5:1 on the lightest pixel under it; a missing or failed image falls back to the variant without a photo, same size.
+- Colours: #222224 = surface-tertiary; #121213 = surface-control; #1A1A1B = surface-control-hover; #D9D9D9 = text-chip; text links = brand-bright #FF9A3D (DS-SYNC ATLAS-UX-01, approved 2026-10-25).
