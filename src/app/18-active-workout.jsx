@@ -298,6 +298,24 @@ function awMmSs(sec) {
   sec = Math.max(0, Math.round(sec || 0));
   return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 }
+// V5 / BUG-V5-01: the live workout clock keeps its seconds past one hour (1:05:09), so it visibly
+// moves every second (fmtClock shows H:MM from one hour on and stays as it is for the rest of the app).
+function awElapsedClock(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  if (sec < 3600) return fmtClock(sec);
+  const h = Math.floor(sec / 3600);
+  return `${h}:${String(Math.floor((sec % 3600) / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+}
+// V5 / BUG-V5-01: a resumed draft continues from the time it was left (draft.savedAt − startTime, the
+// "Czas" of the Dashboard card): the time the workout spent closed is not counted, neither by the clock
+// nor by the duration saved in history. The shifted start is what later drafts keep.
+function awResumeStart(draft, now = Date.now()) {
+  const start = Number(draft && draft.startTime);
+  if (!Number.isFinite(start) || start <= 0) return now;
+  const saved = Date.parse(draft.savedAt);
+  if (!Number.isFinite(saved) || saved < start || now <= saved) return start;
+  return start + (now - saved);
+}
 // "Czas treningu 24 minuty 18 sekund" — the spoken form of the elapsed clock
 function awClockLabel(sec) {
   sec = Math.max(0, Math.round(sec || 0));
@@ -503,8 +521,8 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   );
   const [blockIdx, setBlockIdx] = useState(() => (draftInit && Number.isInteger(draftInit.blockIdx) ? Math.min(draftInit.blockIdx, Math.max(0, draftInit.blocks.length - 1)) : 0));
   const [subIdx, setSubIdx] = useState(() => (draftInit && Number.isInteger(draftInit.subIdx) ? draftInit.subIdx : 0)); // which exercise inside a superset block
-  const [startTime] = useState(() => (draftInit && draftInit.startTime ? draftInit.startTime : Date.now()));
-  const [elapsed, setElapsed] = useState(0);
+  const [startTime] = useState(() => (draftInit && draftInit.startTime ? awResumeStart(draftInit) : Date.now()));
+  const [elapsed, setElapsed] = useState(() => Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showPriorDetail, setShowPriorDetail] = useState(false);
@@ -694,7 +712,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   };
 
   useEffect(() => {
-    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    const t = setInterval(() => setElapsed(Math.max(0, Math.floor((Date.now() - startTime) / 1000))), 1000);
     return () => clearInterval(t);
   }, [startTime]);
 
@@ -1060,7 +1078,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
       totalReps,
       totalWeight,
       volume,
-      durationSec: backfillInfo ? Math.max(0, Math.round(manualDuration * 60)) : elapsed,
+      durationSec: backfillInfo ? Math.max(0, Math.round(manualDuration * 60)) : Math.max(0, Math.floor((Date.now() - startTime) / 1000)),
       exercises: withSets.map((it) => ({
         id: it.id || uid(),
         exerciseId: it.exerciseId,
@@ -1194,7 +1212,7 @@ function ActiveWorkout({ plan, exercises, history, backfillInfo, editingSession,
   const clockChip = !editingSession && !backfillInfo && (
     <span data-clock role="timer" aria-label={awClockLabel(elapsed)} data-testid="aw-clock" style={{ display: "inline-flex", alignItems: "center", gap: "6px", minHeight: "32px", boxSizing: "border-box", padding: "2px 10px", borderRadius: "16px", background: "rgba(9,9,9,.5)", border: "1px solid rgba(255,255,255,.12)", fontFamily: AW_NUM, fontSize: "15px", fontWeight: 500, fontVariantNumeric: "tabular-nums", color: "#D0D0D0" }}>
       <Clock aria-hidden="true" size={14} color={NR.textSecondary} />
-      {fmtClock(elapsed)}
+      {awElapsedClock(elapsed)}
     </span>
   );
   const restChip = kbOpen && restActive && (

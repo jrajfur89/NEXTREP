@@ -51,7 +51,7 @@ async function boot(seed = {}) {
 }
 
 describe("Compact B2 parameters (handoff §6)", () => {
-  test("row 56 px (also in the icon mode), icon 22, gap 2, bottom padding = the safe area only, side safe areas kept", async () => {
+  test("row 56 px (a large system font may only grow it: minmax(56px, auto), V5 / BUG-V5-02), icon 22, gap 2, bottom padding = the safe area only, side safe areas kept", async () => {
     A = A || (await loadApp());
     await unmount();
     await mount(h(A.BottomNav, { screen: "exercises", onNavigate() {} }));

@@ -254,15 +254,62 @@ const AtlasNum = ({ children, style }) => <span style={{ fontFamily: ATLAS_UI.nu
 
 // P1 — search field: role=search, hidden label, Enter → blur (keeps results), „Wyczyść” keeps the
 // focus and the keyboard, optional „Anuluj” (E05) and a trailing slot (P9).
+// V5 / BUG-V5-03: the global search hint and its shorter forms for a large system font
+const ATLAS_SEARCH_HINTS = ["Szukaj po nazwie lub aliasie", "Nazwa lub alias", "Szukaj"];
 function AtlasSearchField({ value, onChange, label, placeholder = "", onCancel, onFocus, onBlur, inputRef, disabled = false, children, testId = "atlas-search" }) {
   const own = useRef(null);
   const ref = inputRef || own;
   const [focused, setFocused] = useState(false);
+  // V5 / BUG-V5-03: `placeholder` may list shorter fallbacks; the first one that fits the field on one
+  // line is shown (a large system font cut "Szukaj po nazwie lub ali…"). The field's name stays the
+  // hidden label; the placeholder is only a hint.
+  const options = (Array.isArray(placeholder) ? placeholder : [placeholder]).filter(Boolean);
+  const optionsKey = options.join("|");
+  const [hint, setHint] = useState(0);
+  const meterRef = useRef(null);
+  useEffect(() => {
+    const fit = () => {
+      const el = ref.current;
+      const meter = meterRef.current;
+      if (!el || !meter || options.length < 2) return setHint(0);
+      const cs = window.getComputedStyle(el);
+      const room = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+      let pick = options.length - 1;
+      for (let i = 0; i < options.length; i++) {
+        meter.textContent = options[i];
+        const w = meter.getBoundingClientRect().width;
+        if (!(w > 0) || !(room > 0) || w <= room) {
+          pick = i;
+          break;
+        }
+      }
+      meter.textContent = "";
+      setHint(pick);
+    };
+    fit();
+    let ro = null;
+    try {
+      if (typeof ResizeObserver !== "undefined" && ref.current) {
+        ro = new ResizeObserver(fit);
+        ro.observe(ref.current);
+      }
+    } catch {}
+    window.addEventListener("resize", fit);
+    const fonts = typeof document !== "undefined" ? document.fonts : null;
+    try {
+      if (fonts && fonts.ready) fonts.ready.then(fit).catch(() => {});
+    } catch {}
+    return () => {
+      window.removeEventListener("resize", fit);
+      if (ro) ro.disconnect();
+    };
+  }, [optionsKey]);
   return (
     <div role="search" data-testid={testId} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
       <style>{`[data-atlas-search]::-webkit-search-cancel-button{display:none;-webkit-appearance:none}[data-atlas-search]::placeholder{color:#8E8E8E;opacity:1}`}</style>
       <label style={{ flex: "1 1 auto", minWidth: 0, position: "relative", display: "flex", alignItems: "center" }}>
         <span style={ATLAS_SR}>{label}</span>
+        <span ref={meterRef} data-placeholder-measure="" aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, visibility: "hidden", pointerEvents: "none", width: "max-content", fontFamily: NR.font, fontSize: "18px", lineHeight: "22px" }} />
         <Search aria-hidden="true" size={20} color={ATLAS_UI.muted} style={{ position: "absolute", left: "14px", pointerEvents: "none" }} />
         <input
           ref={ref}
@@ -275,7 +322,7 @@ function AtlasSearchField({ value, onChange, label, placeholder = "", onCancel, 
           spellCheck={false}
           disabled={disabled}
           value={value}
-          placeholder={placeholder}
+          placeholder={options[Math.min(hint, options.length - 1)] || ""}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -356,14 +403,18 @@ function AtlasCategoryTile({ label, count, enabled = true, onOpen, photo = null,
   const [photoFailed, setPhotoFailed] = useState(false);
   const withPhoto = Boolean(enabled && photo && photo.src && !photoFailed);
   const photoLayer = (
-    <span data-layer="photo" aria-hidden="true" style={{ position: "absolute", inset: 0 }}>
+    <span data-layer="photo" aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: "inherit", overflow: "hidden" }}>
       {withPhoto && <img src={photo.src} srcSet={photo.srcSet} alt="" loading="lazy" onError={() => setPhotoFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: photo.focus || "50% 50%" }} />}
     </span>
   );
-  const body = { position: "absolute", inset: 0, boxSizing: "border-box", padding: "12px 12px 10px 14px", display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: "2px" };
+  // V5 / BUG-V5-02: the 3:2 box is the tile's minimum, not a clip — with a large system font the text
+  // stays in the flow and the tile grows (aspect-ratio + overflow visible = content-based minimum);
+  // the photo and scrim keep the rounded corners on their own layers. At 100 % nothing moves.
+  const body = { position: "relative", boxSizing: "border-box", padding: "12px 12px 10px 14px", display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: "2px" };
+  const box = { position: "relative", display: "flex", flexDirection: "column", justifyContent: "flex-end", flex: "1 0 auto", width: "100%", aspectRatio: "3 / 2", padding: 0, borderRadius: "16px" };
   if (!enabled) {
     return (
-      <button type="button" disabled aria-label={`${label}, ${count} ${plPlural(count, "exercise")}, brak w tym wydaniu Atlasu`} data-tile="category" data-photo="none" data-testid={testId} style={{ position: "relative", display: "block", width: "100%", aspectRatio: "3 / 2", padding: 0, borderRadius: "16px", overflow: "hidden", border: `1px dashed ${ATLAS_UI.dashed}`, background: "#0F0F10", color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "default" }}>
+      <button type="button" disabled aria-label={`${label}, ${count} ${plPlural(count, "exercise")}, brak w tym wydaniu Atlasu`} data-tile="category" data-photo="none" data-testid={testId} style={{ ...box, border: `1px dashed ${ATLAS_UI.dashed}`, background: "#0F0F10", color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "default" }}>
         {photoLayer}
         <span style={body}>
           <span style={{ fontSize: "20px", lineHeight: "23px", fontWeight: 500, color: NR.textSecondary, overflowWrap: "anywhere" }}>{label}</span>
@@ -375,9 +426,9 @@ function AtlasCategoryTile({ label, count, enabled = true, onOpen, photo = null,
     );
   }
   return (
-    <button type="button" onClick={onOpen} data-tile="category" data-photo={withPhoto ? "photo" : "none"} data-testid={testId} className={ATLAS_UI.focus} style={{ position: "relative", display: "block", width: "100%", aspectRatio: "3 / 2", padding: 0, border: 0, borderRadius: "16px", overflow: "hidden", background: ATLAS_UI.tileSurface, boxShadow: NR.cardShadow, color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "pointer" }}>
+    <button type="button" onClick={onOpen} data-tile="category" data-photo={withPhoto ? "photo" : "none"} data-testid={testId} className={ATLAS_UI.focus} style={{ ...box, border: 0, background: ATLAS_UI.tileSurface, boxShadow: NR.cardShadow, color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "pointer" }}>
       {photoLayer}
-      {withPhoto && <span aria-hidden="true" data-layer="scrim" style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(9,9,9,0) 35%, rgba(9,9,9,.55) 62%, rgba(9,9,9,.88) 100%)" }} />}
+      {withPhoto && <span aria-hidden="true" data-layer="scrim" style={{ position: "absolute", inset: 0, borderRadius: "inherit", background: "linear-gradient(180deg, rgba(9,9,9,0) 35%, rgba(9,9,9,.55) 62%, rgba(9,9,9,.88) 100%)" }} />}
       <span style={body}>
         <span style={{ fontSize: "20px", lineHeight: "23px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "anywhere" }}>{label}</span>
         <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
@@ -824,7 +875,7 @@ function AtlasHomeView({ model, onOpenAll, onOpenCategory, onRetry, ownCount = 0
           {atlasSectionHead("Partie mięśniowe", "atlas-cats-h")}
           <ul aria-labelledby="atlas-cats-h" style={ATLAS_GRID}>
             {model.categories.map((c) => (
-              <li key={c.code} style={{ minWidth: 0 }}>
+              <li key={c.code} style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
                 <AtlasCategoryTile label={c.label} count={c.count} enabled={c.enabled} onOpen={() => onOpenCategory(c)} testId={`atlas-category-${c.code}`} />
               </li>
             ))}
@@ -1175,7 +1226,7 @@ function AtlasBrowseScreen({ onNavigate, history = [], isPro = false, onOpenUnlo
       <AtlasSearchRow
         search={searchCtl}
         label={scopeKind === "global" ? "Szukaj w całym Atlasie" : scopeKind === "subregion" ? `Szukaj w podpartii ${title}` : `Szukaj w partii ${title}`}
-        placeholder={scopeKind === "global" ? "Szukaj po nazwie lub aliasie" : scopeKind === "subregion" ? "Szukaj w tej podpartii" : "Szukaj w tej partii"}
+        placeholder={scopeKind === "global" ? ATLAS_SEARCH_HINTS : [scopeKind === "subregion" ? "Szukaj w tej podpartii" : "Szukaj w tej partii", "Szukaj"]}
         filtersCount={nSel}
         onOpenFilters={openFilters}
         filtersRef={filtersRef}
@@ -1195,7 +1246,7 @@ function AtlasBrowseScreen({ onNavigate, history = [], isPro = false, onOpenUnlo
   } else if (model.ok && nav.level === "category" && cat) {
     view = <AtlasCategoryView category={cat} onBack={onScreenBack} onOpenAll={() => openList({ categoryCode: cat.code })} onOpenSubregion={(s) => s.enabled && openList({ categoryCode: cat.code, subregionCode: s.code })} />;
   } else {
-    const row = <AtlasSearchRow search={searchCtl} label="Szukaj ćwiczenia" placeholder="Szukaj po nazwie lub aliasie" cancel={searching && focused} filtersCount={nSel} onOpenFilters={openFilters} filtersRef={filtersRef} inputRef={inputRef} />;
+    const row = <AtlasSearchRow search={searchCtl} label="Szukaj ćwiczenia" placeholder={ATLAS_SEARCH_HINTS} cancel={searching && focused} filtersCount={nSel} onOpenFilters={openFilters} filtersRef={filtersRef} inputRef={inputRef} />;
     const hasQuery = Boolean(String(nav.query).trim());
     view = (
       <AtlasHomeView
