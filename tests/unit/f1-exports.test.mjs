@@ -52,9 +52,9 @@ const ADDED_BY_STAGE = {
     // I5.5: the app's one soft-keyboard detector (moved out of the Active Workout) for the Compact B2
     "NR_KEYBOARD_GAP", "nrIsTextField", "nrSoftKeyboardOpen", "nrViewportBase", "useSoftKeyboard",
   ],
-  // V5 / DEVICE BUGFIX (26.10.2026): resumed workout clock (BUG-V5-01), B2 labels wrapping with a large
-  // system font (BUG-V5-02), shorter search hints (BUG-V5-03)
-  V5_DEVICE: ["ATLAS_SEARCH_HINTS", "NAV_B2_WRAP_LABELS", "awElapsedClock", "awResumeStart"],
+  // V5 / DEVICE BUGFIX (26.10.2026): resumed workout clock (BUG-V5-01), E01 tiles growing with a large
+  // system font (BUG-V5-02; B2 keeps its icon-only mode, V5 / KOREKTA B2), shorter search hints (BUG-V5-03)
+  V5_DEVICE: ["ATLAS_SEARCH_HINTS", "awElapsedClock", "awResumeStart"],
 };
 // Baseline names an approved stage removed on purpose (and only these).
 const REMOVED_BY_STAGE = {

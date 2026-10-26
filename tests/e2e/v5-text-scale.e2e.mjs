@@ -1,7 +1,8 @@
 // V5 / DEVICE BUGFIX — large Android system font (S22: ≈130 % and the maximum) on the BUILT app, with
 // the font scaling of WebView textZoom emulated (e2e/text-scale.mjs: fonts grow, boxes do not).
-// BUG-V5-02: E01 tile names are never clipped (the tile grows); Compact B2 keeps all 7 labels visible
-// (they wrap inside their tab and the bar grows — no icon-only mode, no smaller text).
+// BUG-V5-02: E01 tile names are never clipped (the tile grows). Compact B2 (V5 / KOREKTA B2, owner
+// decision): icons with labels while every label fits its tab (100 %), icons only when a label does not
+// fit — 7 tabs, 56 px row, full accessible names (aria-label), active state kept, nothing clipped.
 // BUG-V5-03: the search hint is never cut (a shorter hint is shown when the long one does not fit);
 // the field keeps its accessible name. At 100 % everything stays as approved (one-line B2, the long hint).
 import { describe, test, before, after } from "node:test";
@@ -62,7 +63,7 @@ async function open(w, h, f) {
   return app;
 }
 
-// the B2 bar: 7 tabs, every label visible, inside its tab, at the scaled size, accessible name = label
+// the B2 bar: tabs, labels, accessible names, active tab, icons
 async function navState(page) {
   return page.evaluate((sel) => {
     const nav = document.querySelector(sel);
@@ -77,7 +78,10 @@ async function navState(page) {
         const cs = getComputedStyle(l);
         return {
           name: b.getAttribute("aria-label") || b.textContent.trim(),
-          text: l.textContent.replace(/­/g, ""),
+          ariaLabel: b.getAttribute("aria-label"),
+          current: b.getAttribute("aria-current"),
+          icon: Boolean(b.querySelector("svg")),
+          text: l.textContent,
           visible: cs.visibility === "visible" && cs.display !== "none" && lr.width > 0 && lr.height > 0,
           inside: lr.left >= br.left - 0.5 && lr.right <= br.right + 0.5 && lr.top >= br.top - 0.5 && lr.bottom <= br.bottom + 0.5,
           overflow: l.scrollWidth > l.clientWidth + 1,
@@ -100,6 +104,30 @@ async function hintState(page) {
   });
 }
 
+// both B2 modes: 7 tabs with icons, 56 px row (+ 1 px border), one active tab, full accessible names
+function checkB2(nav, f, where, activeIndex) {
+  assert.equal(nav.tabs.length, 7, `${where}: seven tabs`);
+  assert.deepEqual(nav.tabs.map((x) => x.text), LABELS, `${where}: labels in the DOM`);
+  assert.deepEqual(nav.tabs.map((x) => x.name), LABELS, `${where}: accessible names = full labels`);
+  assert.equal(nav.height, 57, `${where}: row 56 px in both modes`);
+  assert.deepEqual(nav.tabs.map((x, i) => (x.current === "page" ? i : -1)).filter((i) => i >= 0), [activeIndex], `${where}: active tab`);
+  for (const x of nav.tabs) assert.ok(x.icon, `${where}: ${x.text} icon`);
+  if (f === 1) assert.equal(nav.layout, "1row", `${where}: 100 % → icons with labels`);
+  else assert.equal(nav.layout, "icons", `${where}: ${Math.round(f * 100)} % → labels do not fit → icons only`);
+  if (nav.layout === "1row") {
+    for (const x of nav.tabs) {
+      assert.ok(x.visible, `${where}: ${x.text} visible`);
+      assert.ok(x.inside && !x.overflow, `${where}: ${x.text} not clipped`);
+      assert.equal(x.ariaLabel, null, `${where}: name from the visible label`);
+    }
+  } else {
+    for (const x of nav.tabs) {
+      assert.ok(!x.visible, `${where}: ${x.text} hidden in icon mode`);
+      assert.equal(x.ariaLabel, x.text, `${where}: aria-label ${x.text}`);
+    }
+  }
+}
+
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 
 describe("V5 / DEVICE BUGFIX — large system font (emulated textZoom) on the built app", { concurrency: false }, () => {
@@ -112,7 +140,7 @@ describe("V5 / DEVICE BUGFIX — large system font (emulated textZoom) on the bu
 
   for (const [w, h] of SIZES) {
     for (const f of SCALES) {
-      test(`${w} × ${h} at ${Math.round(f * 100)} %: E01 tiles, B2 labels, search hint (E01, E03), no horizontal scroll`, async (t) => {
+      test(`${w} × ${h} at ${Math.round(f * 100)} %: E01 tiles, B2 mode, search hint (E01, E03), no horizontal scroll`, async (t) => {
         const app = await open(w, h, f);
         const page = app.page;
         try {
@@ -125,22 +153,10 @@ describe("V5 / DEVICE BUGFIX — large system font (emulated textZoom) on the bu
             for (const [top2, ht2] of tiles) if (top2 === top) assert.equal(ht2, ht, "one row, one height");
           }
           if (f === 1) assert.ok(tiles.every(([, ht, wd]) => Math.abs(ht - (wd * 2) / 3) <= 1), "100 %: exactly 3:2 as approved");
-          // BUG-V5-02 — B2: 7 labels visible, inside the tab, not smaller than 13 px × scale
+          // V5 / KOREKTA B2 — 100 %: icons + labels; larger font where a label no longer fits: icons only
           const nav = await navState(page);
           t.diagnostic(`B2 ${nav.layout}, ${nav.height}px`);
-          assert.deepEqual(nav.tabs.map((x) => x.text), LABELS);
-          assert.deepEqual(nav.tabs.map((x) => x.name), LABELS, "accessible names = labels (no soft hyphens)");
-          for (const x of nav.tabs) {
-            assert.ok(x.visible, `${x.text} visible`);
-            assert.ok(x.inside, `${x.text} inside its tab`);
-            assert.ok(!x.overflow, `${x.text} not overflowing`);
-            assert.ok(x.fontSize >= 13 * f - 0.05, `${x.text} not shrunk (${x.fontSize})`);
-          }
-          if (f === 1) {
-            assert.equal(nav.layout, "1row", "100 %: one-line B2 as approved");
-            assert.equal(nav.height, 57);
-          }
-          assert.equal(await page.locator(`${NAV} [data-layout="icons"], ${NAV}[data-layout="icons"]`).count(), 0, "no icon-only mode");
+          checkB2(nav, f, "E01", 1);
           // BUG-V5-03 — the hint fits; the field keeps its name
           const e01 = await hintState(page);
           t.diagnostic(`E01 hint „${e01.hint}” ${e01.width.toFixed(1)} / ${e01.room}`);
@@ -159,8 +175,7 @@ describe("V5 / DEVICE BUGFIX — large system font (emulated textZoom) on the bu
           // B2 on another screen (Start)
           await page.getByTestId("nav-dashboard").click();
           await page.waitForTimeout(400);
-          const nav2 = await navState(page);
-          for (const x of nav2.tabs) assert.ok(x.visible && x.inside && !x.overflow, `Start: ${x.text}`);
+          checkB2(await navState(page), f, "Start", 0);
           assert.ok(await noHorizontalScroll(page), "Start no horizontal scroll");
           assert.deepEqual(app.errors.filter((e) => e.startsWith("pageerror")), []);
         } finally {

@@ -51,7 +51,7 @@ async function boot(seed = {}) {
 }
 
 describe("Compact B2 parameters (handoff §6)", () => {
-  test("row 56 px (a large system font may only grow it: minmax(56px, auto), V5 / BUG-V5-02), icon 22, gap 2, bottom padding = the safe area only, side safe areas kept", async () => {
+  test("row 56 px (also in the icon mode), icon 22, gap 2, bottom padding = the safe area only, side safe areas kept", async () => {
     A = A || (await loadApp());
     await unmount();
     await mount(h(A.BottomNav, { screen: "exercises", onNavigate() {} }));
@@ -86,6 +86,108 @@ describe("Compact B2 parameters (handoff §6)", () => {
       const s = readFileSync(new URL(`../../src/app/${f}`, import.meta.url), "utf8");
       assert.doesNotMatch(s, /--nr-nav-h, 71px/, f);
       assert.match(s, /--nr-nav-h, 57px/, f);
+    }
+  });
+});
+
+// V5 / KOREKTA B2 (owner decision): the bar has two modes — icons with labels when every label fits its
+// tab (standard font), icons only when a label does not fit (large system font). jsdom has no layout, so
+// the label and tab widths are stubbed; the real fonts are checked in e2e/v5-text-scale.e2e.mjs.
+describe("Compact B2 modes: icons + labels / icons only (V5 / KOREKTA B2)", () => {
+  const LABELS = ["Start", "Ćwiczenia", "Plany", "Trening", "Statystyki", "Historia", "Więcej"];
+  let labelW = 40;
+  const origRect = window.HTMLElement.prototype.getBoundingClientRect;
+  const origCW = Object.getOwnPropertyDescriptor(window.Element.prototype, "clientWidth");
+  const stub = () => {
+    window.HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.hasAttribute && this.hasAttribute("data-nav-label")) return { width: labelW, height: 15, top: 0, left: 0, right: labelW, bottom: 15, x: 0, y: 0 };
+      return origRect.call(this);
+    };
+    Object.defineProperty(window.Element.prototype, "clientWidth", { configurable: true, get() { return this.tagName === "BUTTON" ? 51 : 0; } });
+  };
+  const unstub = () => {
+    window.HTMLElement.prototype.getBoundingClientRect = origRect;
+    if (origCW) Object.defineProperty(window.Element.prototype, "clientWidth", origCW);
+  };
+  const remeasure = async (w) => {
+    labelW = w;
+    await act(async () => window.dispatchEvent(new window.Event("resize")));
+    await flush(3, 1);
+  };
+  const tabs = () => $$("button", nav());
+  const labelOf = (b) => b.querySelector("[data-nav-label]");
+
+  test("standard font (labels fit): icons with visible labels; a label wider than its tab → icons only; fits again → labels back", async () => {
+    A = A || (await loadApp());
+    await unmount();
+    stub();
+    try {
+      let went = null;
+      await mount(h(A.BottomNav, { screen: "exercises", onNavigate(k) { went = k; } }));
+      await remeasure(40);
+      // mode 1: icons + labels
+      assert.equal(nav().dataset.layout, "1row");
+      assert.equal(tabs().length, 7);
+      for (const [i, b] of tabs().entries()) {
+        const l = labelOf(b);
+        assert.equal(l.textContent, LABELS[i]);
+        assert.equal(l.style.visibility, "visible");
+        assert.equal(l.style.position, "relative");
+        assert.equal(b.getAttribute("aria-label"), null, "name from the visible label");
+        assert.ok(b.querySelector("svg"), "icon");
+      }
+      assert.equal(nav().firstElementChild.style.gridAutoRows, "56px");
+      // mode 2: icons only (a label does not fit: 48 > 51 − 4)
+      await remeasure(48);
+      assert.equal(nav().dataset.layout, "icons");
+      assert.equal(tabs().length, 7, "seven tabs");
+      for (const [i, b] of tabs().entries()) {
+        const l = labelOf(b);
+        assert.equal(l.style.visibility, "hidden", `${LABELS[i]} hidden`);
+        assert.equal(l.style.position, "absolute");
+        assert.equal(b.getAttribute("aria-label"), LABELS[i], "full accessible name");
+        assert.ok(b.querySelector("svg"), "icon");
+      }
+      assert.equal(nav().firstElementChild.style.gridAutoRows, "56px", "row stays 56 px");
+      const active = byTestId("nav-exercises");
+      assert.equal(active.getAttribute("aria-current"), "page");
+      assert.equal(active.style.color, "rgb(255, 133, 27)");
+      assert.equal(byTestId("nav-plans").getAttribute("aria-current"), null);
+      assert.equal(byTestId("nav-plans").style.color, "rgb(184, 184, 184)");
+      await click(byTestId("nav-history"));
+      assert.equal(went, "history", "icons only still navigate");
+      // back to labels
+      await remeasure(30);
+      assert.equal(nav().dataset.layout, "1row");
+      for (const b of tabs()) {
+        assert.equal(labelOf(b).style.visibility, "visible");
+        assert.equal(b.getAttribute("aria-label"), null);
+      }
+    } finally {
+      unstub();
+    }
+  });
+
+  test("icons only + soft keyboard: the bar still hides with the keyboard and returns in icon mode", async () => {
+    A = A || (await loadApp());
+    await unmount();
+    installViewport();
+    stub();
+    try {
+      await mount(h("div", null, h("input", { id: "f" }), h(A.BottomNav, { screen: "dashboard", onNavigate() {} })));
+      await remeasure(60);
+      assert.equal(nav().dataset.layout, "icons");
+      await focus(document.getElementById("f"));
+      await keyboard(true);
+      assert.equal(nav().style.display, "none");
+      await act(async () => document.getElementById("f").blur());
+      await keyboard(false);
+      assert.notEqual(nav().style.display, "none");
+      await remeasure(60);
+      assert.equal(nav().dataset.layout, "icons");
+      assert.equal(byTestId("nav-dashboard").getAttribute("aria-label"), "Start");
+    } finally {
+      unstub();
     }
   });
 });

@@ -195,21 +195,9 @@ const NAV_B2_ITEMS = [
   { key: "history", label: "Historia", icon: HistoryIcon },
   { key: "more", label: "Więcej", icon: MoreHorizontal },
 ];
-// V5 / BUG-V5-02: with a large system font (Android textZoom) the labels no longer fit one line of a
-// tab. They stay visible at the same size: they wrap inside their tab at these syllable breaks (soft
-// hyphens, shown only where a line actually breaks) and the bar grows; nothing is hidden or shrunk.
-const NAV_B2_WRAP_LABELS = {
-  dashboard: "Start",
-  exercises: "Ćwi\u00ADcze\u00ADnia",
-  plans: "Pla\u00ADny",
-  startWorkout: "Tre\u00ADning",
-  stats: "Sta\u00ADty\u00ADsty\u00ADki",
-  history: "Hi\u00ADsto\u00ADria",
-  more: "Wię\u00ADcej",
-};
 function BottomNav({ screen, onNavigate }) {
   const navRef = useRef(null);
-  const [wrap, setWrap] = useState(false);
+  const [iconOnly, setIconOnly] = useState(false);
   const keyboard = useSoftKeyboard();
   const hiddenRef = useRef(false);
   hiddenRef.current = keyboard;
@@ -225,21 +213,15 @@ function BottomNav({ screen, onNavigate }) {
         } catch {}
         return;
       }
-      // each label is measured on one line (a hidden measuring span with the active, widest weight),
-      // so the same measurement decides both ways: a label wider than its tab (minus 2 × 2 px) → the
-      // labels wrap and the row grows (V5 / BUG-V5-02; no icon-only mode any more)
-      const meter = nav.querySelector("[data-nav-measure]");
-      const tabs = [...nav.querySelectorAll("button[data-testid^='nav-']")];
-      let tooWide = false;
-      if (meter) {
-        for (let i = 0; i < tabs.length && i < NAV_B2_ITEMS.length; i++) {
-          meter.textContent = NAV_B2_ITEMS[i].label;
-          const w = meter.getBoundingClientRect().width;
-          if (w > 0 && tabs[i].clientWidth > 0 && w > tabs[i].clientWidth - 4) tooWide = true;
-        }
-        meter.textContent = "";
-      }
-      setWrap(tooWide);
+      // every label keeps its natural width (absolute + hidden in the icon mode), so the same
+      // measurement decides both ways: a label wider than its tab (minus 2 × 2 px) → icons only
+      const labels = [...nav.querySelectorAll("[data-nav-label]")];
+      const tooWide = labels.some((l) => {
+        const tab = l.parentElement;
+        const w = l.getBoundingClientRect().width;
+        return tab && w > 0 && tab.clientWidth > 0 && w > tab.clientWidth - 4;
+      });
+      setIconOnly(tooWide);
       try {
         document.documentElement.style.setProperty("--nr-nav-h", `${Math.round(nav.getBoundingClientRect().height)}px`);
       } catch {}
@@ -277,7 +259,7 @@ function BottomNav({ screen, onNavigate }) {
       aria-label="Nawigacja główna"
       data-variant="B2"
       data-size="compact"
-      data-layout={wrap ? "wrap" : "1row"}
+      data-layout={iconOnly ? "icons" : "1row"}
       data-keyboard={keyboard ? "open" : undefined}
       className="fixed bottom-0 left-0 right-0 z-30"
       style={{
@@ -291,7 +273,7 @@ function BottomNav({ screen, onNavigate }) {
         fontFamily: "'Barlow Condensed', Inter, sans-serif",
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${NAV_B2_ITEMS.length}, minmax(0, 1fr))`, gridAutoRows: wrap ? "minmax(56px, auto)" : "56px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${NAV_B2_ITEMS.length}, minmax(0, 1fr))`, gridAutoRows: "56px" }}>
         {NAV_B2_ITEMS.map((it) => {
           const Icon = it.icon;
           const active = screen === it.key;
@@ -301,10 +283,10 @@ function BottomNav({ screen, onNavigate }) {
               type="button"
               onClick={() => onNavigate(it.key)}
               aria-current={active ? "page" : undefined}
-              aria-label={wrap ? it.label : undefined}
+              aria-label={iconOnly ? it.label : undefined}
               data-testid={`nav-${it.key}`}
               className="relative flex flex-col items-center justify-center min-w-0 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#FF851B]"
-              style={{ gap: "2px", padding: wrap ? "8px 2px 6px" : "0 2px", justifyContent: wrap ? "flex-start" : undefined, color: active ? "#FF851B" : "#B8B8B8", background: "transparent" }}
+              style={{ gap: "2px", padding: "0 2px", color: active ? "#FF851B" : "#B8B8B8", background: "transparent" }}
             >
               {active && (
                 <span aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
@@ -321,23 +303,20 @@ function BottomNav({ screen, onNavigate }) {
               <span
                 data-nav-label=""
                 style={{
-                  position: "relative",
-                  maxWidth: "100%",
+                  position: iconOnly ? "absolute" : "relative",
+                  visibility: iconOnly ? "hidden" : "visible",
                   fontSize: "13px",
                   lineHeight: "15px",
                   fontWeight: active ? 500 : 400,
-                  whiteSpace: wrap ? "normal" : "nowrap",
-                  textAlign: "center",
-                  overflowWrap: wrap ? "anywhere" : undefined,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {wrap ? NAV_B2_WRAP_LABELS[it.key] || it.label : it.label}
+                {it.label}
               </span>
             </button>
           );
         })}
       </div>
-      <span data-nav-measure="" aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, visibility: "hidden", pointerEvents: "none", whiteSpace: "nowrap", fontSize: "13px", lineHeight: "15px", fontWeight: 500 }} />
     </nav>
   );
 }
