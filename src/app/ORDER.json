@@ -5,6 +5,7 @@
   "03-normalizers-namespaces.jsx",
   "04-account-init-migration.jsx",
   "05-storage-keys-draft-pro.jsx",
+  "05b-user-exercise-data.jsx",
   "06-legacy-cloud-v1.jsx",
   "07-sync-queue-push.jsx",
   "08-sync-meta-pull-conflicts.jsx",

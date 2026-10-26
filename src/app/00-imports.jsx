@@ -105,3 +105,5 @@ import { ATLAS_NAVIGATION, buildAtlasIndex, ATLAS_FACET_DIMENSIONS, buildHierarc
 import { SlidersHorizontal, XCircle, RefreshCcw } from "lucide-react";
 // I5.3 (ATLAS-UX-01): the list icon of „Wszystkie ćwiczenia” (E01 / E02)
 import { List as ListIcon } from "lucide-react";
+// DES-01 / D1: the user's own exercises and the user catalog — used ONLY by the data layer (05b-user-exercise-data.jsx)
+import { privateExerciseContext, createPrivateExercise, updatePrivateExercise, deriveFromPrivateExercise, archivePrivateExercise, restorePrivateExercise, countExerciseUsage, canDeletePrivateExercise, upsertPrivateExercise, removePrivateExerciseFromList, isPrivateExerciseId, buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites, toggleFavourite, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS } from "@nextrep-engine";

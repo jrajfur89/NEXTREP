@@ -25,6 +25,11 @@ function readAllAppData() {
     userName: safeGet(STORAGE_KEYS.userName),
     proStatus: safeGet(STORAGE_KEYS.proStatus),
     proHints: safeGet(STORAGE_KEYS.proHints),
+    // DES-01 / D1.5: own exercises, favourites, private names, material metadata (no video files)
+    userExercises: safeGet(STORAGE_KEYS.userExercises),
+    favourites: safeGet(STORAGE_KEYS.favourites),
+    exerciseNames: safeGet(STORAGE_KEYS.exerciseNames),
+    exerciseMedia: safeGet(STORAGE_KEYS.exerciseMedia),
   };
 }
 
@@ -142,9 +147,14 @@ function pruneBeforeCloudRestoreBackups(list, ns, userId, keepBackupId = null) {
 // A snapshot's data is only ever restored field-by-field, and only for fields that are actually
 // present and array-shaped where an array is expected — this mirrors the same validation already
 // used for JSON import, so a malformed/partial snapshot can't wipe out a field it didn't cover.
+// DES-01 / D1.5: the user-exercise fields of the snapshot are checked first (records, UUIDs, references); a
+// snapshot whose user-exercise part is invalid is not restored at all (nothing is written). A snapshot from
+// before D1 has none of them and restores as before (the current user-exercise data stays).
 function restoreFromSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object" || !snapshot.data || typeof snapshot.data !== "object") return false;
   const d = snapshot.data;
+  const userCheck = userExerciseDataImportProblems(d);
+  if (!userCheck.ok) return false;
   try {
     if (Array.isArray(d.exercises)) localStorage.setItem(STORAGE_KEYS.exercises, JSON.stringify(d.exercises));
     if (Array.isArray(d.plans)) localStorage.setItem(STORAGE_KEYS.plans, JSON.stringify(d.plans));
@@ -154,11 +164,53 @@ function restoreFromSnapshot(snapshot) {
     if (typeof d.userName === "string") localStorage.setItem(STORAGE_KEYS.userName, JSON.stringify(d.userName));
     if (d.proStatus && typeof d.proStatus === "object") localStorage.setItem(STORAGE_KEYS.proStatus, JSON.stringify(d.proStatus));
     if (d.proHints && typeof d.proHints === "object") localStorage.setItem(STORAGE_KEYS.proHints, JSON.stringify(d.proHints));
-    return true;
+    return writeUserExerciseDataFrom(userCheck);
   } catch (e) {
     console.error("restoreFromSnapshot failed", e);
     return false;
   }
+}
+
+// DES-01 / D1.5: the JSON import of the backup screen (13-account-ui.jsx), as one checked function. Order:
+// recognise → check (S1 atlas gate, user-exercise data) → backup of the current state → write. Nothing is
+// written when a check fails. Older copies (without the user-exercise fields) import as before; the fields a
+// copy does not contain stay as they are. → { ok, code: "IMPORTED" | "UNRECOGNIZED" | "ATLAS_INCOMPATIBLE" |
+// "USER_EXERCISES_INVALID" | "STORAGE_FAILED", problems }
+function applyImportedAppData(data) {
+  const isObj = (v) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
+  const recognized =
+    isObj(data) &&
+    ([data.exercises, data.plans, data.history, data.measurements, data.userExercises, data.favourites].some((v) => Array.isArray(v)) ||
+      isObj(data.exerciseNames) || isObj(data.exerciseMedia));
+  if (!recognized) return { ok: false, code: "UNRECOGNIZED", problems: [] };
+  // I3: in S1 only a copy that fits the atlas-only model is imported (the import code stays)
+  if (NR_ATLAS_ONLY_EXERCISES) {
+    const p = atlasImportProblems(data);
+    if (p.length > 0) return { ok: false, code: "ATLAS_INCOMPATIBLE", problems: p };
+  }
+  const u = userExerciseDataImportProblems(data);
+  if (!u.ok) return { ok: false, code: "USER_EXERCISES_INVALID", problems: u.problems };
+
+  // Safety backup of the current state before touching anything, per the required order:
+  // parse → validate → backup current → apply → normalize (on reload) → refresh.
+  createBackupSnapshot("before-import", { force: true });
+
+  if (Array.isArray(data.exercises)) localStorage.setItem(STORAGE_KEYS.exercises, JSON.stringify(data.exercises));
+  if (Array.isArray(data.plans)) {
+    const cleanPlans = data.plans.map(normalizePlan).filter(Boolean);
+    localStorage.setItem(STORAGE_KEYS.plans, JSON.stringify(cleanPlans));
+  }
+  if (Array.isArray(data.history)) {
+    const cleanHistory = data.history.map(normalizeHistorySession).filter(Boolean);
+    localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(cleanHistory));
+  }
+  if (Array.isArray(data.measurements)) localStorage.setItem(STORAGE_KEYS.measurements, JSON.stringify(data.measurements));
+  if (Array.isArray(data.customFields)) localStorage.setItem(STORAGE_KEYS.customFields, JSON.stringify(data.customFields));
+  if (typeof data.userName === "string") localStorage.setItem(STORAGE_KEYS.userName, JSON.stringify(data.userName));
+  if (data.proStatus && typeof data.proStatus === "object") localStorage.setItem(STORAGE_KEYS.proStatus, JSON.stringify(data.proStatus));
+  if (data.proHints && typeof data.proHints === "object") localStorage.setItem(STORAGE_KEYS.proHints, JSON.stringify(data.proHints));
+  if (!writeUserExerciseDataFrom(u)) return { ok: false, code: "STORAGE_FAILED", problems: [] };
+  return { ok: true, code: "IMPORTED", problems: [], dangling: u.dangling };
 }
 
 const BACKUP_REASON_LABELS = {

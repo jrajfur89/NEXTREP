@@ -1547,43 +1547,22 @@ function BackupModal({ onClose }) {
       try {
         const parsed = JSON.parse(reader.result);
         const data = parsed?.data || parsed;
-        const hasAnyRecognizedField =
-          data &&
-          typeof data === "object" &&
-          [data.exercises, data.plans, data.history, data.measurements].some((v) => Array.isArray(v));
-
-        if (!hasAnyRecognizedField) {
-          setMessage("Nie udało się zaimportować danych. Obecne dane nie zostały zmienione.");
+        // DES-01 / D1.5: recognise → check → backup → write, in one checked function (09-backups.jsx)
+        const r = applyImportedAppData(data);
+        if (!r.ok) {
+          setMessage(
+            r.code === "ATLAS_INCOMPATIBLE"
+              ? "Ta kopia nie jest zgodna z atlasem NEXTREP 1.0 (ćwiczenia lub treningi spoza atlasu). Obecne dane nie zostały zmienione."
+              : r.code === "USER_EXERCISES_INVALID"
+              ? "Ta kopia zawiera niepoprawne dane ćwiczeń własnych lub ulubionych. Obecne dane nie zostały zmienione."
+              : r.code === "STORAGE_FAILED"
+              ? "Nie udało się zapisać wszystkich danych z kopii. Kopia stanu sprzed importu jest na liście kopii zapasowych."
+              : "Nie udało się zaimportować danych. Obecne dane nie zostały zmienione."
+          );
           setImporting(false);
           e.target.value = "";
           return;
         }
-        // I3: in S1 only a copy that fits the atlas-only model is imported (the import code stays)
-        if (NR_ATLAS_ONLY_EXERCISES && atlasImportProblems(data).length > 0) {
-          setMessage("Ta kopia nie jest zgodna z atlasem NEXTREP 1.0 (ćwiczenia lub treningi spoza atlasu). Obecne dane nie zostały zmienione.");
-          setImporting(false);
-          e.target.value = "";
-          return;
-        }
-
-        // Safety backup of the current state before touching anything, per the required order:
-        // parse → validate → backup current → apply → normalize (on reload) → refresh.
-        createBackupSnapshot("before-import", { force: true });
-
-        if (Array.isArray(data.exercises)) localStorage.setItem(STORAGE_KEYS.exercises, JSON.stringify(data.exercises));
-        if (Array.isArray(data.plans)) {
-          const cleanPlans = data.plans.map(normalizePlan).filter(Boolean);
-          localStorage.setItem(STORAGE_KEYS.plans, JSON.stringify(cleanPlans));
-        }
-        if (Array.isArray(data.history)) {
-          const cleanHistory = data.history.map(normalizeHistorySession).filter(Boolean);
-          localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(cleanHistory));
-        }
-        if (Array.isArray(data.measurements)) localStorage.setItem(STORAGE_KEYS.measurements, JSON.stringify(data.measurements));
-        if (Array.isArray(data.customFields)) localStorage.setItem(STORAGE_KEYS.customFields, JSON.stringify(data.customFields));
-        if (typeof data.userName === "string") localStorage.setItem(STORAGE_KEYS.userName, JSON.stringify(data.userName));
-        if (data.proStatus && typeof data.proStatus === "object") localStorage.setItem(STORAGE_KEYS.proStatus, JSON.stringify(data.proStatus));
-        if (data.proHints && typeof data.proHints === "object") localStorage.setItem(STORAGE_KEYS.proHints, JSON.stringify(data.proHints));
 
         setMessage("Zaimportowano! Aplikacja zaraz się odświeży...");
         setTimeout(() => window.location.reload(), 1200);

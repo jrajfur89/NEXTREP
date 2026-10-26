@@ -14,3 +14,16 @@ export { validateRefMatchesSnapshot } from "../nr1/contracts/exercise-ref.js";
 // (used as they are — no second implementation).
 export { buildAtlasIndex, ATLAS_FACET_DIMENSIONS } from "./atlas-index.js";
 export { buildHierarchyIndex, validateHierarchy } from "./hierarchy.js";
+// DES-01 / D1 (26.10.2026, approved): the user's own exercises and the user catalog (pure modules; the app
+// keeps the data locally per account namespace). Exactly these named exports.
+export {
+  PRIVATE_EXERCISE_SCOPE, PRIVATE_EDITORIAL_FIELDS, PRIVATE_COMPARABILITY_FIELDS, PRIVATE_ARCHIVED_REASON,
+  isPrivateExerciseId, newPrivateExerciseId, privateExerciseContext, validatePrivateExercise, createPrivateExercise,
+  classifyPrivateChange, updatePrivateExercise, deriveFromPrivateExercise, archivePrivateExercise, restorePrivateExercise,
+  refersToExercise, countExerciseUsage, canDeletePrivateExercise, upsertPrivateExercise, removePrivateExerciseFromList,
+  privateExerciseListProblems,
+} from "./private-exercise.js";
+export {
+  buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites,
+  isFavourite, toggleFavourite, isYoutubeUrl, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS,
+} from "./user-catalog.js";

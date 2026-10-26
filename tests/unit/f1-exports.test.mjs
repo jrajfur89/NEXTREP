@@ -55,6 +55,16 @@ const ADDED_BY_STAGE = {
   // V5 / DEVICE BUGFIX (26.10.2026): resumed workout clock (BUG-V5-01), E01 tiles growing with a large
   // system font (BUG-V5-02; B2 keeps its icon-only mode, V5 / KOREKTA B2), shorter search hints (BUG-V5-03)
   V5_DEVICE: ["ATLAS_SEARCH_HINTS", "awElapsedClock", "awResumeStart"],
+  // DES-01 / D1 (26.10.2026): the local data layer of own exercises, favourites, private names and material
+  // metadata (src/app/05b-user-exercise-data.jsx) and the checked JSON import (09-backups.jsx)
+  DES01_D1: [
+    "USER_STORE_SHAPE", "_userExerciseCtx", "addUserExercise", "applyImportedAppData", "archiveUserExercise", "deleteUserExercise",
+    "editUserExercise", "findStoredUserExercise", "getUserExerciseCatalog", "loadCustomExerciseNames", "loadExerciseMediaData",
+    "loadFavouriteExercises", "loadUserExercises", "readUserStore", "readUserStoreOf", "removeCustomExerciseNameFor",
+    "restoreUserExercise", "saveUserExerciseAsNew", "setCustomExerciseNameFor", "setUserExerciseStatus", "storedUserExercisesForWrite",
+    "toggleFavouriteExercise", "userExerciseCtx", "userExerciseDataImportProblems", "userExerciseUsage", "writeUserExerciseDataFrom",
+    "writeUserStore",
+  ],
 };
 // Baseline names an approved stage removed on purpose (and only these).
 const REMOVED_BY_STAGE = {

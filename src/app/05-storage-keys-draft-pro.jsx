@@ -13,6 +13,12 @@ const STORAGE_KEYS = {
   // Stage 4A.2: local PRO state belongs to the account (guest ≠ A ≠ B), not to the device.
   get proStatus() { return getStorageKey("pro_status"); },
   get proHints() { return getStorageKey("pro_hints"); },
+  // DES-01 / D1 (26.10.2026): the user's own exercises, favourites, private names of atlas exercises and
+  // material metadata — local only, per account namespace; never in CLOUD_SYNC_FIELDS (sync stays off).
+  get userExercises() { return getStorageKey("user_exercises"); },
+  get favourites() { return getStorageKey("favourites"); },
+  get exerciseNames() { return getStorageKey("exercise_names"); },
+  get exerciseMedia() { return getStorageKey("exercise_media"); },
   // device-level: the intro walkthrough (I2: the clean data space starts with its own walkthrough)
   onboardingCompleted: NR_CLEAN_DATA_SPACE ? "nextrep1_onboarding_completed_v1" : "trainapp_onboarding_completed_v1",
 };

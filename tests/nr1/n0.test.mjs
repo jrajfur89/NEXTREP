@@ -332,6 +332,10 @@ const I4_APP_FILES = ["src/app/11-ui-shared.jsx", "src/app/16-dashboard.jsx"];
 // (I5.1), components (I5.2) and screens E01–E03 (I5.3) in one new file after the atlas catalog; checked by
 // tests/unit/i5-atlas-browse-model.test.mjs and tests/ui/i5-atlas-*.test.mjs.
 const I5_APP_FILES = ["src/app/17c-atlas-browse.jsx"];
+// DES-01 / D1 (26.10.2026, approved by the product owner): data and engine of own exercises, favourites,
+// private names and material metadata — one new data-layer file after the storage keys (05), beyond the files
+// already listed above (00, 05, 09, 13, ORDER); checked by tests/unit/des01-*.test.mjs and tests/ui/des01-*.test.mjs.
+const DES01_D1_APP_FILES = ["src/app/05b-user-exercise-data.jsx"];
 describe("N0-F: frozen environments; the old app changes only within the approved stage (K01-1, AT2)", () => {
   test(`no change since ${FREEZE_REF} in index.html, the web build, Android project, Supabase-related config, S1 workflow and old engine modules`, () => {
     const paths = [
@@ -367,14 +371,16 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       .split("\n").filter(Boolean);
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", "src/app"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean);
-    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f) && !I2_APP_FILES.includes(f) && !I3_APP_FILES.includes(f) && !I4_APP_FILES.includes(f) && !I5_APP_FILES.includes(f));
-    assert.deepEqual(outside, [], "src/app files changed outside AT2, SEC-HF-01, I2, I3, I4 and I5");
-    // ORDER.json: the old order plus the atlas catalog after 17-exercises-plans.jsx (AT2) and the
-    // browse model right after it (I5)
+    const outside = [...changed, ...untracked].filter((f) => !AT2_APP_FILES.includes(f) && !SEC_HF_01_APP_FILES.includes(f) && !I2_APP_FILES.includes(f) && !I3_APP_FILES.includes(f) && !I4_APP_FILES.includes(f) && !I5_APP_FILES.includes(f) && !DES01_D1_APP_FILES.includes(f));
+    assert.deepEqual(outside, [], "src/app files changed outside AT2, SEC-HF-01, I2, I3, I4, I5 and DES-01 D1");
+    // ORDER.json: the old order plus the atlas catalog after 17-exercises-plans.jsx (AT2), the
+    // browse model right after it (I5) and the DES-01 D1 data layer right after the storage keys (05)
     const before = JSON.parse(execFileSync("git", ["show", `${AT1_REF}:src/app/ORDER.json`], { cwd: ROOT, encoding: "utf8" }));
     const now = JSON.parse(readFileSync(resolve(ROOT, "src/app/ORDER.json"), "utf8"));
     const i = before.indexOf("17-exercises-plans.jsx");
-    assert.deepEqual(now, [...before.slice(0, i + 1), "17b-atlas-catalog.jsx", "17c-atlas-browse.jsx", ...before.slice(i + 1)]);
+    const at2i5 = [...before.slice(0, i + 1), "17b-atlas-catalog.jsx", "17c-atlas-browse.jsx", ...before.slice(i + 1)];
+    const k = at2i5.indexOf("05-storage-keys-draft-pro.jsx");
+    assert.deepEqual(now, [...at2i5.slice(0, k + 1), "05b-user-exercise-data.jsx", ...at2i5.slice(k + 1)]);
     // 00-imports.jsx: only the one import of the atlas release (AT2) and the one import of the nr1
     // contracts used by the atlas adapter (I3) are added
     const imports0 = execFileSync("git", ["show", `${AT1_REF}:src/app/00-imports.jsx`], { cwd: ROOT, encoding: "utf8" });
@@ -391,16 +397,20 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     // I5.2: icons of the components P1–P9, from lucide-react only
     const i5Icons = "// I5.2 (ATLAS-UX-01): icons of the components P1–P9 not imported above\n" + 'import { SlidersHorizontal, XCircle, RefreshCcw } from "lucide-react";\n';
     const i53Icons = "// I5.3 (ATLAS-UX-01): the list icon of „Wszystkie ćwiczenia” (E01 / E02)\n" + 'import { List as ListIcon } from "lucide-react";\n';
-    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons + i53Icons);
+    // DES-01 / D1: one more line — the own-exercise and user-catalog engines for the data layer
+    const d1Engines = "// DES-01 / D1: the user's own exercises and the user catalog — used ONLY by the data layer (05b-user-exercise-data.jsx)\n" +
+      'import { privateExerciseContext, createPrivateExercise, updatePrivateExercise, deriveFromPrivateExercise, archivePrivateExercise, restorePrivateExercise, countExerciseUsage, canDeletePrivateExercise, upsertPrivateExercise, removePrivateExerciseFromList, isPrivateExerciseId, buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites, toggleFavourite, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS } from "@nextrep-engine";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons + i53Icons + d1Engines);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
-    assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx", "src/app/17c-atlas-browse.jsx"]);
+    // (DES-01 D1: the data layer reads it to resolve ids and check own records — read-only)
+    assert.deepEqual(users, ["src/app/00-imports.jsx", "src/app/05b-user-exercise-data.jsx", "src/app/17b-atlas-catalog.jsx", "src/app/17c-atlas-browse.jsx"]);
     // I3: the nr1 contracts are used only by the atlas adapter
     const nr1Users = execFileSync("git", ["grep", "--untracked", "-l", "-E", "planItemSnapshot|resolvePlanItemLoadModel|validateLoadSnapshot|validateRefMatchesSnapshot", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
     assert.deepEqual(nr1Users, ["src/app/00-imports.jsx", "src/app/17b-atlas-catalog.jsx"]);
   });
 
-  test(`src/engine/index.js = ${FREEZE_REF} plus only the AT2 re-export of the atlas release, the I3 and the I5 named re-exports`, () => {
+  test(`src/engine/index.js = ${FREEZE_REF} plus only the AT2 re-export of the atlas release, the I3, the I5 and the DES-01 D1 named re-exports`, () => {
     const frozen = execFileSync("git", ["show", `${FREEZE_REF}:src/engine/index.js`], { cwd: ROOT, encoding: "utf8" });
     const expected = frozen + '// AT2: the approved atlas release (read-only), shown by the catalog „Atlas ćwiczeń”.\nexport * from "./atlas-release.js";\n' +
       // I3: exactly these named re-exports (no load.js, no volume of the new engine — A5 stays closed)
@@ -414,7 +424,21 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       "// I5 (ATLAS-UX-01): the existing atlas search / facets and hierarchy engines for the module „Ćwiczenia”\n" +
       "// (used as they are — no second implementation).\n" +
       'export { buildAtlasIndex, ATLAS_FACET_DIMENSIONS } from "./atlas-index.js";\n' +
-      'export { buildHierarchyIndex, validateHierarchy } from "./hierarchy.js";\n';
+      'export { buildHierarchyIndex, validateHierarchy } from "./hierarchy.js";\n' +
+      // DES-01 / D1: exactly the named exports of the two new pure modules
+      "// DES-01 / D1 (26.10.2026, approved): the user's own exercises and the user catalog (pure modules; the app\n" +
+      "// keeps the data locally per account namespace). Exactly these named exports.\n" +
+      "export {\n" +
+      "  PRIVATE_EXERCISE_SCOPE, PRIVATE_EDITORIAL_FIELDS, PRIVATE_COMPARABILITY_FIELDS, PRIVATE_ARCHIVED_REASON,\n" +
+      "  isPrivateExerciseId, newPrivateExerciseId, privateExerciseContext, validatePrivateExercise, createPrivateExercise,\n" +
+      "  classifyPrivateChange, updatePrivateExercise, deriveFromPrivateExercise, archivePrivateExercise, restorePrivateExercise,\n" +
+      "  refersToExercise, countExerciseUsage, canDeletePrivateExercise, upsertPrivateExercise, removePrivateExerciseFromList,\n" +
+      "  privateExerciseListProblems,\n" +
+      '} from "./private-exercise.js";\n' +
+      "export {\n" +
+      "  buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites,\n" +
+      "  isFavourite, toggleFavourite, isYoutubeUrl, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS,\n" +
+      '} from "./user-catalog.js";\n';
     assert.equal(readFileSync(resolve(ROOT, "src/engine/index.js"), "utf8"), expected);
   });
 
