@@ -24,6 +24,6 @@ export {
   privateExerciseListProblems,
 } from "./private-exercise.js";
 export {
-  buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites,
+  buildUserCatalog, displayAtlasRecord, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites,
   isFavourite, toggleFavourite, isYoutubeUrl, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS,
 } from "./user-catalog.js";

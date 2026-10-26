@@ -65,6 +65,16 @@ const ADDED_BY_STAGE = {
     "toggleFavouriteExercise", "userExerciseCtx", "userExerciseDataImportProblems", "userExerciseUsage", "writeUserExerciseDataFrom",
     "writeUserStore",
   ],
+  // DES-01 / D2 (27.10.2026): „Twoje” on E01, Ulubione, Moje ćwiczenia, the card's heart / „Więcej” / private
+  // names (17c-atlas-browse.jsx, 17b card), the catalog cache and favourite „Cofnij” (05b)
+  DES01_D2: [
+    "ATLAS_ADD_SOON", "ATLAS_BADGES", "ATLAS_NAME_ERRORS", "ATLAS_USER_SCOPE_PHRASES", "AtlasAddExerciseSoon", "AtlasBadges",
+    "AtlasCardHeart", "AtlasCardMenu", "AtlasCardMoreButton", "AtlasCardUserHeader", "AtlasCustomNamesSection", "AtlasNameSheet",
+    "AtlasOriginBadge", "AtlasSheet", "AtlasSheetAction", "AtlasShortcutTile", "AtlasToast", "AtlasUserListView", "AtlasViewSwitch",
+    "_userCatalogCache", "atlasBadgesOf", "atlasBrowseDisplayAtlas", "atlasBrowseMemoKey", "atlasBrowseNamesKey", "atlasCardEntry",
+    "atlasCardOverlay", "atlasUserCounts", "atlasUserListMemo", "atlasUserListModel", "invalidateUserExerciseCatalog",
+    "isFavouriteExercise", "normalizeAtlasText", "rawUserStore", "restoreFavouriteExercise", "useAtlasCardUser", "userExerciseCatalogKey",
+  ],
 };
 // Baseline names an approved stage removed on purpose (and only these).
 const REMOVED_BY_STAGE = {

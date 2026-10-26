@@ -732,6 +732,91 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
   const mem = exvMemory.restore && exvMemory.exerciseId === exercise.exerciseId ? { ...exvMemory } : null;
   const [tab, setTab] = useState(() => (mem ? mem.tab : "ex"));
   const tabRefs = useRef({});
+  // DES-01 / D2 (Q10, limited unfreeze): heart, „Więcej”, the display name with its badges and „W Atlasie: …”,
+  // the archived state, the sheets and the feedback message (17c-atlas-browse.jsx). Tabs, history, variants
+  // and pinning are unchanged.
+  const user = useAtlasCardUser(exercise.exerciseId);
+  const info = user.info;
+  const shownName = info ? info.displayName : exercise.name;
+  const [toast, setToast] = useState(null); // { text, onUndo? }
+  const [sheet, setSheet] = useState(null); // null | "menu" | "name"
+  const rootRef = useRef(null);
+  const moreRef = useRef(null);
+  const closeSheet = () => {
+    setSheet(null);
+    setTimeout(() => {
+      try {
+        if (moreRef.current && moreRef.current.focus) moreRef.current.focus();
+      } catch {}
+    }, 0);
+  };
+  const closeSheetRef = useRef(closeSheet);
+  closeSheetRef.current = closeSheet;
+  useEffect(() => {
+    if (!sheet) {
+      atlasCardOverlay.current = null;
+      return undefined;
+    }
+    atlasCardOverlay.current = () => {
+      const el = document.activeElement;
+      // Back with the keyboard open over the name field: the keyboard goes first, the sheet stays (V5 K4)
+      if (el && el.matches && el.matches("[data-testid='atlas-name-input']") && window.visualViewport && nrSoftKeyboardOpen()) return el.blur();
+      closeSheetRef.current();
+    };
+    return () => {
+      atlasCardOverlay.current = null;
+    };
+  }, [sheet]);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    if (sheet) {
+      el.setAttribute("inert", "");
+      el.setAttribute("aria-hidden", "true");
+    } else {
+      el.removeAttribute("inert");
+      el.removeAttribute("aria-hidden");
+    }
+  }, [sheet]);
+  const toggleHeart = () => {
+    const r = toggleFavouriteExercise(exercise.exerciseId);
+    if (!r.ok) return setToast({ text: "Nie udało się zmienić ulubionych. Spróbuj ponownie.", at: Date.now() });
+    user.refresh();
+    if (r.favourite) {
+      if (atlasBrowseMemory.favUndo && atlasBrowseMemory.favUndo.removed.exerciseId === exercise.exerciseId) atlasBrowseMemory.favUndo = null;
+      return setToast({ text: "Dodano do ulubionych", at: Date.now() });
+    }
+    // D02b: opened from Ulubione → the list offers „Cofnij” too when it is back
+    if (atlasBrowseMemory.level === "favourites") atlasBrowseMemory.favUndo = { removed: r.removed, name: shownName, at: Date.now() };
+    setToast({
+      text: "Usunięto z ulubionych",
+      at: Date.now(),
+      onUndo: () => {
+        restoreFavouriteExercise(r.removed);
+        atlasBrowseMemory.favUndo = null;
+        user.refresh();
+        setToast({ text: "Przywrócono do ulubionych", at: Date.now() });
+      },
+    });
+  };
+  const removeName = () => {
+    const prev = info && info.customName;
+    const r = removeCustomExerciseNameFor(exercise.exerciseId);
+    closeSheet();
+    user.refresh();
+    if (!r.ok) return setToast({ text: "Nie udało się usunąć nazwy. Spróbuj ponownie.", at: Date.now() });
+    setToast({
+      text: "Przywrócono nazwę z Atlasu",
+      at: Date.now(),
+      onUndo: prev
+        ? () => {
+            setCustomExerciseNameFor(exercise.exerciseId, prev);
+            user.refresh();
+            setToast({ text: `Przywrócono Twoją nazwę: ${prev}`, at: Date.now() });
+          }
+        : null,
+    });
+  };
   useEffect(() => {
     if (!mem) return;
     exvClearRestore();
@@ -751,7 +836,8 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
     if (el && el.focus) el.focus();
   };
   return (
-    <div data-testid="atlas-detail" data-screen="exercise-detail" style={{ minHeight: "100vh", boxSizing: "border-box", position: "relative", overflowX: "clip", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, padding: "0 12px calc(var(--nr-nav-h, 71px) + 16px)", display: "flex", flexDirection: "column", gap: "12px" }}>
+    <>
+    <div ref={rootRef} data-testid="atlas-detail" data-screen="exercise-detail" data-source={info ? info.source : undefined} style={{ minHeight: "100vh", boxSizing: "border-box", position: "relative", overflowX: "clip", background: NR.bg, color: NR.textPrimary, fontFamily: NR.font, padding: "0 12px calc(var(--nr-nav-h, 71px) + 16px)", display: "flex", flexDirection: "column", gap: "12px" }}>
       <FontStyles />
       <div data-pin="bar" style={{ position: "sticky", top: 0, zIndex: 7, margin: "0 -12px", padding: "max(env(safe-area-inset-top, 0px), 12px) 6px 0 2px", background: NR.bg }}>
         <header style={{ display: "flex", alignItems: "center", gap: "2px", minHeight: "44px" }}>
@@ -759,10 +845,13 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
             <ChevronLeft aria-hidden="true" size={22} color={NR.textPrimary} />
           </button>
           <span style={{ flex: "1 1 auto", minWidth: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", fontWeight: 500, letterSpacing: ".06em", textTransform: "uppercase", color: NR.textSecondary, overflowWrap: "anywhere" }}>Atlas ćwiczeń</span>
+          {info && <AtlasCardHeart favourite={user.favourite} onToggle={toggleHeart} />}
+          {info && <AtlasCardMoreButton buttonRef={moreRef} onOpen={() => setSheet("menu")} />}
         </header>
       </div>
       <section aria-labelledby="exv-h" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "2px 2px 4px" }}>
-        <h1 id="exv-h" data-testid="atlas-detail-name" style={{ margin: 0, fontFamily: NR.font, fontSize: "32px", lineHeight: "35px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" }}>{exercise.name}</h1>
+        <h1 id="exv-h" data-testid="atlas-detail-name" style={{ margin: 0, fontFamily: NR.font, fontSize: "32px", lineHeight: "35px", fontWeight: 600, color: NR.textDisplay, overflowWrap: "anywhere" }}>{shownName}</h1>
+        <AtlasCardUserHeader info={info} />
         {exercise.equipment[0] && (
           <p data-testid="atlas-detail-primary-equipment" style={{ margin: 0, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", color: NR.textSecondary }}>
             <span style={AW_SR}>Podstawowy sprzęt: </span>
@@ -803,6 +892,20 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
       </div>
       <BottomNav screen="exercises" onNavigate={onNavigate} />
     </div>
+    {sheet === "menu" && info && <AtlasCardMenu info={info} onRename={() => setSheet("name")} onRemoveName={removeName} onClose={closeSheet} />}
+    {sheet === "name" && info && (
+      <AtlasNameSheet
+        info={info}
+        onClose={closeSheet}
+        onSaved={(name) => {
+          closeSheet();
+          user.refresh();
+          setToast({ text: `Zapisano nazwę: ${name}`, at: Date.now() });
+        }}
+      />
+    )}
+    {toast && <AtlasToast key={toast.at} text={toast.text} actionLabel={toast.onUndo ? "Cofnij" : null} onAction={toast.onUndo || null} onDone={() => setToast(null)} testId="atlas-detail-toast" />}
+    </>
   );
 }
 

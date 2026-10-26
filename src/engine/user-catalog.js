@@ -35,7 +35,21 @@ export function isUserExerciseRef(v) {
 }
 
 // ---- the catalog (D1.3) -------------------------------------------------------------------------------
-// → { resolve, displayName, search, list, isPrivate, sourceOf, customNameOf, atlasIndex }
+// The display record of an atlas exercise with a private name (D2.7): the private name is the name searched
+// and sorted (an exact query of the whole private name ranks first — rank 0 of the atlas index, rules of the
+// index unchanged); the atlas name becomes the first alias, so it keeps finding the exercise. The atlas record
+// itself is never changed (resolve() returns it as it is).
+export function displayAtlasRecord(exercise, customName) {
+  if (!customName) return exercise;
+  return { ...exercise, namePl: customName, aliasesPl: [exercise.namePl, ...arr(exercise.aliasesPl)] };
+}
+// The display record of an own exercise: the atlas-shaped part (device metadata left out).
+function indexRecord(r) {
+  const out = {};
+  for (const [k, v] of Object.entries(r)) if (!PRIVATE_META_FIELDS.includes(k)) out[k] = v;
+  return out;
+}
+// → { resolve, displayName, displayRecord, search, list, isPrivate, sourceOf, customNameOf, customNames, atlasIndex }
 export function buildUserCatalog({ atlas, privateExercises = [], exerciseNames = {} } = {}) {
   const a = isObj(atlas) ? atlas : {};
   const atlasIds = new Set(arr(a.exercises).map((e) => e && e.exerciseId).filter(Boolean));
@@ -48,16 +62,11 @@ export function buildUserCatalog({ atlas, privateExercises = [], exerciseNames =
     seen.add(r.exerciseId);
     privates.push(r);
   }
-  const indexRecord = (r) => {
-    const out = {};
-    for (const [k, v] of Object.entries(r)) if (!PRIVATE_META_FIELDS.includes(k)) out[k] = v;
-    return out;
-  };
   const combined = {
     dictionaries: a.dictionaries,
     families: a.families,
     exercises: [
-      ...arr(a.exercises).map((e) => (names[e.exerciseId] ? { ...e, aliasesPl: [...arr(e.aliasesPl), names[e.exerciseId].name] } : e)),
+      ...arr(a.exercises).map((e) => displayAtlasRecord(e, names[e.exerciseId] && names[e.exerciseId].name)),
       ...privates.map(indexRecord),
     ],
   };
@@ -86,6 +95,12 @@ export function buildUserCatalog({ atlas, privateExercises = [], exerciseNames =
     const r = resolve(id);
     return r ? r.displayName : null;
   };
+  // the atlas-shaped record shown and searched for an id (private name applied, metadata left out)
+  const displayRecord = (id) => {
+    const r = resolve(id);
+    if (!r) return null;
+    return r.source === "private" ? indexRecord(r.exercise) : displayAtlasRecord(r.exercise, r.customName);
+  };
   const toEntry = (ex) => resolve(ex.exerciseId);
   // sources: ["atlas", "private"] by default
   function search(query, { includeArchived = false, sources = null } = {}) {
@@ -95,7 +110,12 @@ export function buildUserCatalog({ atlas, privateExercises = [], exerciseNames =
   function list({ includeArchived = false, sources = null } = {}) {
     return search("", { includeArchived, sources });
   }
-  return { resolve, displayName, search, list, isPrivate: (id) => privateById.has(id), sourceOf, customNameOf, atlasIndex };
+  // atlas ids with a private name, in the order of the names (Polish), → [{ exerciseId, name, atlasName, updatedAt }]
+  const customNames = () =>
+    Object.entries(names)
+      .map(([id, v]) => ({ exerciseId: id, name: v.name, atlasName: atlasIndex.resolve(id).namePl, updatedAt: v.updatedAt }))
+      .sort((x, y) => x.name.localeCompare(y.name, "pl"));
+  return { resolve, displayName, displayRecord, search, list, isPrivate: (id) => privateById.has(id), sourceOf, customNameOf, customNames, atlasIndex };
 }
 
 // ---- private names of atlas exercises --------------------------------------------------------------------

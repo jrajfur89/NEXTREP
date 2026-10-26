@@ -187,3 +187,21 @@ describe("9 / 10. the user-exercise part of a copy (engine check)", () => {
     assert.equal(cur.write.favourites.length, 2);
   });
 });
+
+describe("D2.7 ranking of private names (atlas index rules unchanged)", () => {
+  test("the whole private name ranks first (exact name); a prefix of it next; the atlas name keeps finding it as an alias", () => {
+    const names = { bench_press_barbell_flat: { name: "Wyciskanie płaskie", updatedAt: NOW } };
+    const c = U.buildUserCatalog({ atlas, exerciseNames: names });
+    assert.equal(c.search("Wyciskanie płaskie")[0].exerciseId, "bench_press_barbell_flat");
+    assert.equal(c.search("wyciskanie plaskie")[0].exerciseId, "bench_press_barbell_flat", "case and Polish letters do not matter");
+    const atlasName = atlas.exercises.find((e) => e.exerciseId === "bench_press_barbell_flat").namePl;
+    assert.ok(c.search(atlasName).some((e) => e.exerciseId === "bench_press_barbell_flat"));
+    // display record: private name as the name, atlas name as the first alias; the atlas record untouched
+    const d = c.displayRecord("bench_press_barbell_flat");
+    assert.equal(d.namePl, "Wyciskanie płaskie");
+    assert.equal(d.aliasesPl[0], atlasName);
+    assert.equal(c.resolve("bench_press_barbell_flat").exercise.namePl, atlasName);
+    assert.deepEqual(U.displayAtlasRecord(d, null), d, "no name → the record as it is");
+    assert.deepEqual(c.customNames().map((n) => [n.exerciseId, n.name, n.atlasName]), [["bench_press_barbell_flat", "Wyciskanie płaskie", atlasName]]);
+  });
+});

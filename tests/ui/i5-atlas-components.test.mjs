@@ -172,7 +172,7 @@ describe("P5 AtlasExerciseRow + atlasRowProps (D04 / D12 / D13)", () => {
   });
   test("global results: „Partia · sprzęt”, no chips, „Też jako” on an alias hit (E05-Alias)", async () => {
     const props = A.atlasRowProps(M, M.exercise("bench_press_barbell_flat"), { global: true, query: "bench" });
-    assert.deepEqual(props, { exerciseId: "bench_press_barbell_flat", name: "Wyciskanie sztangi leżąc na ławce poziomej", line: "Klatka piersiowa · Sztanga · Ławka", alias: "Bench press", chips: [] });
+    assert.deepEqual(props, { exerciseId: "bench_press_barbell_flat", name: "Wyciskanie sztangi leżąc na ławce poziomej", line: "Klatka piersiowa · Sztanga · Ławka", alias: "Bench press", chips: [], badges: [] }); // DES-01 / D2: N2 badges (none without user data)
     await render(h("ul", null, h(A.AtlasExerciseRow, props)));
     assert.match(byTestId("atlas-row").textContent, /Też jako: Bench press/);
     assert.equal(A.atlasRowProps(M, M.exercise("pushup_standard")).line, "Bez sprzętu");

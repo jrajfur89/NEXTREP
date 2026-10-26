@@ -400,7 +400,12 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     // DES-01 / D1: one more line — the own-exercise and user-catalog engines for the data layer
     const d1Engines = "// DES-01 / D1: the user's own exercises and the user catalog — used ONLY by the data layer (05b-user-exercise-data.jsx)\n" +
       'import { privateExerciseContext, createPrivateExercise, updatePrivateExercise, deriveFromPrivateExercise, archivePrivateExercise, restorePrivateExercise, countExerciseUsage, canDeletePrivateExercise, upsertPrivateExercise, removePrivateExerciseFromList, isPrivateExerciseId, buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites, toggleFavourite, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS } from "@nextrep-engine";\n';
-    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons + i53Icons + d1Engines);
+    // DES-01 / D2: the display-record helper for the browse adapter and the icons of tiles, badges and the card menu
+    const d2Lines = "// DES-01 / D2: the display record of an atlas exercise with a private name — used ONLY by the browse adapter (17c-atlas-browse.jsx)\n" +
+      'import { displayAtlasRecord } from "@nextrep-engine";\n' +
+      "// DES-01 / D2: icons of the shortcut tiles, origin badges and the card menu\n" +
+      'import { Tag, Archive, UserRound, CopyPlus, ArchiveRestore, Eraser } from "lucide-react";\n';
+    assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons + i53Icons + d1Engines + d2Lines);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
     // (DES-01 D1: the data layer reads it to resolve ids and check own records — read-only)
@@ -436,7 +441,7 @@ describe("N0-F: frozen environments; the old app changes only within the approve
       "  privateExerciseListProblems,\n" +
       '} from "./private-exercise.js";\n' +
       "export {\n" +
-      "  buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites,\n" +
+      "  buildUserCatalog, displayAtlasRecord, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites,\n" +
       "  isFavourite, toggleFavourite, isYoutubeUrl, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS,\n" +
       '} from "./user-catalog.js";\n';
     assert.equal(readFileSync(resolve(ROOT, "src/engine/index.js"), "utf8"), expected);

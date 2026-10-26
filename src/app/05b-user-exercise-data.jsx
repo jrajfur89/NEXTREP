@@ -57,8 +57,30 @@ function loadExerciseMediaData() {
   return r.state === "ok" ? normalizeExerciseMedia(r.value).media : {};
 }
 // The catalog of the active namespace: atlas + own exercises (active and archived) + private names.
+// D2.7: cached. The cache key is the active namespace + the stored values of the own exercises and the names,
+// so the catalog of another account (or of data replaced by an import / restore / any write) can never be
+// served; every write of this layer also drops the cache explicitly (invalidateUserExerciseCatalog).
+let _userCatalogCache = { key: null, catalog: null };
+function rawUserStore(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+// Key of the user catalog: changes with the namespace and with any change of the own exercises or the names.
+function userExerciseCatalogKey() {
+  return `${getActiveDataNamespace()}\u0000${rawUserStore(STORAGE_KEYS.userExercises) ?? ""}\u0000${rawUserStore(STORAGE_KEYS.exerciseNames) ?? ""}`;
+}
+function invalidateUserExerciseCatalog() {
+  _userCatalogCache = { key: null, catalog: null };
+}
 function getUserExerciseCatalog() {
-  return buildUserCatalog({ atlas: ATLAS_RELEASE, privateExercises: loadUserExercises(), exerciseNames: loadCustomExerciseNames() });
+  const key = userExerciseCatalogKey();
+  if (_userCatalogCache.key !== key || !_userCatalogCache.catalog) {
+    _userCatalogCache = { key, catalog: buildUserCatalog({ atlas: ATLAS_RELEASE, privateExercises: loadUserExercises(), exerciseNames: loadCustomExerciseNames() }) };
+  }
+  return _userCatalogCache.catalog;
 }
 // Plans and workouts that use an exercise (read from storage, never changed).
 function userExerciseUsage(exerciseId) {
@@ -74,7 +96,9 @@ function userExerciseUsage(exerciseId) {
 // Writes one store unless its current value is unreadable. → { ok, code }
 function writeUserStore(field, value) {
   if (readUserStoreOf(field).state === "unreadable") return { ok: false, code: "STORE_UNREADABLE" };
-  return saveKeyStrict(STORAGE_KEYS[field], value) ? { ok: true, code: "SAVED" } : { ok: false, code: "STORAGE_FAILED" };
+  const ok = saveKeyStrict(STORAGE_KEYS[field], value);
+  invalidateUserExerciseCatalog();
+  return ok ? { ok: true, code: "SAVED" } : { ok: false, code: "STORAGE_FAILED" };
 }
 // The stored list itself (incl. records the lenient read leaves out) — operations keep every other record.
 function storedUserExercisesForWrite() {
@@ -176,8 +200,29 @@ function toggleFavouriteExercise(exerciseId, { now } = {}) {
   if (adding && !getUserExerciseCatalog().resolve(exerciseId)) return { ok: false, code: "REF_UNKNOWN_EXERCISE", favourite: false };
   const t = toggleFavourite(current, exerciseId, now ? { now } : {});
   if (!t.ok) return t;
+  // D2: what was removed (with its place and date) — „Cofnij” puts it back exactly there
+  const index = current.findIndex((f) => f.exerciseId === exerciseId);
+  const removed = adding ? null : { ...current[index], index };
   const w = writeUserStore("favourites", t.favourites);
-  return w.ok ? t : { ok: false, code: w.code, favourite: !adding };
+  return w.ok ? { ...t, removed } : { ok: false, code: w.code, favourite: !adding };
+}
+function isFavouriteExercise(exerciseId) {
+  return loadFavouriteExercises().some((f) => f.exerciseId === exerciseId);
+}
+// D2 „Cofnij” after removing a favourite: the same entry (date of adding) at its old place; nothing when it is
+// already back. → { ok, code }
+function restoreFavouriteExercise(removed) {
+  if (!removed || typeof removed.exerciseId !== "string") return { ok: false, code: "NOTHING_TO_RESTORE" };
+  const r = readUserStoreOf("favourites");
+  if (r.state === "unreadable") return { ok: false, code: "STORE_UNREADABLE" };
+  const current = normalizeFavourites(r.value).favourites;
+  if (current.some((f) => f.exerciseId === removed.exerciseId)) return { ok: true, code: "ALREADY_FAVOURITE" };
+  if (!getUserExerciseCatalog().resolve(removed.exerciseId)) return { ok: false, code: "REF_UNKNOWN_EXERCISE" };
+  const at = Math.max(0, Math.min(Number.isInteger(removed.index) ? removed.index : current.length, current.length));
+  const next = [...current.slice(0, at), { exerciseId: removed.exerciseId, addedAt: removed.addedAt }, ...current.slice(at)];
+  if (normalizeFavourites(next).problems.length) return { ok: false, code: "INVALID" };
+  const w = writeUserStore("favourites", next);
+  return w.ok ? { ok: true, code: "FAVOURITE_RESTORED" } : { ok: false, code: w.code };
 }
 // A private name of an ATLAS exercise — the exerciseId stays the same (no new exercise, no copy).
 function setCustomExerciseNameFor(exerciseId, name, { now } = {}) {
@@ -207,5 +252,6 @@ function userExerciseDataImportProblems(data) {
 function writeUserExerciseDataFrom(check) {
   let ok = true;
   for (const f of USER_EXERCISE_DATA_FIELDS) if (check && check.write && check.write[f] !== undefined) ok = saveKeyStrict(STORAGE_KEYS[f], check.write[f]) && ok;
+  invalidateUserExerciseCatalog(); // D2.7: an import / restore replaces the data the catalog was built from
   return ok;
 }

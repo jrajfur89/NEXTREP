@@ -271,6 +271,7 @@ describe("D1 scope", () => {
   });
   test("no cloud: the four keys are local only — no Supabase / sync module refers to them", () => {
     const out = execFileSync("git", ["grep", "--untracked", "-l", "-E", "userExercises|user_exercises|exerciseNames|exercise_names|exerciseMedia|exercise_media|STORAGE_KEYS\\.favourites", "--", "src/app", "src/nr1", "db", "docs/sql"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();
-    assert.deepEqual(out, ["src/app/05-storage-keys-draft-pro.jsx", "src/app/05b-user-exercise-data.jsx", "src/app/09-backups.jsx"]);
+    // DES-01 / D2: the browse adapter reads the raw names / favourites only as cache keys (never writes them)
+    assert.deepEqual(out, ["src/app/05-storage-keys-draft-pro.jsx", "src/app/05b-user-exercise-data.jsx", "src/app/09-backups.jsx", "src/app/17c-atlas-browse.jsx"]);
   });
 });

@@ -144,7 +144,7 @@ describe("I2: clean start on a device with old data", () => {
     await click(buttonByText("Ćwiczenia"));
     await flush(10, 3);
     // I5.3: the own exercises are one level below E01 („Moje ćwiczenia”, shown because there is one)
-    assert.match(byTestId("atlas-own").textContent, /Moje ćwiczenia1 ćwiczenie/);
+    assert.match(byTestId("atlas-own").textContent, /Ćwiczenia zapisane wcześniej1 ćwiczenie/); // renamed in DES-01 / D2
     await click(byTestId("atlas-own"));
     await flush(10, 3);
     await type(document.querySelector('input[placeholder="Szukaj ćwiczenia..."]'), "ćwiczenie");

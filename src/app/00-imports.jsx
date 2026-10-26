@@ -107,3 +107,7 @@ import { SlidersHorizontal, XCircle, RefreshCcw } from "lucide-react";
 import { List as ListIcon } from "lucide-react";
 // DES-01 / D1: the user's own exercises and the user catalog — used ONLY by the data layer (05b-user-exercise-data.jsx)
 import { privateExerciseContext, createPrivateExercise, updatePrivateExercise, deriveFromPrivateExercise, archivePrivateExercise, restorePrivateExercise, countExerciseUsage, canDeletePrivateExercise, upsertPrivateExercise, removePrivateExerciseFromList, isPrivateExerciseId, buildUserCatalog, normalizeExerciseNames, setCustomExerciseName, removeCustomExerciseName, normalizeFavourites, toggleFavourite, normalizeExerciseMedia, userExerciseDataProblems, USER_EXERCISE_DATA_FIELDS } from "@nextrep-engine";
+// DES-01 / D2: the display record of an atlas exercise with a private name — used ONLY by the browse adapter (17c-atlas-browse.jsx)
+import { displayAtlasRecord } from "@nextrep-engine";
+// DES-01 / D2: icons of the shortcut tiles, origin badges and the card menu
+import { Tag, Archive, UserRound, CopyPlus, ArchiveRestore, Eraser } from "lucide-react";

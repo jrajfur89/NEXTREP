@@ -146,7 +146,7 @@ describe("AT2 → I5.3 screen: the atlas in „Ćwiczenia” (E01 → E03 → ca
     assert.match(byTestId("atlas-home-total").textContent, new RegExp(`${A.ATLAS_CATALOG.exercises.length} ćwiczeń`));
     const entry = byTestId("atlas-all");
     assert.equal(entry.textContent, `Wszystkie ćwiczenia${A.ATLAS_CATALOG.exercises.length} · alfabetycznie`);
-    assert.match(byTestId("atlas-own").textContent, new RegExp(`^Moje ćwiczenia${LEGACY_DEFAULT_EXERCISES.length} ćwiczeń`), "the person's own list is still there");
+    assert.match(byTestId("atlas-own").textContent, new RegExp(`^Ćwiczenia zapisane wcześniej${LEGACY_DEFAULT_EXERCISES.length} ćwiczeń`), "the person's own list (old model) is still there — renamed in DES-01 / D2");
 
     await click(entry);
     assert.ok(byTestId("atlas-list"));

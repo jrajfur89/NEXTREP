@@ -56,7 +56,8 @@ describe("E01 „Ćwiczenia” (board Main / E01-Koniec / E01-Kafel)", () => {
     assert.equal(text($("h1", home)), "Ćwiczenia");
     assert.equal(text(byTestId("atlas-home-total")), "Atlas NEXTREP · 55 ćwiczeń");
     assert.equal(text(byTestId("atlas-all")), "Wszystkie ćwiczenia55 · alfabetycznie");
-    assert.equal(text($("h2", home)), "Partie mięśniowe");
+    // DES-01 / D2: „Twoje” (Ulubione, Moje ćwiczenia) between „Wszystkie ćwiczenia” and „Partie mięśniowe”
+    assert.deepEqual($$("h2", home).map(text), ["Twoje", "Partie mięśniowe"]);
     const tiles = $$('[data-tile="category"]', home);
     assert.deepEqual(tiles.map((t) => t.dataset.testid), ATLAS_NAVIGATION.categories.map((c) => `atlas-category-${c.code}`), "navigation.json order");
     // the counts of the board (= engine on release 5), never typed in the code
@@ -396,7 +397,8 @@ describe("the person's own exercises and the rest of the app are kept", () => {
     ];
     await boot({ exercises: own });
     await toExercises();
-    assert.match(text(byTestId("atlas-own")), /^Moje ćwiczenia2 ćwiczenia/);
+    // DES-01 / D2: the old list keeps its path, renamed („Moje ćwiczenia” is now the new list of own exercises)
+    assert.match(text(byTestId("atlas-own")), /^Ćwiczenia zapisane wcześniej2 ćwiczenia/);
     await click(byTestId("atlas-own"));
     await flush(5, 2);
     assert.equal(byTestId("atlas-home"), null);
