@@ -859,6 +859,7 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
           </p>
         )}
       </section>
+      <AtlasCardArchivedState info={info} />
       <div data-pin="tabs" style={{ position: "sticky", top: EXV_TOP, zIndex: 6, margin: "0 -12px", padding: "0 12px", background: NR.bg, borderBottom: "1px solid #222224" }}>
         <div role="tablist" aria-label="Sekcje ćwiczenia" style={{ display: "flex" }}>
           {EXV_TABS.map(([k, label], i) => {
@@ -892,7 +893,7 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
       </div>
       <BottomNav screen="exercises" onNavigate={onNavigate} />
     </div>
-    {sheet === "menu" && info && <AtlasCardMenu info={info} onRename={() => setSheet("name")} onRemoveName={removeName} onClose={closeSheet} />}
+    {sheet === "menu" && info && <AtlasCardMenu info={info} usage={info.source === "private" ? userExerciseUsage(exercise.exerciseId) : null} onRename={() => setSheet("name")} onRemoveName={removeName} onClose={closeSheet} />}
     {sheet === "name" && info && (
       <AtlasNameSheet
         info={info}

@@ -322,7 +322,9 @@ describe("D2.5 „Więcej” + D2.6 private names", () => {
     await type($('[data-testid="atlas-search"] input'), BENCH_NAME);
     await flush(3, 2);
     assert.ok(rowIds().includes(BENCH), "the atlas name still finds it");
-    assert.match(text($(`[data-exercise-id="${BENCH}"]`)), new RegExp(`Też jako: ${BENCH_NAME}`));
+    // D2-FIX-01 / R03: the atlas name is the row's second line („W Atlasie: …”), not repeated as „Też jako”
+    assert.match(text($(`[data-exercise-id="${BENCH}"]`)), new RegExp(`^Klata płaskoW Atlasie: ${BENCH_NAME}`));
+    assert.doesNotMatch(text($(`[data-exercise-id="${BENCH}"]`)), /Też jako/);
   });
   test("edit and remove the name (back to the atlas name, „Cofnij” restores it)", async () => {
     await boot({ exercise_names: { [BENCH]: { name: "Klata płasko", updatedAt: NOW } } });

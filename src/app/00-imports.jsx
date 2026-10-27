@@ -111,3 +111,5 @@ import { privateExerciseContext, createPrivateExercise, updatePrivateExercise, d
 import { displayAtlasRecord } from "@nextrep-engine";
 // DES-01 / D2: icons of the shortcut tiles, origin badges and the card menu
 import { Tag, Archive, UserRound, CopyPlus, ArchiveRestore, Eraser } from "lucide-react";
+// DES-01 / D2-FIX-01: the variant icon of the card menu (board D09c)
+import { GitBranch } from "lucide-react";

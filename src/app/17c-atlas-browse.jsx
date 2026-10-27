@@ -509,18 +509,20 @@ function AtlasCategoryTile({ label, count, enabled = true, onOpen, photo = null,
 // P5 — exercise row: the whole row is one button (by exerciseId); name and line wrap, never cut;
 // optional „Też jako”; at most 2 chips (D04).
 // DES-01 / D2 — N2 origin / status badge: always an icon AND a word (never colour alone).
+// D2-FIX-01 / R02: the values of the DES-01 v4 boards (D02, D04, D04b, D15c) — a 6 px rectangle (not a pill),
+// padding 1/8/1/6, icon 12 px; „Własne” on a brand tint with #FFB27A (the master's accent text colour).
 const ATLAS_BADGES = Object.freeze({
-  own: { label: "Własne", icon: UserRound, color: NR.brandBright, border: "rgba(255,133,27,.55)" },
-  name: { label: "Twoja nazwa", icon: Tag, color: NR.textChip, border: NR.surfaceTertiary },
-  archived: { label: "Zarchiwizowane", icon: Archive, color: NR.textSecondary, border: NR.control },
+  own: { label: "Własne", icon: UserRound, color: "#FFB27A", border: "rgba(255,133,27,.45)", background: "rgba(255,106,0,.12)", stroke: 2.5 },
+  name: { label: "Twoja nazwa", icon: Tag, color: NR.textChip, border: NR.surfaceTertiary, background: NR.surfaceTertiary, stroke: 2.25 },
+  archived: { label: "Zarchiwizowane", icon: Archive, color: NR.textSecondary, border: NR.control, background: "transparent", stroke: 2.25 },
 });
 function AtlasOriginBadge({ kind, testId }) {
   const b = ATLAS_BADGES[kind];
   if (!b) return null;
   const Icon = b.icon;
   return (
-    <span data-badge={kind} data-testid={testId || `atlas-badge-${kind}`} style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "1px 8px", borderRadius: "100px", border: `1px solid ${b.border}`, background: kind === "name" ? NR.surfaceTertiary : "transparent", fontFamily: NR.font, fontSize: "14px", lineHeight: "18px", fontWeight: 500, color: b.color, whiteSpace: "normal", overflowWrap: "anywhere" }}>
-      <Icon aria-hidden="true" size={13} color={b.color} style={{ flexShrink: 0 }} />
+    <span data-badge={kind} data-testid={testId || `atlas-badge-${kind}`} style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "1px 8px 1px 6px", borderRadius: "6px", border: `1px solid ${b.border}`, background: b.background, fontFamily: NR.font, fontSize: "14px", lineHeight: "18px", fontWeight: 500, color: b.color, whiteSpace: "normal", overflowWrap: "anywhere" }}>
+      <Icon aria-hidden="true" size={12} strokeWidth={b.stroke} color={b.color} style={{ flexShrink: 0 }} />
       {b.label}
     </span>
   );
@@ -528,19 +530,26 @@ function AtlasOriginBadge({ kind, testId }) {
 function AtlasBadges({ kinds = [], testId = "atlas-badges" }) {
   if (!kinds.length) return null;
   return (
-    <span data-testid={testId} style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "2px" }}>
+    <span data-testid={testId} style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "2px" }}>
       {kinds.map((k) => (
         <AtlasOriginBadge key={k} kind={k} />
       ))}
     </span>
   );
 }
-function AtlasExerciseRow({ exerciseId, name, line, alias = null, chips = [], badges = [], onOpen, testId = "atlas-row" }) {
+// D2-FIX-01 / R03: `atlasName` = the second line of a row with a private name (the exercise's atlas name, 15/19
+// #9A9A9A, before „Partia · sprzęt”); R06: an archived row has a dimmed name (#B8B8B8, boards D02 / D04b).
+function AtlasExerciseRow({ exerciseId, name, line, alias = null, chips = [], badges = [], atlasName = null, onOpen, testId = "atlas-row" }) {
   return (
     <li style={{ borderBottom: `1px solid ${ATLAS_UI.divider}`, listStyle: "none" }}>
       <button type="button" onClick={() => onOpen && onOpen(exerciseId)} data-exercise-id={exerciseId} data-testid={testId} className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "64px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px 10px 21px", border: 0, background: "transparent", color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "pointer" }}>
         <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: "3px" }}>
-          <span style={{ fontSize: "19px", lineHeight: "23px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "anywhere" }}>{name}</span>
+          <span data-row-name="" style={{ fontSize: "19px", lineHeight: "23px", fontWeight: 500, color: badges.includes("archived") ? NR.textSecondary : NR.textDisplay, overflowWrap: "anywhere" }}>{name}</span>
+          {atlasName && (
+            <span data-row-atlas-name="" style={{ fontSize: "15px", lineHeight: "19px", color: ATLAS_UI.muted, overflowWrap: "anywhere" }}>
+              W Atlasie: {atlasName}
+            </span>
+          )}
           {line && <span style={{ fontSize: "15px", lineHeight: "19px", color: NR.textSecondary, overflowWrap: "anywhere" }}>{line}</span>}
           {alias && <span style={{ fontSize: "15px", lineHeight: "19px", color: ATLAS_UI.muted, overflowWrap: "anywhere" }}>Też jako: {alias}</span>}
           <AtlasBadges kinds={badges} />
@@ -566,13 +575,17 @@ function AtlasExerciseRow({ exerciseId, name, line, alias = null, chips = [], ba
 function atlasRowProps(model, ex, { global = false, query = "" } = {}) {
   if (!model || !model.ok || !ex) return null;
   const equipment = model.rowEquipment(ex);
+  const user = getUserExerciseCatalog().resolve(ex.exerciseId);
+  const atlasName = user && user.customName ? user.atlasName : null;
+  const alias = query ? model.aliasHit(ex, query) : null;
   return {
     exerciseId: ex.exerciseId,
     name: ex.namePl,
     line: global ? [model.rowCategoryLabel(ex), equipment].filter(Boolean).join(" · ") : equipment,
-    alias: query ? model.aliasHit(ex, query) : null,
+    alias: alias && alias !== atlasName ? alias : null, // the atlas name has its own line (R03)
     chips: global ? [] : model.rowChips(ex),
     badges: atlasBadgesOf(ex.exerciseId),
+    atlasName,
   };
 }
 
@@ -649,7 +662,7 @@ function AtlasMessage({ variant = "empty", title, text, primary = null, link = n
   const content = (
     <div data-testid={testId} data-variant={variant} style={{ marginTop: `${marginTop}px`, display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "0 20px", textAlign: "center", fontFamily: NR.font }}>
       <span aria-hidden="true" style={{ width: "56px", height: "56px", borderRadius: "16px", background: error ? NR.surfaceRaised : "rgba(255,133,27,.10)", border: error ? `1px solid ${ATLAS_UI.dashed}` : "1px solid rgba(255,133,27,.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {error ? <RefreshCcw size={26} color={NR.textSecondary} /> : icon ? React.createElement(icon, { size: 26, color: NR.warm, fill: icon === Heart ? NR.warm : "none" }) : <Search size={26} color={NR.warm} />}
+        {error ? <RefreshCcw size={26} color={NR.textSecondary} /> : icon ? React.createElement(icon, { size: 26, color: NR.warm }) : <Search size={26} color={NR.warm} />}
       </span>
       <p style={{ margin: 0, fontSize: "23px", lineHeight: "26px", fontWeight: 500, color: NR.textDisplay }}>{title}</p>
       {text && <p style={{ margin: 0, fontSize: "17px", lineHeight: "21px", color: NR.textSecondary }}>{text}</p>}
@@ -978,10 +991,10 @@ function AtlasHomeView({ model, onOpenAll, onOpenCategory, onRetry, ownCount = 0
             <>
               {atlasSectionHead("Twoje", "atlas-yours-h")}
               <ul aria-labelledby="atlas-yours-h" data-testid="atlas-yours" style={ATLAS_GRID}>
-                <li style={{ minWidth: 0 }}>
+                <li style={{ minWidth: 0, display: "flex" }}>
                   <AtlasShortcutTile icon={Heart} filled label="Ulubione" count={userCounts.favourites} onOpen={onOpenFavourites} testId="atlas-tile-favourites" />
                 </li>
-                <li style={{ minWidth: 0 }}>
+                <li style={{ minWidth: 0, display: "flex" }}>
                   <AtlasShortcutTile icon={UserRound} label="Moje ćwiczenia" count={userCounts.mine} onOpen={onOpenMine} testId="atlas-tile-mine" />
                 </li>
               </ul>
@@ -1128,19 +1141,23 @@ function AtlasFilterSheet({ model, scope, scopeLine, query, selection, onChange,
 /* feedback message with „Cofnij” (DS-C08 variant) and the action sheets  */
 /* (DS-C09 variant). Data: the D1 layer (05b) only.                       */
 /* ---------------------------------------------------------------------- */
-// N1 — shortcut tile: the sub-region tile (DS-C22) with an icon; always active (also with 0).
+// N1 — shortcut tile (D2-FIX-01 / R01, boards Main / D01): the sub-region tile (DS-C22) at min. 104 px — icon in a
+// 36 × 36 square (radius 10, brand tint) top left, chevron top right, name and count at the bottom; always
+// active (also with 0); it grows with a large font, the name wraps by words.
 function AtlasShortcutTile({ icon: Icon, filled = false, label, count, onOpen, testId }) {
   return (
-    <button type="button" onClick={onOpen} data-tile="shortcut" data-testid={testId} aria-label={`${label}, ${count} ${plPlural(count, "exercise")}`} className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "80px", height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "8px", padding: "12px 12px 10px 14px", border: 0, borderRadius: "16px", background: ATLAS_UI.subSurface, boxShadow: NR.cardShadow, color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "pointer" }}>
-      <span style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-        <Icon aria-hidden="true" size={20} color={NR.warm} fill={filled ? NR.warm : "none"} style={{ flexShrink: 0, marginTop: "1px" }} />
-        <span style={{ fontSize: "19px", lineHeight: "22px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "break-word", hyphens: "none", minWidth: 0 }}>{label}</span>
+    <button type="button" onClick={onOpen} data-tile="shortcut" data-testid={testId} aria-label={`${label}, ${count} ${plPlural(count, "exercise")}`} className={ATLAS_UI.focus} style={{ flex: "1 1 auto", width: "100%", minHeight: "104px", height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "8px", padding: "12px 12px 10px 14px", border: 0, borderRadius: "16px", background: ATLAS_UI.subSurface, boxShadow: NR.cardShadow, color: "inherit", textAlign: "left", fontFamily: NR.font, cursor: "pointer" }}>
+      <span aria-hidden="true" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px" }}>
+        <span data-tile-icon="" style={{ flexShrink: 0, width: "36px", height: "36px", boxSizing: "border-box", borderRadius: "10px", background: "rgba(255,133,27,.10)", border: "1px solid rgba(255,133,27,.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon size={20} color={NR.warm} fill={filled ? NR.warm : "none"} />
+        </span>
+        <ChevronRight size={16} color={NR.warm} style={{ flexShrink: 0 }} />
       </span>
-      <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+      <span aria-hidden="true" style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+        <span style={{ fontSize: "19px", lineHeight: "22px", fontWeight: 500, color: NR.textDisplay, overflowWrap: "break-word", hyphens: "none" }}>{label}</span>
         <span data-testid={`${testId}-count`} style={{ fontSize: "15px", lineHeight: "18px", color: NR.textSecondary }}>
           <AtlasNum>{count}</AtlasNum> {plPlural(count, "exercise")}
         </span>
-        <ChevronRight size={16} color={NR.warm} />
       </span>
     </button>
   );
@@ -1156,7 +1173,7 @@ function AtlasToast({ text, actionLabel = null, onAction = null, onDone, ms = 40
   }, [text, ms]);
   return (
     <div role="status" aria-live="polite" data-testid={testId} style={{ position: "fixed", left: "12px", right: "12px", bottom: "calc(var(--nr-nav-h, 57px) + 12px)", zIndex: 40, display: "flex", alignItems: "center", gap: "10px", minHeight: "52px", boxSizing: "border-box", padding: "6px 6px 6px 14px", borderRadius: "14px", background: `linear-gradient(180deg, ${NR.surfaceRaised}, ${NR.surfaceControl})`, border: "1px solid rgba(66,201,138,.45)", boxShadow: "0 12px 28px -8px rgba(0,0,0,.9)", fontFamily: NR.font }}>
-      <Check aria-hidden="true" size={20} strokeWidth={2.5} color={NR.success} style={{ flexShrink: 0 }} />
+      <CheckCircle2 aria-hidden="true" data-icon="circle-check" size={20} strokeWidth={2.25} color={NR.success} style={{ flexShrink: 0 }} />
       <span data-testid={`${testId}-text`} style={{ flex: "1 1 auto", minWidth: 0, fontSize: "17px", lineHeight: "21px", color: NR.textPrimary, overflowWrap: "anywhere" }}>{text}</span>
       {actionLabel && onAction && (
         <button type="button" onClick={onAction} data-testid={`${testId}-undo`} className={ATLAS_UI.focus} style={{ flexShrink: 0, minHeight: "44px", minWidth: "44px", padding: "0 10px", border: 0, borderRadius: "10px", background: "transparent", color: NR.brandBright, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 600, cursor: "pointer" }}>
@@ -1173,7 +1190,9 @@ const atlasCardOverlay = { current: null };
 
 // DS-C09 variant — a bottom sheet: role=dialog + aria-modal, focus inside (Tab stays in it), Escape and the
 // dimmed background close it; the caller returns the focus to the element that opened it.
-function AtlasSheet({ titleId, title, sub = null, onClose, children, footer = null, testId = "atlas-sheet" }) {
+// `cancel` adds the boards' „Anuluj” link at the end of the sheet (D09c / D13b; the ✕ stays, DS-C09).
+const ATLAS_CANCEL_LINK = { minHeight: "44px", display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 8px", border: 0, background: "transparent", color: NR.brandBright, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" };
+function AtlasSheet({ titleId, title, sub = null, onClose, children, footer = null, cancel = false, testId = "atlas-sheet" }) {
   const ref = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -1216,7 +1235,16 @@ function AtlasSheet({ titleId, title, sub = null, onClose, children, footer = nu
             <X aria-hidden="true" size={22} color={NR.textPrimary} />
           </button>
         </div>
-        <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: "4px 16px 12px", borderTop: `1px solid ${ATLAS_UI.divider}` }}>{children}</div>
+        <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: "4px 16px 12px", borderTop: `1px solid ${ATLAS_UI.divider}` }}>
+          {children}
+          {cancel && (
+            <div style={{ display: "flex", justifyContent: "center", paddingTop: "12px" }}>
+              <button type="button" onClick={onClose} data-testid={`${testId}-cancel`} className={ATLAS_UI.focus} style={ATLAS_CANCEL_LINK}>
+                Anuluj
+              </button>
+            </div>
+          )}
+        </div>
         {footer && <div style={{ flexShrink: 0, padding: "12px 16px max(env(safe-area-inset-bottom, 0px), 12px)", borderTop: `1px solid ${ATLAS_UI.divider}` }}>{footer}</div>}
       </div>
     </div>
@@ -1243,15 +1271,25 @@ function AtlasSheetAction({ icon: Icon, label, sub = null, onClick, soon = false
 
 // D11 / D13 — „Więcej” of the card, by kind. D2: only the private-name actions work; the rest is shown as
 // unavailable until its stage (variant / edit → D3; archive, delete, restore → D5).
-function AtlasCardMenu({ info, onRename, onRemoveName, onClose }) {
+// D2-FIX-01 / R07 (boards D09c / D13b): the title is the exercise's name; the subtitle „W Atlasie: …” (atlas exercise
+// with a private name) or „Własne · w N planach i M zapisanych treningach” (own exercise, real usage); icons pencil /
+// x / git-branch / archive; „Anuluj” at the end.
+const atlasPlansPhrase = (n) => `w ${n} ${n === 1 ? "planie" : "planach"}`;
+const atlasSessionsPhrase = (n) => `${n} ${n === 1 ? "zapisanym treningu" : "zapisanych treningach"}`;
+function atlasCardMenuSub(info, usage) {
+  if (info.source === "atlas") return info.customName ? `W Atlasie: ${info.atlasName}` : null;
+  const u = usage || { plans: 0, sessions: 0 };
+  return `Własne · ${atlasPlansPhrase(u.plans)} i ${atlasSessionsPhrase(u.sessions)}`;
+}
+function AtlasCardMenu({ info, usage = null, onRename, onRemoveName, onClose }) {
   const atlas = info.source === "atlas";
   return (
-    <AtlasSheet titleId="atlas-menu-t" title="Więcej" sub={info.displayName} onClose={onClose} testId="atlas-card-menu">
+    <AtlasSheet titleId="atlas-menu-t" title={info.displayName} sub={atlasCardMenuSub(info, usage)} onClose={onClose} cancel testId="atlas-card-menu">
       {atlas ? (
         <>
-          <AtlasSheetAction icon={Tag} label={info.customName ? "Zmień własną nazwę" : "Nadaj własną nazwę"} sub="Ćwiczenie i jego historia zostają te same" onClick={onRename} testId="atlas-menu-rename" />
-          {info.customName && <AtlasSheetAction icon={Eraser} label="Usuń własną nazwę" sub={`Wróci nazwa z Atlasu: ${info.atlasName}`} onClick={onRemoveName} testId="atlas-menu-remove-name" />}
-          <AtlasSheetAction icon={CopyPlus} label="Utwórz własny wariant" sub="Dostępne w kolejnej aktualizacji" soon testId="atlas-menu-variant" />
+          <AtlasSheetAction icon={Pencil} label={info.customName ? "Zmień własną nazwę" : "Nadaj własną nazwę"} sub="Ćwiczenie i jego historia zostają te same" onClick={onRename} testId="atlas-menu-rename" />
+          {info.customName && <AtlasSheetAction icon={X} label="Usuń własną nazwę" sub={`Wróci nazwa z Atlasu: ${info.atlasName}`} onClick={onRemoveName} testId="atlas-menu-remove-name" />}
+          <AtlasSheetAction icon={GitBranch} label="Utwórz własny wariant" sub="Dostępne w kolejnej aktualizacji" soon testId="atlas-menu-variant" />
         </>
       ) : (
         <>
@@ -1296,19 +1334,26 @@ function AtlasNameSheet({ info, onSaved, onClose }) {
           <button type="button" onClick={save} data-testid="atlas-name-save" className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "52px", border: 0, borderRadius: "12px", background: NR.ctaFill, boxShadow: NR.ctaShadow, color: NR.bg, fontFamily: NR.font, fontSize: "19px", lineHeight: "22px", fontWeight: 600, cursor: "pointer" }}>
             Zapisz nazwę
           </button>
-          <button type="button" onClick={onClose} data-testid="atlas-name-cancel" className={ATLAS_UI.focus} style={{ width: "100%", minHeight: "48px", border: 0, borderRadius: "12px", background: "transparent", color: NR.textPrimary, fontFamily: NR.font, fontSize: "18px", lineHeight: "21px", fontWeight: 500, cursor: "pointer" }}>
-            Anuluj
-          </button>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <button type="button" onClick={onClose} data-testid="atlas-name-cancel" className={ATLAS_UI.focus} style={ATLAS_CANCEL_LINK}>
+              Anuluj
+            </button>
+          </div>
         </div>
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", paddingTop: "8px" }}>
-        <div>
-          <p style={{ margin: 0, fontSize: "15px", lineHeight: "19px", color: NR.textMuted }}>Nazwa w Atlasie</p>
-          <p data-testid="atlas-name-atlas" style={{ margin: "2px 0 0", fontSize: "19px", lineHeight: "23px", color: NR.textSecondary, overflowWrap: "anywhere" }}>{info.atlasName}</p>
+        {/* D2-FIX-01 / R08 (board D09): the atlas name in a read-only field (surface-raised, radius 12); it wraps */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span id="atlas-name-atlas-l" style={{ fontSize: "17px", lineHeight: "21px", fontWeight: 500, color: NR.textPrimary }}>Nazwa w Atlasie</span>
+          <div role="textbox" aria-readonly="true" aria-multiline="true" aria-labelledby="atlas-name-atlas-l" data-testid="atlas-name-atlas" style={{ margin: 0, padding: "12px 14px", borderRadius: "12px", background: NR.surfaceRaised, fontFamily: NR.font, fontSize: "18px", lineHeight: "22px", color: NR.textChip, overflowWrap: "anywhere" }}>
+            {info.atlasName}
+          </div>
         </div>
         <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <span style={{ fontSize: "16px", lineHeight: "20px", fontWeight: 500, color: NR.textPrimary }}>Twoja nazwa</span>
+          <span data-testid="atlas-name-label" style={{ fontSize: "17px", lineHeight: "21px", fontWeight: 500, color: NR.textPrimary }}>
+            Twoja nazwa<span style={{ fontWeight: 400, color: NR.textSecondary }}> · wymagane</span>
+          </span>
           <input
             data-autofocus=""
             data-testid="atlas-name-input"
@@ -1316,6 +1361,7 @@ function AtlasNameSheet({ info, onSaved, onClose }) {
             value={value}
             maxLength={120}
             autoComplete="off"
+            aria-required="true"
             aria-invalid={error ? "true" : undefined}
             aria-describedby={error ? "atlas-name-err atlas-name-rules" : "atlas-name-rules"}
             onChange={(e) => {
@@ -1338,8 +1384,8 @@ function AtlasNameSheet({ info, onSaved, onClose }) {
         )}
         <ul id="atlas-name-rules" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "6px" }}>
           {["To nadal to samo ćwiczenie — historia i statystyki się nie zmieniają.", "Nie tworzymy kopii ćwiczenia.", "Nazwa z Atlasu zawsze będzie widoczna na karcie."].map((t) => (
-            <li key={t} style={{ display: "grid", gridTemplateColumns: "20px minmax(0, 1fr)", gap: "8px", fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
-              <Check aria-hidden="true" size={18} color={NR.textSecondary} style={{ marginTop: "1px" }} />
+            <li key={t} style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "16px", lineHeight: "20px", color: NR.textChip }}>
+              <span aria-hidden="true" data-rule-dot="" style={{ flexShrink: 0, width: "6px", height: "6px", borderRadius: "3px", background: NR.warm, marginTop: "7px" }} />
               <span>{t}</span>
             </li>
           ))}
@@ -1388,8 +1434,17 @@ function AtlasCardUserHeader({ info }) {
           W Atlasie: {info.atlasName}
         </p>
       )}
+    </>
+  );
+}
+// D2-FIX-01 / R12 (board D15c): the archived state sits UNDER the equipment line (rendered by the card after its
+// header section); „Przywróć” comes in D5.
+function AtlasCardArchivedState({ info }) {
+  if (!info || !info.archived) return null;
+  return (
+    <>
       {info.archived && (
-        <div role="note" data-testid="atlas-detail-archived" style={{ marginTop: "4px", display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", borderRadius: "12px", border: `1px solid ${NR.control}`, background: NR.surfaceRaised }}>
+        <div role="note" data-testid="atlas-detail-archived" style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", borderRadius: "12px", border: `1px solid ${NR.control}`, background: NR.surfaceRaised }}>
           <Archive aria-hidden="true" size={20} color={NR.textSecondary} style={{ flexShrink: 0, marginTop: "1px" }} />
           <span style={{ fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textSecondary }}>
             <strong style={{ display: "block", fontWeight: 600, color: NR.textPrimary }}>Ćwiczenie zarchiwizowane</strong>
@@ -1417,7 +1472,9 @@ function AtlasAddExerciseSoon({ testId = "atlas-mine-add" }) {
     </div>
   );
 }
-function AtlasViewSwitch({ value, onChange }) {
+// D2-FIX-01 / R04 (boards D04 / D04b): DS-C18 chips with the number of exercises (Inter 14, #B8B8B8); the chosen
+// one has ✓ (brand-bright) and the brand outline on a brand tint; the other one sits on surface-tertiary.
+function AtlasViewSwitch({ value, onChange, counts = { active: 0, archived: 0 } }) {
   const opts = [
     ["active", "Aktywne"],
     ["archived", "Zarchiwizowane"],
@@ -1433,12 +1490,14 @@ function AtlasViewSwitch({ value, onChange }) {
     }, 0);
   };
   return (
-    <div role="radiogroup" aria-label="Pokaż ćwiczenia" data-testid="atlas-mine-view" style={{ display: "flex", gap: "6px" }}>
+    <div role="radiogroup" aria-label="Pokaż ćwiczenia" data-testid="atlas-mine-view" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
       {opts.map(([k, label]) => {
         const on = value === k;
         return (
-          <button key={k} type="button" role="radio" aria-checked={on ? "true" : "false"} tabIndex={on ? 0 : -1} onClick={() => onChange(k)} onKeyDown={onKey} data-testid={`atlas-mine-view-${k}`} className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 14px", borderRadius: "100px", border: on ? `1px solid ${NR.warm}` : `1px solid ${NR.control}`, background: on ? "rgba(255,133,27,.12)" : NR.surfaceControl, color: on ? NR.textDisplay : NR.textSecondary, fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: on ? 600 : 500, cursor: "pointer" }}>
+          <button key={k} type="button" role="radio" aria-checked={on ? "true" : "false"} tabIndex={on ? 0 : -1} onClick={() => onChange(k)} onKeyDown={onKey} data-testid={`atlas-mine-view-${k}`} className={ATLAS_UI.focus} style={{ minHeight: "44px", padding: "0 12px", borderRadius: "100px", border: on ? `1px solid ${NR.warm}` : `1px solid ${NR.surfaceTertiary}`, background: on ? "rgba(255,133,27,.14)" : NR.surfaceTertiary, color: NR.textPrimary, display: "flex", alignItems: "center", gap: "6px", fontFamily: NR.font, fontSize: "17px", lineHeight: "21px", fontWeight: 400, cursor: "pointer" }}>
+            {on && <Check aria-hidden="true" size={16} strokeWidth={2.5} color={NR.brandBright} style={{ flexShrink: 0 }} />}
             {label}
+            <span data-testid={`atlas-mine-view-${k}-count`} style={{ fontFamily: ATLAS_UI.num, fontVariantNumeric: "tabular-nums", fontSize: "14px", color: NR.textSecondary }}>{counts[k]}</span>
           </button>
         );
       })}
@@ -1457,9 +1516,11 @@ function AtlasCustomNamesSection({ query, onOpenExercise }) {
       <p style={{ ...ATLAS_NOTE, margin: "0 9px" }}>To ćwiczenia z Atlasu pod Twoją nazwą — nie są osobnymi ćwiczeniami.</p>
       {rows.length ? (
         <ul aria-labelledby="atlas-names-h" style={{ listStyle: "none", margin: "0 -12px", padding: 0, borderTop: `1px solid ${ATLAS_UI.divider}` }}>
-          {rows.map((r) => (
-            <AtlasExerciseRow key={r.exerciseId} exerciseId={r.exerciseId} name={r.name} line={`W Atlasie: ${r.atlasName}`} badges={["name"]} onOpen={onOpenExercise} testId="atlas-name-row" />
-          ))}
+          {rows.map((r) => {
+            const m = atlasBrowseModel();
+            const props = (m.ok && atlasRowProps(m, m.exercise(r.exerciseId), { global: true })) || { exerciseId: r.exerciseId, name: r.name, atlasName: r.atlasName, badges: ["name"] };
+            return <AtlasExerciseRow key={r.exerciseId} {...props} onOpen={onOpenExercise} testId="atlas-name-row" />;
+          })}
         </ul>
       ) : (
         <p data-testid="atlas-mine-names-none" style={{ ...ATLAS_NOTE, margin: "0 9px" }}>Żadna z Twoich nazw nie pasuje do wyszukiwania.</p>
@@ -1483,37 +1544,49 @@ function AtlasUserListView({ kind, view, onView, model, count, onBack, search, r
   const title = fav ? "Ulubione" : "Moje ćwiczenia";
   const q = String(search.query || "").trim();
   const empty = count === 0 && !q;
-  const hasNames = !fav && view === "active" && getUserExerciseCatalog().customNames().length > 0;
+  const cat = getUserExerciseCatalog();
+  const hasNames = !fav && view === "active" && cat.customNames().length > 0;
+  // R04: the numbers of the switch come from the stored own exercises; R13: the switch only when there are
+  // archived ones (or the archived view is open)
+  const own = fav ? [] : cat.list({ sources: ["private"], includeArchived: true });
+  const counts = { active: own.filter((e) => !e.archived).length, archived: own.filter((e) => e.archived).length };
+  const showSwitch = !fav && (counts.archived > 0 || view === "archived");
+  const archivedNote = !fav && view === "archived" && (
+    // R05 (board D04b): an information box
+    <div data-testid="atlas-mine-archived-note" style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", borderRadius: "12px", border: `1px solid ${ATLAS_UI.dashed}`, background: "#0F0F10" }}>
+      <Info aria-hidden="true" size={18} color={NR.textSecondary} style={{ flexShrink: 0, marginTop: "1px" }} />
+      <p style={{ margin: 0, fontFamily: NR.font, fontSize: "16px", lineHeight: "20px", color: NR.textChip }}>Zarchiwizowane ćwiczenia nie pojawiają się w wyszukiwaniu ani przy tworzeniu planów. Ich historia jest zachowana.</p>
+    </div>
+  );
+  const sw = showSwitch ? <AtlasViewSwitch value={view} onChange={onView} counts={counts} /> : null;
   return (
     <div data-testid={fav ? "atlas-favourites" : "atlas-mine"} data-screen={fav ? "exercises-favourites" : "exercises-mine"} data-view={fav ? undefined : view} style={{ ...ATLAS_SCREEN_STYLE, gap: "10px", padding: `0 12px ${ATLAS_PAD_BOTTOM}` }}>
       <AtlasBackBar label="Ćwiczenia" backLabel="Wróć do Ćwiczeń" onBack={onBack} />
       <h1 data-testid="atlas-list-title" style={{ ...ATLAS_H1, margin: "0 0 0 9px" }}>{title}</h1>
       {!fav && <AtlasAddExerciseSoon />}
-      {!fav && <AtlasViewSwitch value={view} onChange={onView} />}
-      {!fav && view === "archived" && (
-        <p data-testid="atlas-mine-archived-note" style={{ ...ATLAS_NOTE, margin: "0 9px" }}>
-          Zarchiwizowane ćwiczenia nie pojawiają się w wyszukiwaniu ani przy tworzeniu planów. Ich historia zostaje bez zmian.
-        </p>
-      )}
-      {empty && !hasNames ? (
+      {empty && !hasNames && !showSwitch ? (
         fav ? (
-          <AtlasMessage icon={Heart} title="Nie masz jeszcze ulubionych ćwiczeń" text="Dotknij serca na karcie ćwiczenia, a pojawi się tutaj." primary={{ label: "Przeglądaj Atlas", onClick: onBrowseAtlas }} testId="atlas-favourites-empty" />
-        ) : view === "archived" ? (
-          <AtlasMessage icon={Archive} title="Brak zarchiwizowanych ćwiczeń" text="Ćwiczenia, które zarchiwizujesz, znajdziesz tutaj." testId="atlas-mine-archived-empty" />
+          <AtlasMessage icon={Heart} title="Nie masz jeszcze ulubionych ćwiczeń" text="Na karcie ćwiczenia dotknij serca — ćwiczenie pojawi się tutaj." primary={{ label: "Przeglądaj Atlas", onClick: onBrowseAtlas }} testId="atlas-favourites-empty" />
         ) : (
           <AtlasMessage icon={UserRound} title="Nie masz jeszcze własnych ćwiczeń" text="Własne ćwiczenie dodasz, gdy w Atlasie brakuje tego, które wykonujesz." extra={<p style={{ ...ATLAS_NOTE, margin: 0 }}>Możesz też nadać własną nazwę ćwiczeniu z Atlasu — na jego karcie, w menu „Więcej”.</p>} testId="atlas-mine-empty" />
         )
       ) : (
         <>
+          {/* boards D04 / D04b: add → search + „Filtry” → switch → note → counter and rows */}
           {count > 0 || q || hasNames ? (
             <>
               {search.row}
               {search.filters}
-              {count > 0 ? results : null}
             </>
           ) : null}
+          {sw}
+          {archivedNote}
+          {count > 0 ? results : null}
           {!fav && view === "active" && count === 0 && !q && (
             <p data-testid="atlas-mine-none" style={{ ...ATLAS_NOTE, margin: "0 9px" }}>Nie masz jeszcze własnych ćwiczeń.</p>
+          )}
+          {!fav && view === "archived" && count === 0 && !q && (
+            <AtlasMessage icon={Archive} title="Brak zarchiwizowanych ćwiczeń" text="Ćwiczenia, które zarchiwizujesz, znajdziesz tutaj." testId="atlas-mine-archived-empty" />
           )}
           {hasNames && <AtlasCustomNamesSection query={search.query} onOpenExercise={onOpenExercise} />}
         </>
@@ -1778,7 +1851,7 @@ function AtlasBrowseScreen({ onNavigate, history = [], isPro = false, onOpenUnlo
       <AtlasSearchRow
         search={searchCtl}
         label={fav ? "Szukaj w Ulubionych" : "Szukaj w Moich ćwiczeniach"}
-        placeholder={["Szukaj w tej liście", "Szukaj"]}
+        placeholder={fav ? ["Szukaj w ulubionych", "Szukaj"] : ["Szukaj w moich ćwiczeniach", "Szukaj"]}
         filtersCount={nSel}
         onOpenFilters={openFilters}
         filtersRef={filtersRef}

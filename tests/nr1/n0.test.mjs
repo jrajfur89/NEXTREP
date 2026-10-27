@@ -404,7 +404,9 @@ describe("N0-F: frozen environments; the old app changes only within the approve
     const d2Lines = "// DES-01 / D2: the display record of an atlas exercise with a private name — used ONLY by the browse adapter (17c-atlas-browse.jsx)\n" +
       'import { displayAtlasRecord } from "@nextrep-engine";\n' +
       "// DES-01 / D2: icons of the shortcut tiles, origin badges and the card menu\n" +
-      'import { Tag, Archive, UserRound, CopyPlus, ArchiveRestore, Eraser } from "lucide-react";\n';
+      'import { Tag, Archive, UserRound, CopyPlus, ArchiveRestore, Eraser } from "lucide-react";\n' +
+      "// DES-01 / D2-FIX-01: the variant icon of the card menu (board D09c)\n" +
+      'import { GitBranch } from "lucide-react";\n';
     assert.equal(readFileSync(resolve(ROOT, "src/app/00-imports.jsx"), "utf8"), imports0.replace(anchor, anchor + added) + i4Icons + i5Engines + i5Icons + i53Icons + d1Engines + d2Lines);
     // the atlas release is read only in the catalog file
     const users = execFileSync("git", ["grep", "--untracked", "-l", "ATLAS_RELEASE", "--", "src/app"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean).sort();

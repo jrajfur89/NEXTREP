@@ -94,3 +94,4 @@ export const UserRound = icon("UserRound");
 export const CopyPlus = icon("CopyPlus");
 export const ArchiveRestore = icon("ArchiveRestore");
 export const Eraser = icon("Eraser");
+export const GitBranch = icon("GitBranch");

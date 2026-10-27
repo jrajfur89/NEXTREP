@@ -75,6 +75,8 @@ const ADDED_BY_STAGE = {
     "atlasCardOverlay", "atlasUserCounts", "atlasUserListMemo", "atlasUserListModel", "invalidateUserExerciseCatalog",
     "isFavouriteExercise", "normalizeAtlasText", "rawUserStore", "restoreFavouriteExercise", "useAtlasCardUser", "userExerciseCatalogKey",
   ],
+  // DES-01 / D2-FIX-01 (27.10.2026): corrections after the Claude Design audit (R07 menu header, R08 „Anuluj”, R12)
+  DES01_D2_FIX01: ["ATLAS_CANCEL_LINK", "AtlasCardArchivedState", "atlasCardMenuSub", "atlasPlansPhrase", "atlasSessionsPhrase"],
 };
 // Baseline names an approved stage removed on purpose (and only these).
 const REMOVED_BY_STAGE = {
