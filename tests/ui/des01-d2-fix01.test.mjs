@@ -278,17 +278,20 @@ describe("P3", () => {
     assert.ok(eq.compareDocumentPosition(msg) & Node.DOCUMENT_POSITION_FOLLOWING, "message after the equipment line");
     assert.deepEqual($$('[role="tab"]').map(text), ["Ćwiczenie", "Historia", "Warianty"]);
   });
-  test("R13 — Moje: no switch without archived exercises (D05); the switch appears when there are some", async () => {
+  // R13 superseded by D2-FIX-02 (owner decision after the S22 acceptance): the switch is always shown in Moje,
+  // also „Aktywne 0 · Zarchiwizowane 0”; the D05 empty state stays under it (tests/ui/des01-d2-fix02.test.mjs)
+  test("R13 (as changed by D2-FIX-02) — Moje: the switch also without own / archived exercises; D05 under it", async () => {
     await boot({});
     await click(byTestId("atlas-tile-mine"));
     await flush(5, 2);
     assert.ok(byTestId("atlas-mine-empty"));
-    assert.equal(byTestId("atlas-mine-view"), null);
-    assert.equal($('[data-testid="atlas-search"]'), null);
+    assert.ok(byTestId("atlas-mine-view"), "0 / 0 → the switch is shown");
+    assert.equal($('[data-testid="atlas-search"]'), null, "nothing to search — the search rule is unchanged");
     await boot({ user_exercises: [OWN[0]] });
     await click(byTestId("atlas-tile-mine"));
     await flush(5, 2);
-    assert.equal(byTestId("atlas-mine-view"), null, "only active ones → no switch");
+    assert.ok(byTestId("atlas-mine-view"), "only active ones → the switch stays");
+    assert.equal(text(byTestId("atlas-mine-view-archived-count")), "0");
     await boot({ user_exercises: [ARCH] });
     await click(byTestId("atlas-tile-mine"));
     await flush(5, 2);

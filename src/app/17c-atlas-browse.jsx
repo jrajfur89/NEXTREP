@@ -1186,7 +1186,24 @@ function AtlasToast({ text, actionLabel = null, onAction = null, onDone, ms = 40
 
 // The Back of the card's sheets (menu, private name): while a sheet of the card is open, the module's Back
 // step closes that sheet first (or hides the keyboard first) — set by the card, read by AtlasBrowseScreen.
-const atlasCardOverlay = { current: null };
+// D2-FIX-02 (S22: Back dead after the name sheet): the sheet owns ONE history entry, pushed when it opens
+// on a tap. Back pops it and only closes the sheet — nothing is pushed while handling popstate (an entry
+// added without a user gesture makes Chromium / Android WebView skip the document's entries, canGoBack()
+// turns false and @capacitor/app ignores every further Back). A sheet closed on screen (✕, „Anuluj”,
+// scrim, Escape, save) removes its entry with history.back(); that pop is expected and consumed here.
+const atlasCardOverlay = { current: null, expectedPops: 0 };
+// one Back step of a card with its sheets; true = consumed (a sheet / the keyboard / an expected pop)
+function atlasCardBackStep() {
+  if (atlasCardOverlay.expectedPops > 0) {
+    atlasCardOverlay.expectedPops -= 1;
+    return true;
+  }
+  if (atlasCardOverlay.current) {
+    atlasCardOverlay.current();
+    return true;
+  }
+  return false;
+}
 
 // DS-C09 variant — a bottom sheet: role=dialog + aria-modal, focus inside (Tab stays in it), Escape and the
 // dimmed background close it; the caller returns the focus to the element that opened it.
@@ -1546,11 +1563,11 @@ function AtlasUserListView({ kind, view, onView, model, count, onBack, search, r
   const empty = count === 0 && !q;
   const cat = getUserExerciseCatalog();
   const hasNames = !fav && view === "active" && cat.customNames().length > 0;
-  // R04: the numbers of the switch come from the stored own exercises; R13: the switch only when there are
-  // archived ones (or the archived view is open)
+  // R04: the numbers of the switch come from the stored own exercises. D2-FIX-02 (owner, S22): the switch is
+  // always shown in Moje ćwiczenia — also „Aktywne 0 · Zarchiwizowane 0” (replaces the R13 rule)
   const own = fav ? [] : cat.list({ sources: ["private"], includeArchived: true });
   const counts = { active: own.filter((e) => !e.archived).length, archived: own.filter((e) => e.archived).length };
-  const showSwitch = !fav && (counts.archived > 0 || view === "archived");
+  const showSwitch = !fav;
   const archivedNote = !fav && view === "archived" && (
     // R05 (board D04b): an information box
     <div data-testid="atlas-mine-archived-note" style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", borderRadius: "12px", border: `1px solid ${ATLAS_UI.dashed}`, background: "#0F0F10" }}>
@@ -1564,12 +1581,8 @@ function AtlasUserListView({ kind, view, onView, model, count, onBack, search, r
       <AtlasBackBar label="Ćwiczenia" backLabel="Wróć do Ćwiczeń" onBack={onBack} />
       <h1 data-testid="atlas-list-title" style={{ ...ATLAS_H1, margin: "0 0 0 9px" }}>{title}</h1>
       {!fav && <AtlasAddExerciseSoon />}
-      {empty && !hasNames && !showSwitch ? (
-        fav ? (
-          <AtlasMessage icon={Heart} title="Nie masz jeszcze ulubionych ćwiczeń" text="Na karcie ćwiczenia dotknij serca — ćwiczenie pojawi się tutaj." primary={{ label: "Przeglądaj Atlas", onClick: onBrowseAtlas }} testId="atlas-favourites-empty" />
-        ) : (
-          <AtlasMessage icon={UserRound} title="Nie masz jeszcze własnych ćwiczeń" text="Własne ćwiczenie dodasz, gdy w Atlasie brakuje tego, które wykonujesz." extra={<p style={{ ...ATLAS_NOTE, margin: 0 }}>Możesz też nadać własną nazwę ćwiczeniu z Atlasu — na jego karcie, w menu „Więcej”.</p>} testId="atlas-mine-empty" />
-        )
+      {fav && empty ? (
+        <AtlasMessage icon={Heart} title="Nie masz jeszcze ulubionych ćwiczeń" text="Na karcie ćwiczenia dotknij serca — ćwiczenie pojawi się tutaj." primary={{ label: "Przeglądaj Atlas", onClick: onBrowseAtlas }} testId="atlas-favourites-empty" />
       ) : (
         <>
           {/* boards D04 / D04b: add → search + „Filtry” → switch → note → counter and rows */}
@@ -1582,8 +1595,11 @@ function AtlasUserListView({ kind, view, onView, model, count, onBack, search, r
           {sw}
           {archivedNote}
           {count > 0 ? results : null}
-          {!fav && view === "active" && count === 0 && !q && (
+          {!fav && view === "active" && count === 0 && !q && hasNames && (
             <p data-testid="atlas-mine-none" style={{ ...ATLAS_NOTE, margin: "0 9px" }}>Nie masz jeszcze własnych ćwiczeń.</p>
+          )}
+          {!fav && view === "active" && count === 0 && !q && !hasNames && (
+            <AtlasMessage icon={UserRound} title="Nie masz jeszcze własnych ćwiczeń" text="Własne ćwiczenie dodasz, gdy w Atlasie brakuje tego, które wykonujesz." extra={<p style={{ ...ATLAS_NOTE, margin: 0 }}>Możesz też nadać własną nazwę ćwiczeniu z Atlasu — na jego karcie, w menu „Więcej”.</p>} testId="atlas-mine-empty" />
           )}
           {!fav && view === "archived" && count === 0 && !q && (
             <AtlasMessage icon={Archive} title="Brak zarchiwizowanych ćwiczeń" text="Ćwiczenia, które zarchiwizujesz, znajdziesz tutaj." testId="atlas-mine-archived-empty" />
@@ -1664,10 +1680,7 @@ function AtlasBrowseScreen({ onNavigate, history = [], isPro = false, onOpenUnlo
   // one step back (hardware / gesture / on-screen Back through popstate → exercisesOverlayRef)
   const stepBackOne = () => {
     const m = atlasBrowseMemory;
-    if (m.openExerciseId && atlasCardOverlay.current) {
-      atlasBrowsePush(); // a sheet of the card (menu, private name) is a step inside the card
-      return atlasCardOverlay.current();
-    }
+    if (m.openExerciseId && atlasCardBackStep()) return; // a sheet of the card: its own entry (D2-FIX-02)
     const input = atlasFocusedSearch();
     if (sheetRef.current) {
       atlasBrowsePush(); // the sheet is a step inside the level: put the popped entry back

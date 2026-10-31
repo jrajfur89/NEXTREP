@@ -742,7 +742,29 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
   const [sheet, setSheet] = useState(null); // null | "menu" | "name"
   const rootRef = useRef(null);
   const moreRef = useRef(null);
-  const closeSheet = () => {
+  // D2-FIX-02: the sheets (menu → name) own ONE history entry, pushed on the tap that opens the menu; Back
+  // pops it (atlasCardBackStep) — never a push while handling popstate (17c-atlas-browse.jsx)
+  const sheetEntryRef = useRef(false);
+  const openMenu = () => {
+    if (!sheetEntryRef.current) {
+      try {
+        window.history.pushState({ trainapp: true }, "", "");
+        sheetEntryRef.current = true;
+      } catch {}
+    }
+    setSheet("menu");
+  };
+  // closed on screen (✕, „Anuluj”, scrim, Escape, save, remove): its entry goes too, the pop is consumed
+  const closeSheet = (byBack = false) => {
+    if (byBack !== true && sheetEntryRef.current) { // (a click handler passes its event here)
+      sheetEntryRef.current = false;
+      atlasCardOverlay.expectedPops += 1;
+      try {
+        window.history.back();
+      } catch {
+        atlasCardOverlay.expectedPops -= 1;
+      }
+    }
     setSheet(null);
     setTimeout(() => {
       try {
@@ -758,10 +780,13 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
       return undefined;
     }
     atlasCardOverlay.current = () => {
+      // this Back popped the sheet's entry (or, after the keyboard took it, the card's — the card then
+      // closes on the list's entry, one step per Back as before)
+      sheetEntryRef.current = false;
       const el = document.activeElement;
       // Back with the keyboard open over the name field: the keyboard goes first, the sheet stays (V5 K4)
       if (el && el.matches && el.matches("[data-testid='atlas-name-input']") && window.visualViewport && nrSoftKeyboardOpen()) return el.blur();
-      closeSheetRef.current();
+      closeSheetRef.current(true);
     };
     return () => {
       atlasCardOverlay.current = null;
@@ -846,7 +871,7 @@ function AtlasExerciseDetail({ exercise, onBack, onNavigate, history = [], isPro
           </button>
           <span style={{ flex: "1 1 auto", minWidth: 0, fontFamily: NR.font, fontSize: "15px", lineHeight: "18px", fontWeight: 500, letterSpacing: ".06em", textTransform: "uppercase", color: NR.textSecondary, overflowWrap: "anywhere" }}>Atlas ćwiczeń</span>
           {info && <AtlasCardHeart favourite={user.favourite} onToggle={toggleHeart} />}
-          {info && <AtlasCardMoreButton buttonRef={moreRef} onOpen={() => setSheet("menu")} />}
+          {info && <AtlasCardMoreButton buttonRef={moreRef} onOpen={openMenu} />}
         </header>
       </div>
       <section aria-labelledby="exv-h" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "2px 2px 4px" }}>
@@ -918,7 +943,7 @@ function AtlasCatalogView({ onClose, onNavigate, history = [], isPro = false, on
   const selected = selectedId ? ATLAS_CATALOG.exercises.find((e) => e.exerciseId === selectedId) || null : null;
 
   useEffect(() => {
-    exercisesOverlayRef.current = selected ? () => setSelectedId(null) : onClose;
+    exercisesOverlayRef.current = selected ? () => atlasCardBackStep() || setSelectedId(null) : onClose; // D2-FIX-02: the card's sheets first
     return () => {
       exercisesOverlayRef.current = null;
     };
